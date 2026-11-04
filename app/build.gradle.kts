@@ -11,8 +11,8 @@ android {
         applicationId = "com.sahayak.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "2.0"
+        versionCode = 24
+        versionName = "2.1"
     }
 
     // Test key: har build par same rehti hai, taaki app update ho sake.

@@ -60,6 +60,10 @@ class AssistService : Service(), GeminiLive.Callback {
     private val recent = ArrayDeque<String>()
     private val appVisits = ArrayDeque<String>()
     private var stepCount = 0
+    @Volatile private var currentOrder: String? = null
+    @Volatile private var quietOrder = false
+    private val stepLog = ArrayList<String>()
+    private var reviews = 0
     private var controlLostShown = false
     private var tools: JSONArray? = null
     private val actions = HandlerThread("sahayak-actions").apply { start() }
@@ -315,6 +319,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (System.currentTimeMillis() - pressedAt < STOP_TAP_MS) {
                 // Ek chhota tap: chal raha kaam turant roko
                 stopRequested = true
+                currentOrder = null
                 mainHandler.post { listener?.cancel() }
                 whisperHandler.removeCallbacks(partialTick)
                 voice?.setMic(false)
@@ -409,14 +414,46 @@ class AssistService : Service(), GeminiLive.Callback {
                 recent.clear()
                 appVisits.clear()
                 stepCount = 0
+                stepLog.clear()
+                reviews = 0
+                currentOrder = text
+                quietOrder = silentTurn
             }
             live?.sendText(if (plan == null) text else "ORDER: $text\n\nPLAN:\n$plan")
         }
     }
 
+    /** Doosra model kaam jaanchta hai aur zaroorat par sudhar bhejta hai. */
+    private fun reviewWork(stuck: Boolean) {
+        val order = currentOrder ?: return
+        val think = planner ?: return
+        if (reviews >= MAX_REVIEWS || stepLog.isEmpty() || stopRequested) return
+        reviews++
+        val steps = stepLog.takeLast(15).joinToString("\n")
+        setBusy(true)
+        plannerHandler.postDelayed({
+            val began = System.currentTimeMillis()
+            val answer = think.review(order, steps, screen?.latest(), stuck).orEmpty().trim()
+            val fix = answer.takeIf { it.startsWith("FIX") }?.removePrefix("FIX")?.trimStart(':', ' ')
+            RunLog.add(this, "review " + (if (fix != null) "fix " else "done ") + (System.currentTimeMillis() - began) + "ms")
+            when {
+                stopRequested || talking -> setBusy(false)
+                fix.isNullOrEmpty() -> {
+                    setBusy(false)
+                    if (!stuck) currentOrder = null
+                }
+                else -> {
+                    silentTurn = quietOrder
+                    live?.sendText("[REVIEW] $fix")
+                }
+            }
+        }, REVIEW_DELAY_MS)
+    }
+
     /** Sahayak chakkar mein phanse to use rokta hai. */
     private fun checkProgress(name: String, args: JSONObject, result: JSONObject) {
         stepCount++
+        stepLog.add(name + " " + result.optString("status") + " " + result.optString("reason"))
         val mark = name + "|" + args.toString().take(120) + "|" + result.optString("app")
         recent.addLast(mark)
         if (recent.size > HISTORY_SIZE) recent.removeFirst()
@@ -432,6 +469,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 .put("warning", "Stop now and tell the person in one sentence what is blocking you.")
             bouncing || repeating -> {
                 RunLog.add(this, "loop_warning")
+                reviewWork(stuck = true)
                 result.put("warning", "You are going in circles. Do not repeat this. Use what you already have and take a different approach.")
             }
         }
@@ -547,6 +585,7 @@ class AssistService : Service(), GeminiLive.Callback {
     override fun onTurnComplete() {
         framesPaused = false
         setBusy(false)
+        reviewWork(stuck = false)
         if (silentTurn) {
             silentTurn = false
             mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
@@ -726,6 +765,8 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 80L
         private const val HISTORY_SIZE = 8
+        private const val MAX_REVIEWS = 2
+        private const val REVIEW_DELAY_MS = 1_200L
         private const val REPEAT_LIMIT = 3
         private const val STEP_LIMIT = 40
         private const val FAST_DONE_MS = 1_500L

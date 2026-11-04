@@ -1,5 +1,6 @@
 package com.sahayak.app
 
+import android.util.Base64
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,11 +16,26 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
 
     /** Plan na ban paye to null. Tab order seedha chalega. */
     fun plan(order: String, app: String): String? {
+        val parts = JSONArray().put(JSONObject().put("text", "Open app: $app\nOrder: $order"))
+        return ask(RULES, parts, 0.3, 1500)
+    }
+
+    /** Doosra model kaam jaanchta hai. DONE ya agla sudhar deta hai. */
+    fun review(order: String, steps: String, screen: ByteArray?, stuck: Boolean): String? {
+        val note = if (stuck) "The worker seems stuck in a loop." else "The worker says it has finished."
+        val parts = JSONArray().put(JSONObject().put("text", "Order: $order\n$note\nSteps taken:\n$steps"))
+        if (screen != null) {
+            parts.put(JSONObject().put("inlineData", JSONObject().put("mimeType", "image/jpeg")
+                .put("data", Base64.encodeToString(screen, Base64.NO_WRAP))))
+        }
+        return ask(REVIEW_RULES, parts, 0.1, 300)
+    }
+
+    private fun ask(system: String, parts: JSONArray, temperature: Double, maxTokens: Int): String? {
         val body = JSONObject()
-            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", RULES))))
-            .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts",
-                JSONArray().put(JSONObject().put("text", "Open app: $app\nOrder: $order")))))
-            .put("generationConfig", JSONObject().put("temperature", 0.3).put("maxOutputTokens", 1500))
+            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
+            .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
+            .put("generationConfig", JSONObject().put("temperature", temperature).put("maxOutputTokens", maxTokens))
             .toString().toRequestBody("application/json".toMediaType())
         for (model in MODELS) {
             val request = Request.Builder()
@@ -28,10 +44,10 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
             try {
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        val parts = JSONObject(response.body?.string().orEmpty()).optJSONArray("candidates")
+                        val reply = JSONObject(response.body?.string().orEmpty()).optJSONArray("candidates")
                             ?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
                         val text = StringBuilder()
-                        for (i in 0 until (parts?.length() ?: 0)) text.append(parts?.optJSONObject(i)?.optString("text"))
+                        for (i in 0 until (reply?.length() ?: 0)) text.append(reply?.optJSONObject(i)?.optString("text"))
                         if (text.isNotBlank()) return text.toString().trim()
                     }
                 }
@@ -45,6 +61,14 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
     companion object {
         private const val TIMEOUT_SECONDS = 6L
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
+        private const val REVIEW_RULES = """You check the work of an AI agent on an Android phone. You see the order, the steps it took and the current screen.
+
+Reply with exactly one line:
+DONE, if the order is fully finished or the agent correctly stopped at a payment, password, PIN or OTP screen, or correctly asked the person for missing details.
+FIX: one short specific next action, if something is unfinished or wrong, for example a message typed but not sent.
+
+Never suggest paying, entering a password, PIN or OTP, or inventing an address or number. If unsure, reply DONE."""
+
         private const val RULES = """You plan work for an AI agent that operates an Android phone. Think like a smart, practical person who avoids wasted movement.
 
 Write only this format, in English, under 12 lines:
