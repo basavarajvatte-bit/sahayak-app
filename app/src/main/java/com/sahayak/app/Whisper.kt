@@ -1,5 +1,6 @@
 package com.sahayak.app
 
+import okhttp3.Dispatcher
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -14,7 +15,10 @@ import java.util.concurrent.TimeUnit
 
 /** Whisper (Groq par) se awaaz ko sahi shabdon mein badalta hai. */
 class Whisper(http: OkHttpClient, private val apiKey: String) {
-    private val client = http.newBuilder().callTimeout(15, TimeUnit.SECONDS).build()
+    private val client = http.newBuilder().dispatcher(Dispatcher()).callTimeout(8, TimeUnit.SECONDS).build()
+
+    /** Dot chhodte hi adhuri likhai roko, taaki poora order pehle jaye. */
+    fun cancelPartial() = client.dispatcher.cancelAll()
 
     fun transcribe(pcm: ByteArray): String {
         val body = MultipartBody.Builder().setType(MultipartBody.FORM)

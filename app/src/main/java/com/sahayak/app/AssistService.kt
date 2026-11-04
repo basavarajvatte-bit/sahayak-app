@@ -64,6 +64,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private var listener: LiveListener? = null
     private var typeBar: TypeBar? = null
     @Volatile private var silentTurn = false
+    @Volatile private var framesPaused = false
     private val replyText = StringBuilder()
     private val hideReply = Runnable { if (!talking) caption?.hide() }
     private var whisper: Whisper? = null
@@ -189,7 +190,7 @@ class AssistService : Service(), GeminiLive.Callback {
             val feed = ScreenFeed(
                 mediaProjection,
                 onChanged = { screenChangedAt = System.currentTimeMillis() },
-                onFrame = { jpeg -> live?.sendJpeg(jpeg) }
+                onFrame = { jpeg -> if (!framesPaused) live?.sendJpeg(jpeg) }
             )
             feed.start()
             screen = feed
@@ -253,7 +254,7 @@ class AssistService : Service(), GeminiLive.Callback {
             releasedAt = System.currentTimeMillis()
             RunLog.add(this, "order typed")
             setBusy(true)
-            live?.sendText(text)
+            dispatchOrder(text)
         }
     }
 
@@ -327,6 +328,7 @@ class AssistService : Service(), GeminiLive.Callback {
         releasedAt = System.currentTimeMillis()
         if (whisper != null) {
             whisperHandler.removeCallbacks(partialTick)
+            whisper?.cancelPartial()
             voice?.setMic(false)
             setBusy(true)
             whisperHandler.post { sendWhisperOrder() }
@@ -348,8 +350,37 @@ class AssistService : Service(), GeminiLive.Callback {
                 } else {
                     releasedAt = System.currentTimeMillis()
                     RunLog.add(this, "order listener")
-                    live?.sendText(words)
+                    dispatchOrder(words)
                 }
+            }
+        }
+    }
+
+    /** Chhota order phone par turant, baaki AI ko. */
+    private fun dispatchOrder(text: String) {
+        val command = LocalCommands.parse(text)
+        val control = PhoneControl.instance
+        if (command == null || control == null) {
+            live?.sendText(text)
+            return
+        }
+        actionHandler.post {
+            val began = System.currentTimeMillis()
+            val done = try {
+                control.fast(command)
+            } catch (e: RuntimeException) {
+                false
+            }
+            RunLog.add(this, "fast " + (if (done) "ok " else "failed ") + (System.currentTimeMillis() - began) + "ms")
+            if (done) {
+                setBusy(false)
+                silentTurn = false
+                mainHandler.post {
+                    caption?.show("Ho gaya")
+                    mainHandler.postDelayed(hideReply, FAST_DONE_MS)
+                }
+            } else {
+                live?.sendText(text)
             }
         }
     }
@@ -379,7 +410,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (text.isBlank()) throw IOException("empty")
             releasedAt = System.currentTimeMillis()
             RunLog.add(this, "order whisper")
-            live?.sendText(text)
+            dispatchOrder(text)
         } catch (e: IOException) {
             RunLog.add(this, "order whisper_failed_audio_used")
             var start = 0
@@ -462,6 +493,7 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onTurnComplete() {
+        framesPaused = false
         setBusy(false)
         if (silentTurn) {
             silentTurn = false
@@ -472,6 +504,7 @@ class AssistService : Service(), GeminiLive.Callback {
 
     override fun onToolCall(id: String, name: String, args: JSONObject) {
         setBusy(true)
+        framesPaused = true // kaam ke dauran AI ko screen list milti hai, photo ki zaroorat nahi
         actionHandler.post {
             val control = PhoneControl.instance
             val began = System.currentTimeMillis()
@@ -484,6 +517,10 @@ class AssistService : Service(), GeminiLive.Callback {
                 } catch (e: RuntimeException) {
                     JSONObject().put("status", "failed")
                 }
+            }
+            // List khali ho to AI ko wahi screen photo se dikhao
+            if ((result.optJSONArray("screen")?.length() ?: 99) < MIN_LIST_SIZE) {
+                screen?.latest()?.let { live?.sendJpeg(it) }
             }
             RunLog.add(this, name + " " + result.optString("status") + " " +
                 (System.currentTimeMillis() - began) + "ms " + result.optString("app"))
@@ -633,7 +670,9 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val AFTER_SPEECH_MS = 800L
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
-        private const val MIC_TAIL_MS = 150L
+        private const val MIC_TAIL_MS = 80L
+        private const val FAST_DONE_MS = 1_500L
+        private const val MIN_LIST_SIZE = 8
         private const val PARTIAL_MS = 2_000L
         private const val MIN_AUDIO_BYTES = 8_000
         private const val AUDIO_CHUNK = 3_200

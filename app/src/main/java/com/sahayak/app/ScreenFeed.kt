@@ -25,7 +25,7 @@ class ScreenFeed(
     private lateinit var handler: Handler
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
-    private var lastJpeg: ByteArray? = null
+    @Volatile private var lastJpeg: ByteArray? = null
     private var lastSentAt = 0L
     private var signature: IntArray? = null
     @Volatile private var running = false
@@ -104,6 +104,8 @@ class ScreenFeed(
         val moved = next.indices.count { kotlin.math.abs(next[it] - old[it]) > CELL_DIFF }
         if (moved >= next.size * CHANGE_SHARE) onChanged()
     }
+
+    fun latest(): ByteArray? = lastJpeg
 
     fun stop() {
         running = false

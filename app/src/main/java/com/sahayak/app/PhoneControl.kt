@@ -97,6 +97,28 @@ class PhoneControl : AccessibilityService() {
         return result
     }
 
+    /** AI ke bina seedha kaam. true matlab kaam ho gaya, false matlab AI ko do. */
+    fun fast(command: LocalCommands.Command): Boolean {
+        val current = rootInActiveWindow?.packageName?.toString().orEmpty()
+        if (isFinance(current)) return false
+        return when (command) {
+            is LocalCommands.Command.Open -> !financeMatch(command.app) && openApp(command.app)
+            is LocalCommands.Command.WhatsApp -> {
+                val args = JSONObject().put("contact", command.contact).put("message", command.message)
+                val opened = openWhatsApp(args)
+                opened.optString("status") == "ok" && tapWhatsAppSend(opened.optString("contact"))
+            }
+        }
+    }
+
+    private fun tapWhatsAppSend(contact: String): Boolean {
+        val shown = visibleNodes().any { label(it).equals(contact, ignoreCase = true) }
+        if (!shown) return false
+        val send = rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")?.firstOrNull()
+            ?: return false
+        return send.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
     private fun screenText(): String = visibleNodes().joinToString("|") { label(it) }
 
     /** Screen shaant hone tak ruko, taaki Sahayak adhuri screen na padhe. */
@@ -329,9 +351,11 @@ class PhoneControl : AccessibilityService() {
         list.forEachIndexed { index, node ->
             node.getBoundsInScreen(box)
             val item = JSONObject().put("element", index)
-                .put("x", box.centerX() * 1000 / metrics.widthPixels)
-                .put("y", box.centerY() * 1000 / metrics.heightPixels)
-            if (!node.isPassword) item.put("text", label(node).take(60))
+            if (node.isClickable || node.isEditable) {
+                item.put("x", box.centerX() * 1000 / metrics.widthPixels)
+                    .put("y", box.centerY() * 1000 / metrics.heightPixels)
+            }
+            if (!node.isPassword) item.put("text", label(node).take(40))
             if (node.isEditable) item.put("input", true)
             if (node.isPassword) item.put("password", true)
             items.put(item)
@@ -348,14 +372,14 @@ class PhoneControl : AccessibilityService() {
         @Volatile var instance: PhoneControl? = null
             private set
 
-        private const val MIN_SETTLE_MS = 300L
+        private const val MIN_SETTLE_MS = 150L
         private const val TYPE_CHECK_MS = 250L
         private const val MAX_SETTLE_MS = 4_000L
-        private const val SETTLE_STEP_MS = 200L
-        private const val LOAD_GRACE_MS = 800L
+        private const val SETTLE_STEP_MS = 100L
+        private const val LOAD_GRACE_MS = 500L
         private const val GESTURE_WAIT_MS = 3_000L
         private const val MAX_SCAN = 1_500
-        private const val MAX_ELEMENTS = 60
+        private const val MAX_ELEMENTS = 40
         private const val GMAIL = "com.google.android.gm"
         private val FINANCE_PACKAGES = setOf(
             "com.phonepe.app", "net.one97.paytm", "com.google.android.apps.nbu.paisa.user",
