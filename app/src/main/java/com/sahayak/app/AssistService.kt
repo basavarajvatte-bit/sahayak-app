@@ -69,6 +69,7 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var quietOrder = false
     private val stepLog = ArrayList<String>()
     private var reviews = 0
+    private var practiceName: String? = null
     private var controlLostShown = false
     private var tools: JSONArray? = null
     private val actions = HandlerThread("sahayak-actions").apply { start() }
@@ -132,6 +133,14 @@ class AssistService : Service(), GeminiLive.Callback {
             val typed = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(REPLY_KEY)?.toString().orEmpty().trim()
             if (typed.isNotEmpty()) typedOrder(typed)
             updateNotification()
+            return START_NOT_STICKY
+        }
+        if (intent.action == ACTION_PRACTICE) {
+            val name = intent.getStringExtra(EXTRA_SKILL).orEmpty()
+            if (name.isNotEmpty()) {
+                practiceName = name
+                typedOrder("Practice the taught task \"$name\" now, exactly as taught, from start to end.")
+            }
             return START_NOT_STICKY
         }
         if (intent.action == ACTION_TALK) {
@@ -283,6 +292,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun stopEverything() {
         stopRequested = true
         currentOrder = null
+        practiceName = null
         plannerHandler.removeCallbacksAndMessages(null)
         actionHandler.removeCallbacksAndMessages(null)
         whisperHandler.removeCallbacks(partialTick)
@@ -485,7 +495,10 @@ class AssistService : Service(), GeminiLive.Callback {
         val think = planner ?: return
         if (stopRequested) return
         if (reviews >= MAX_REVIEWS || stepLog.isEmpty()) {
-            if (!stuck) currentOrder = null // kaam khatam, naye order tak phone control band
+            if (!stuck) {
+                currentOrder = null // kaam khatam, naye order tak phone control band
+                finishPractice(false)
+            }
             return
         }
         reviews++
@@ -500,7 +513,10 @@ class AssistService : Service(), GeminiLive.Callback {
                 stopRequested || talking -> setBusy(false)
                 fix.isNullOrEmpty() -> {
                     setBusy(false)
-                    if (!stuck) currentOrder = null
+                    if (!stuck) {
+                        currentOrder = null
+                        finishPractice(answer.startsWith("DONE"))
+                    }
                 }
                 else -> {
                     silentTurn = quietOrder
@@ -510,10 +526,23 @@ class AssistService : Service(), GeminiLive.Callback {
         }, REVIEW_DELAY_MS)
     }
 
+    /** Practice ka result likho, aur safal kaam se steps sudharo. */
+    private fun finishPractice(ok: Boolean) {
+        val name = practiceName ?: return
+        practiceName = null
+        val used = stepLog.takeLast(25).joinToString("\n")
+        plannerHandler.post {
+            val better = if (ok) planner?.improve(name, Skills.steps(this, name), used) else null
+            Skills.recordRun(this, name, ok, better)
+            RunLog.add(this, "practice " + (if (ok) "ok" else "failed") + (if (better != null) " improved" else ""))
+            AssistState.set(true, if (ok) "Practice poori: $name" else "Practice mein dikkat aayi: $name")
+        }
+    }
+
     /** Sahayak chakkar mein phanse to use rokta hai. */
     private fun checkProgress(name: String, args: JSONObject, result: JSONObject) {
         stepCount++
-        stepLog.add(name + " " + result.optString("status") + " " + result.optString("reason"))
+        stepLog.add(name + " " + args.toString().take(100) + " " + result.optString("status") + " " + result.optString("reason"))
         val mark = name + "|" + args.toString().take(120) + "|" + result.optString("app")
         recent.addLast(mark)
         if (recent.size > HISTORY_SIZE) recent.removeFirst()
@@ -824,6 +853,8 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val ACTION_STOP = "com.sahayak.app.STOP"
         private const val ACTION_TALK = "com.sahayak.app.TALK"
         private const val ACTION_TYPE = "com.sahayak.app.TYPE"
+        private const val ACTION_PRACTICE = "com.sahayak.app.PRACTICE"
+        private const val EXTRA_SKILL = "skill"
         private const val REPLY_KEY = "typed_order"
         private const val REPLY_SHOW_MS = 5_000L
         private const val EXTRA_RESULT = "result"
@@ -870,6 +901,12 @@ class AssistService : Service(), GeminiLive.Callback {
                     .putExtra(EXTRA_VOICE, voice)
                     .putExtra(EXTRA_AUTO, autoStep)
                     .putExtra(EXTRA_WHISPER, whisperKey)
+            )
+        }
+
+        fun practice(context: Context, name: String) {
+            context.startService(
+                Intent(context, AssistService::class.java).setAction(ACTION_PRACTICE).putExtra(EXTRA_SKILL, name)
             )
         }
 

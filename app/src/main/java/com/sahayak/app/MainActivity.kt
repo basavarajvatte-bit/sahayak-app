@@ -157,10 +157,22 @@ class MainActivity : Activity() {
             val name = skill.optString("name")
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             row.addView(TextView(this).apply {
-                text = name
+                text = Skills.label(skill)
                 textSize = 16f
                 setTextColor(0xFF1D2433.toInt())
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(Button(this).apply {
+                text = "Dohrao"
+                isAllCaps = false
+                setOnClickListener {
+                    if (AssistState.running) {
+                        AssistService.practice(this@MainActivity, name)
+                        moveTaskToBack(true)
+                    } else {
+                        statusText.text = "Pehle Assist dabaiye, phir Dohrao dabaiye."
+                    }
+                }
+            })
             row.addView(Button(this).apply {
                 text = "Hatao"
                 isAllCaps = false

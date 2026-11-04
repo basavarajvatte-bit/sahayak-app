@@ -27,6 +27,30 @@ object Skills {
         save(context, (others + item).takeLast(MAX_SKILLS))
     }
 
+    fun steps(context: Context, name: String): List<String> {
+        val array = all(context).firstOrNull { it.optString("name") == name }?.optJSONArray("steps") ?: return emptyList()
+        return List(array.length()) { array.optString(it) }
+    }
+
+    /** Practice ka hisaab, aur behtar steps mile to unhe rakho. */
+    @Synchronized
+    fun recordRun(context: Context, name: String, ok: Boolean, better: List<String>?) {
+        save(context, all(context).map { skill ->
+            if (skill.optString("name") == name) {
+                skill.put("runs", skill.optInt("runs") + 1)
+                if (ok) skill.put("good", skill.optInt("good") + 1)
+                if (!better.isNullOrEmpty()) skill.put("steps", JSONArray(better))
+            }
+            skill
+        })
+    }
+
+    fun label(skill: JSONObject): String {
+        val runs = skill.optInt("runs")
+        val name = skill.optString("name")
+        return if (runs == 0) name else name + " (" + runs + " baar, " + skill.optInt("good") + " sahi)"
+    }
+
     @Synchronized
     fun remove(context: Context, name: String) {
         save(context, all(context).filter { it.optString("name") != name })

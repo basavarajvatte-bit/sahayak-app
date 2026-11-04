@@ -32,6 +32,14 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
         return ask(REVIEW_RULES, parts, 0.1, 300)
     }
 
+    /** Practice ke baad steps ko chhota aur pakka banata hai. */
+    fun improve(name: String, steps: List<String>, used: String): List<String>? {
+        val text = "Task: $name\nCurrent steps:\n" + steps.joinToString("\n") + "\nSteps that just worked:\n$used"
+        val answer = ask(IMPROVE_RULES, JSONArray().put(JSONObject().put("text", text)), 0.1, 700) ?: return null
+        val lines = answer.lines().map { it.trim().trimStart('-', ' ') }.filter { it.isNotEmpty() }
+        return lines.takeIf { it.isNotEmpty() && it.size <= 40 }
+    }
+
     private fun ask(system: String, parts: JSONArray, temperature: Double, maxTokens: Int): String? {
         val body = JSONObject()
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
@@ -62,6 +70,12 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
     companion object {
         private const val TIMEOUT_SECONDS = 6L
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
+        private const val IMPROVE_RULES = """You improve a saved phone task after a successful practice run.
+Write the shortest reliable step list for the same goal, one step per line, with no numbers and no explanation.
+Use the same style: open app X, tap "words", type "text", press enter, wait. Prefer visible words over screen positions.
+Keep every detail of the goal unchanged. If there is no real improvement, return the current steps unchanged.
+Never include a password, PIN, OTP or card number, and never include a payment step."""
+
         private const val REVIEW_RULES = """You check the work of an AI agent on an Android phone. You see the order, the steps it took and the current screen.
 
 Reply with exactly one line:
