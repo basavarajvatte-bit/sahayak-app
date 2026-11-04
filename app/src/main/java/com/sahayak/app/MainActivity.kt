@@ -23,6 +23,8 @@ import android.widget.LinearLayout
 import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
+import org.json.JSONException
+import java.io.IOException
 
 class MainActivity : Activity() {
     private lateinit var assistButton: Button
@@ -60,6 +62,19 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        findViewById<Button>(R.id.backupButton).setOnClickListener {
+            startActivityForResult(
+                Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("application/json").putExtra(Intent.EXTRA_TITLE, "sahayak-backup.json"),
+                REQUEST_BACKUP
+            )
+        }
+        findViewById<Button>(R.id.restoreButton).setOnClickListener {
+            startActivityForResult(
+                Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),
+                REQUEST_RESTORE
+            )
+        }
         findViewById<Button>(R.id.reportButton).setOnClickListener {
             val report = RunLog.read(this).ifEmpty { "Abhi koi record nahi hai" }
             getSystemService(ClipboardManager::class.java)
@@ -129,6 +144,27 @@ class MainActivity : Activity() {
         batteryButton.text = if (batteryFree()) "✓ Background mein chalne ki ijazat hai" else "Background ki ijazat do"
     }
 
+    private fun handleBackup(request: Int, uri: Uri) {
+        statusText.text = try {
+            if (request == REQUEST_BACKUP) {
+                contentResolver.openOutputStream(uri, "wt")?.use { it.write(Skills.exportJson(this).toByteArray()) }
+                "Backup ban gaya. File ko Google Drive mein bhi rakhiye."
+            } else {
+                val text = contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }.orEmpty()
+                val added = Skills.importJson(this, text)
+                renderSkills()
+                renderMemory()
+                "Backup wapas aa gaya: $added naye kaam."
+            }
+        } catch (e: IOException) {
+            "Backup nahi hua. Dobara try kijiye."
+        } catch (e: JSONException) {
+            "Yeh Sahayak ki sahi backup file nahi hai."
+        } catch (e: IllegalArgumentException) {
+            "Yeh Sahayak ki sahi backup file nahi hai."
+        }
+    }
+
     private fun askTeachName() {
         val control = PhoneControl.instance
         if (control == null) {
@@ -150,38 +186,70 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun smallButton(label: String, action: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        textSize = 14f
+        setOnClickListener { action() }
+    }
+
+    private fun askLesson(name: String) {
+        val input = EditText(this).apply { hint = "Kya galat hua, ya kaise karna tha" }
+        AlertDialog.Builder(this)
+            .setTitle("Sudhar likhiye")
+            .setView(input)
+            .setPositiveButton("Yaad rakho") { _, _ ->
+                Skills.markWrong(this, name, input.text.toString().trim())
+                renderSkills()
+            }
+            .setNegativeButton("Rehne do", null)
+            .show()
+    }
+
     private fun renderSkills() {
         val box = findViewById<LinearLayout>(R.id.skillBox)
         box.removeAllViews()
         Skills.all(this).forEach { skill ->
             val name = skill.optString("name")
-            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            row.addView(TextView(this).apply {
+            box.addView(TextView(this).apply {
                 text = Skills.label(skill)
                 textSize = 16f
                 setTextColor(0xFF1D2433.toInt())
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(Button(this).apply {
-                text = "Dohrao"
-                isAllCaps = false
-                setOnClickListener {
-                    if (AssistState.running) {
-                        AssistService.practice(this@MainActivity, name)
-                        moveTaskToBack(true)
-                    } else {
-                        statusText.text = "Pehle Assist dabaiye, phir Dohrao dabaiye."
+                setPadding(0, 18, 0, 0)
+            })
+            val weight = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            val top = LinearLayout(this)
+            top.addView(smallButton("Dohrao") {
+                if (AssistState.running) {
+                    AssistService.practice(this, name)
+                    moveTaskToBack(true)
+                } else {
+                    statusText.text = "Pehle Assist dabaiye, phir Dohrao dabaiye."
+                }
+            }, weight)
+            top.addView(smallButton("Aur sikhao") {
+                val control = PhoneControl.instance
+                if (control == null) {
+                    statusText.text = "Pehle Phone control chalu kijiye."
+                } else {
+                    control.startTeaching(name)
+                    moveTaskToBack(true)
+                }
+            }, LinearLayout.LayoutParams(weight))
+            val bottom = LinearLayout(this)
+            bottom.addView(smallButton("Galat hua") { askLesson(name) }, LinearLayout.LayoutParams(weight))
+            bottom.addView(smallButton("Hatao") {
+                AlertDialog.Builder(this)
+                    .setMessage("Yeh sikhaya hua kaam delete karein?")
+                    .setPositiveButton("Delete") { _, _ ->
+                        Skills.remove(this, name)
+                        renderSkills()
                     }
-                }
-            })
-            row.addView(Button(this).apply {
-                text = "Hatao"
-                isAllCaps = false
-                setOnClickListener {
-                    Skills.remove(this@MainActivity, name)
-                    renderSkills()
-                }
-            })
-            box.addView(row)
+                    .setNegativeButton("Rehne do", null)
+                    .show()
+            }, LinearLayout.LayoutParams(weight))
+            box.addView(top)
+            box.addView(bottom)
         }
     }
 
@@ -311,6 +379,11 @@ class MainActivity : Activity() {
     @Deprecated("Plain Activity API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_BACKUP || requestCode == REQUEST_RESTORE) {
+            val uri = data?.data
+            if (resultCode == RESULT_OK && uri != null) handleBackup(requestCode, uri)
+            return
+        }
         if (requestCode != REQUEST_SCREEN) return
         if (resultCode == RESULT_OK && data != null) {
             AssistService.start(
@@ -326,6 +399,8 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_PERMISSIONS = 1
         private const val REQUEST_SCREEN = 2
+        private const val REQUEST_BACKUP = 3
+        private const val REQUEST_RESTORE = 4
         private const val PREF_LANGUAGE = "language"
         private const val PREF_NAME = "name"
         private const val PREF_VOICE = "voice"

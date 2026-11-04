@@ -7,7 +7,7 @@ import org.json.JSONArray
 object Memory {
     private const val PREFS = "sahayak_memory"
     private const val FACTS = "facts"
-    private const val MAX_FACTS = 40
+    private const val MAX_FACTS = 200
     private const val MAX_LENGTH = 160
     private val BLOCKED = listOf("password", "passcode", "otp", "pin ", "cvv", "card number", "upi pin", "पासवर्ड", "ओटीपी")
 

@@ -6,6 +6,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -30,6 +31,18 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
                 .put("data", Base64.encodeToString(screen, Base64.NO_WRAP))))
         }
         return ask(REVIEW_RULES, parts, 0.1, 300)
+    }
+
+    /** Ek ya kai demos se saaf, general kaam banata hai. */
+    fun digest(name: String, demos: String, lessons: List<String>): JSONObject? {
+        val text = "Task name: $name\nDemonstrations: $demos\nLessons: " + lessons.joinToString("; ")
+        val answer = ask(DIGEST_RULES, JSONArray().put(JSONObject().put("text", text)), 0.1, 1200) ?: return null
+        val clean = answer.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        return try {
+            JSONObject(clean).takeIf { (it.optJSONArray("steps")?.length() ?: 0) > 0 }
+        } catch (e: JSONException) {
+            null
+        }
     }
 
     /** Practice ke baad steps ko chhota aur pakka banata hai. */
@@ -70,6 +83,17 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
     companion object {
         private const val TIMEOUT_SECONDS = 6L
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
+        private const val DIGEST_RULES = """You turn phone task demonstrations into a reliable reusable procedure. Reply with JSON only:
+{"goal":"one sentence on what the task achieves","steps":["step one","step two"]}
+
+Rules:
+- Compare all demonstrations and keep what they share. Remove mistakes, repeated taps and wandering.
+- Replace details that change each time with placeholders such as {contact}, {message}, {date} or {search_text}. Keep fixed things like app names and button words exact.
+- Use short steps: open app X, tap "words", type "{message}", press enter, wait. Prefer visible words over screen positions.
+- Keep "screen shows" notes as check steps where useful, so the agent can confirm it is on the right screen.
+- Apply the lessons.
+- At most 25 steps. Never include a password, PIN, OTP, card number or payment step."""
+
         private const val IMPROVE_RULES = """You improve a saved phone task after a successful practice run.
 Write the shortest reliable step list for the same goal, one step per line, with no numbers and no explanation.
 Use the same style: open app X, tap "words", type "text", press enter, wait. Prefer visible words over screen positions.

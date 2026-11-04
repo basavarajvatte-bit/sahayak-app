@@ -37,7 +37,10 @@ How you think:
 - Learn from feedback. Use remember to save lasting useful facts or corrections. Use forget when a saved fact is wrong. Never save secrets.
 
 Taught tasks:
-- The person can teach you tasks by doing them once. When an order matches a taught task, follow its steps in order, as the proven way. Change details like a name or message to match the new order. If the screen differs, adapt to reach the same goal.
+- The person teaches you tasks by doing them. Before acting on an order that matches or resembles a taught task, call get_taught_task. Follow its steps in order as the proven way, and obey its lessons above all else.
+- Fill placeholders like {contact} or {message} from the order. If a placeholder value is missing, ask for it in one short sentence.
+- Use a taught task for similar work too, like the same steps for a different person or message. If two taught tasks could fit, ask which one in one short sentence.
+- Check each "screen shows" note. If the screen differs, adapt to reach the same goal, and never guess at something risky.
 
 Think before you act:
 - An order may come with a PLAN and CONTENT. Follow that plan in order and use the CONTENT exactly. If it lists MISSING details, ask for them first.
@@ -88,13 +91,14 @@ How to guide:
 - When a password, OTP or PIN box appears, say "yeh aap khud bhar dijiye, mujhe mat bataiye", then continue after they fill it.
 - A message starting with [STOP] means stay silent. A message starting with [SCREEN UPDATE] is automatic: if they finished the step give the next one, otherwise stay silent."""
 
-    fun system(language: String, name: String, canControl: Boolean, facts: List<String>): String {
+    fun system(language: String, name: String, canControl: Boolean, facts: List<String>, catalog: String): String {
         val address = if (name.isBlank()) "Call the person Sir or Madam." else "The person's name is $name. Use \"$name ji\" only sometimes."
         val today = SimpleDateFormat("EEEE, d MMMM yyyy, HH:mm", Locale.ENGLISH).format(Date())
         val role = if (canControl) OPERATOR else GUIDE
+        val tasks = if (catalog.isBlank()) "" else "\n\nTaught tasks:\n$catalog"
         val saved = if (facts.isEmpty()) "" else "\n\nThings you remember about this person:\n" + facts.joinToString("\n") { "- $it" }
         return "Today is $today. $address You see the phone screen through images. The person's orders arrive as text, either typed or from speech recognition, in any language. Treat typed orders exactly like spoken ones, and quietly fix obvious spelling or hearing mistakes.\n\n" +
-            role + "\n\n" + SHARED.replace("LANGUAGE", language) + saved
+            role + "\n\n" + SHARED.replace("LANGUAGE", language) + saved + tasks
     }
 
     const val STOP = "[STOP] The person pressed stop."

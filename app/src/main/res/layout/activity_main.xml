@@ -160,6 +160,23 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/backupButton"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="10dp"
+                android:text="Sikhaye kaam ka backup banao"
+                android:textAllCaps="false"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/restoreButton"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:text="Backup se wapas lao"
+                android:textAllCaps="false"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <Button

@@ -185,6 +185,8 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                     JSONObject().put("fact", prop("STRING", "Short fact")), listOf("fact")))
                 .put(tool("forget", "Remove a saved fact that is wrong.",
                     JSONObject().put("fact", prop("STRING", "Exact saved fact")), listOf("fact")))
+                .put(tool("get_taught_task", "Get the exact steps and lessons of a taught task.",
+                    JSONObject().put("name", prop("STRING", "Task name")), listOf("name")))
                 .put(tool("open_url", "Open a website address in the browser.",
                     JSONObject().put("url", prop("STRING", "Full https address")), listOf("url")))
                 .put(tool("tap_text", "Tap the item showing these words. Best way to tap.",

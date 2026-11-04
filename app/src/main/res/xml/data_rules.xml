@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="sahayak_skills.xml" />
+        <include domain="sharedpref" path="sahayak_memory.xml" />
+    </cloud-backup>
+</data-extraction-rules>

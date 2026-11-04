@@ -140,9 +140,8 @@ class AssistService : Service(), GeminiLive.Callback {
             val name = intent.getStringExtra(EXTRA_SKILL).orEmpty()
             if (name.isNotEmpty()) {
                 practiceName = name
-                val steps = Skills.steps(this, name).joinToString("\n")
                 mainHandler.post { caption?.show("Practice shuru: $name") }
-                typedOrder("Do the taught task \"$name\" now from start to end, using these steps:\n$steps")
+                typedOrder("Do the taught task \"$name\" now from start to end. Use get_taught_task first. If a placeholder has no value, use the example value from before.")
             }
             return START_NOT_STICKY
         }
@@ -170,7 +169,7 @@ class AssistService : Service(), GeminiLive.Callback {
         whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
         tools = if (canControl) GeminiLive.phoneTools() else null
-        systemText = Prompts.system(language, userName, canControl, Memory.all(this) + Skills.promptLines(this))
+        systemText = Prompts.system(language, userName, canControl, Memory.all(this), Skills.catalog(this))
 
         val manager = getSystemService(MediaProjectionManager::class.java)
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -465,7 +464,7 @@ class AssistService : Service(), GeminiLive.Callback {
         plannerHandler.post {
             val began = System.currentTimeMillis()
             val app = PhoneControl.instance?.rootInActiveWindow?.packageName?.toString().orEmpty()
-            val plan = think.plan(text, app, Memory.all(this) + Skills.promptLines(this))
+            val plan = think.plan(text, app, Memory.all(this) + Skills.matches(this, text))
             RunLog.add(this, "plan " + (if (plan != null) "ok " else "skipped ") + (System.currentTimeMillis() - began) + "ms")
             if (stopRequested) return@post
             workerHandler.post {
@@ -547,7 +546,7 @@ class AssistService : Service(), GeminiLive.Callback {
         val used = stepLog.takeLast(25).joinToString("\n")
         plannerHandler.post {
             val better = if (ok) planner?.improve(name, Skills.steps(this, name), used) else null
-            Skills.recordRun(this, name, ok, better)
+            Skills.recordRun(this, name, ok, better, used.lines().lastOrNull().orEmpty())
             RunLog.add(this, "practice " + (if (ok) "ok" else "failed") + (if (better != null) " improved" else ""))
             AssistState.set(true, if (ok) "Practice poori: $name" else "Practice mein dikkat aayi: $name")
         }
@@ -718,6 +717,8 @@ class AssistService : Service(), GeminiLive.Callback {
                     JSONObject().put("status", "cancelled_by_person")
                 }
                 control == null -> JSONObject().put("status", "control_off")
+                name == "get_taught_task" -> Skills.detail(this, args.optString("name"))
+                    ?.put("status", "ok") ?: JSONObject().put("status", "not_found")
                 name == "remember" -> JSONObject().put("status",
                     if (Memory.add(this, args.optString("fact"))) "ok" else "not_saved")
                 name == "forget" -> {

@@ -90,8 +90,8 @@ class PhoneControl : AccessibilityService() {
             Toast.makeText(this, "Koi step record nahi hua", Toast.LENGTH_LONG).show()
             return
         }
-        Skills.add(this, teachName, steps)
-        Toast.makeText(this, "Sikh liya: $teachName", Toast.LENGTH_LONG).show()
+        Skills.addDemo(this, teachName, steps)
+        Toast.makeText(this, "Saved: $teachName", Toast.LENGTH_SHORT).show()
     }
 
     private fun addStep(step: String) {
@@ -112,6 +112,10 @@ class PhoneControl : AccessibilityService() {
                     pkg
                 }
                 addStep("open app $app")
+            } else if (pkg == lastApp) {
+                val shown = visibleNodes().asSequence().map { label(it) }.filter { it.isNotEmpty() }
+                    .take(4).joinToString(", ") { it.take(30) }
+                if (shown.isNotEmpty()) addStep("screen shows: $shown")
             }
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                 val text = event.text.joinToString(" ").ifBlank { event.contentDescription?.toString().orEmpty() }.trim()
@@ -547,7 +551,7 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
-        private const val MAX_TEACH_STEPS = 60
+        private const val MAX_TEACH_STEPS = 120
         private const val SEND_TRIES = 8
         private const val SEND_CHECK_MS = 400L
         private val WHATSAPP_SEND_IDS = listOf(
