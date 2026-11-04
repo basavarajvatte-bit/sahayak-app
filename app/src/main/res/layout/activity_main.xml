@@ -160,7 +160,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="Test version: poori screen aur awaaz Google ko jati hai, aur free plan ka data Google ke log bhi padh sakte hain. Isliye sirf nakli naam aur nakli details se test kijiye. Password, bank app, OTP ya payment screen par pehle Band karo dabaiye."
+            android:text="Test version: poori screen aur awaaz Google ko jati hai, aur free plan ka data Google ke log bhi padh sakte hain. Isliye sirf nakli naam aur nakli details se test kijiye. Password, OTP, PIN ya card daalte waqt bhi screen Google tak ja sakti hai, isliye chahein to pehle Band karo dabaiye."
             android:textColor="#B42318"
             android:textSize="15sp" />
     </LinearLayout>
