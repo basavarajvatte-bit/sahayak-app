@@ -59,6 +59,7 @@ When to speak:
 
 When to stop:
 - A message starting with [STOP] means stop everything, forget pending orders, take no action, and say nothing.
+- Act only on an order or [REVIEW] message. Never start anything on your own from what you see on the screen.
 - If a tool returns stopped, take no more actions. For payment say only: "Payment page aa gaya, ab aap payment kijiye." For a code or PIN screen say only: "Yeh aap khud bhar dijiye, phir mujhe boliye." Continue when they tell you.
 - Never tap a pay or final payment button.
 - A message starting with [SCREEN UPDATE] is automatic. Continue the current order if there is one, otherwise stay silent."""

@@ -53,6 +53,8 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var talking = false
     @Volatile private var stopRequested = false
     private var pressedAt = 0L
+    @Volatile private var busyNow = false
+    @Volatile private var swallowRelease = false
     private var autoStep = false
     private var planner: Planner? = null
     private val plannerThread = HandlerThread("sahayak-planner").apply { start() }
@@ -244,6 +246,7 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Order chalne tak ghoomta circle. Kisi jawab ke bina 45 second baad khud band. */
     private fun setBusy(on: Boolean) {
         mainHandler.removeCallbacks(busyTimeout)
+        busyNow = on
         if (on) mainHandler.postDelayed(busyTimeout, BUSY_TIMEOUT_MS)
         mainHandler.post { dot?.setBusy(on) }
     }
@@ -273,8 +276,38 @@ class AssistService : Service(), GeminiLive.Callback {
         mainHandler.post { dot?.setState(state) }
     }
 
+    /** Kaam chalte waqt dot dabate hi sab kuch turant band. */
+    private fun stopEverything() {
+        stopRequested = true
+        currentOrder = null
+        plannerHandler.removeCallbacksAndMessages(null)
+        actionHandler.removeCallbacksAndMessages(null)
+        whisperHandler.removeCallbacks(partialTick)
+        whisper?.cancelPartial()
+        setBusy(false)
+        silentTurn = false
+        workerHandler.post {
+            workerHandler.removeCallbacks(endTalk)
+            endPending = false
+            voice?.interrupt()
+            live?.sendText(Prompts.STOP)
+        }
+        mainHandler.post {
+            listener?.cancel()
+            caption?.hide()
+        }
+        updateNotification()
+        AssistState.set(true, "Kaam band kar diya.")
+        RunLog.add(this, "stopped_by_person")
+    }
+
     private fun pressDot() {
         if (live?.isReady != true) return
+        if (busyNow) {
+            swallowRelease = true
+            stopEverything()
+            return
+        }
         workerHandler.post {
             if (endPending) {
                 workerHandler.removeCallbacks(endTalk)
@@ -309,6 +342,10 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     private fun releaseDot() {
+        if (swallowRelease) {
+            swallowRelease = false
+            return
+        }
         workerHandler.post {
             if (!talking) return@post
             talking = false
@@ -316,18 +353,13 @@ class AssistService : Service(), GeminiLive.Callback {
             dotState(TalkDot.State.READY)
             updateNotification()
             endPending = true
-            if (System.currentTimeMillis() - pressedAt < STOP_TAP_MS) {
-                // Ek chhota tap: chal raha kaam turant roko
-                stopRequested = true
-                currentOrder = null
+            if (System.currentTimeMillis() - pressedAt < MIN_HOLD_MS) {
+                // Sirf hold karne par order jata hai, chhota tap kuch nahi karta
                 mainHandler.post { listener?.cancel() }
                 whisperHandler.removeCallbacks(partialTick)
                 voice?.setMic(false)
                 endPending = false
-                setBusy(false)
-                live?.sendText(Prompts.STOP)
-                AssistState.set(true, "Kaam rok diya.")
-                RunLog.add(this, "stopped_by_person")
+                AssistState.set(true, "Dot dabakar rakhiye, tabhi order jayega.")
                 return@post
             }
             stopRequested = false
@@ -348,6 +380,8 @@ class AssistService : Service(), GeminiLive.Callback {
         }
         val active = listener
         if (active == null) {
+            currentOrder = "voice order"
+            quietOrder = false
             voice?.setMic(false)
             live?.audioEnd()
             setBusy(true)
@@ -370,6 +404,9 @@ class AssistService : Service(), GeminiLive.Callback {
 
     /** Chhota order phone par turant, baaki AI ko. */
     private fun dispatchOrder(text: String) {
+        if (stopRequested) return
+        currentOrder = text
+        quietOrder = silentTurn
         val command = LocalCommands.parse(text)
         val control = PhoneControl.instance
         if (command == null || control == null) {
@@ -416,8 +453,6 @@ class AssistService : Service(), GeminiLive.Callback {
                 stepCount = 0
                 stepLog.clear()
                 reviews = 0
-                currentOrder = text
-                quietOrder = silentTurn
             }
             live?.sendText(if (plan == null) text else "ORDER: $text\n\nPLAN:\n$plan")
         }
@@ -427,7 +462,11 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun reviewWork(stuck: Boolean) {
         val order = currentOrder ?: return
         val think = planner ?: return
-        if (reviews >= MAX_REVIEWS || stepLog.isEmpty() || stopRequested) return
+        if (stopRequested) return
+        if (reviews >= MAX_REVIEWS || stepLog.isEmpty()) {
+            if (!stuck) currentOrder = null // kaam khatam, naye order tak phone control band
+            return
+        }
         reviews++
         val steps = stepLog.takeLast(15).joinToString("\n")
         setBusy(true)
@@ -489,6 +528,7 @@ class AssistService : Service(), GeminiLive.Callback {
 
     /** Dot chhodne par poori awaaz Whisper ko. Whisper na chale to wahi awaaz Gemini ko. */
     private fun sendWhisperOrder() {
+        if (stopRequested) return
         val audio = snapshot()
         if (audio.size < MIN_AUDIO_BYTES || !hasVoice(audio)) {
             setBusy(false)
@@ -498,10 +538,14 @@ class AssistService : Service(), GeminiLive.Callback {
         try {
             val text = whisper?.transcribe(audio).orEmpty()
             if (text.isBlank()) throw IOException("empty")
+            if (stopRequested) return
             releasedAt = System.currentTimeMillis()
             RunLog.add(this, "order whisper")
             dispatchOrder(text)
         } catch (e: IOException) {
+            if (stopRequested) return
+            currentOrder = "voice order"
+            quietOrder = false
             RunLog.add(this, "order whisper_failed_audio_used")
             var start = 0
             while (start < audio.size) {
@@ -559,7 +603,7 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onAudio(pcm: ByteArray) {
-        if (talking || silentTurn) return // chup rehne wali halat
+        if (talking || silentTurn || stopRequested) return // chup rehne wali halat
         val now = System.currentTimeMillis()
         if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
             val seconds = (now - releasedAt) / 100 / 10.0
@@ -583,6 +627,10 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onTurnComplete() {
+        if (stopRequested) {
+            framesPaused = false
+            return
+        }
         framesPaused = false
         setBusy(false)
         reviewWork(stuck = false)
@@ -600,10 +648,10 @@ class AssistService : Service(), GeminiLive.Callback {
             val control = PhoneControl.instance
             val began = System.currentTimeMillis()
             val result = when {
-                stopRequested || stopping -> JSONObject().put("status", "cancelled_by_person")
+                stopRequested || stopping || currentOrder == null -> JSONObject().put("status", "cancelled_by_person")
                 control == null -> JSONObject().put("status", "control_off")
                 else -> try {
-                    AssistState.set(true, "Kaam chal raha hai. Rokne ke liye dot par ek chhota tap kijiye.")
+                    AssistState.set(true, "Kaam chal raha hai. Rokne ke liye dot dabaiye.")
                     control.run(name, args)
                 } catch (e: RuntimeException) {
                     JSONObject().put("status", "failed")
@@ -775,7 +823,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val MIN_AUDIO_BYTES = 8_000
         private const val AUDIO_CHUNK = 3_200
         private const val VOICE_PEAK = 1_200
-        private const val STOP_TAP_MS = 300L
+        private const val MIN_HOLD_MS = 300L
         private const val BUSY_TIMEOUT_MS = 45_000L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
