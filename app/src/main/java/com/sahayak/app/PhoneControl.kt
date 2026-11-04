@@ -3,6 +3,8 @@ package com.sahayak.app
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
@@ -58,7 +60,13 @@ class PhoneControl : AccessibilityService() {
             "open_app" -> openApp(args.optString("name"))
             "tap" -> tapElement(args.optInt("element", -1))
             "tap_position" -> tapPosition(args.optInt("x", -1), args.optInt("y", -1))
-            "type_text" -> typeText(args.optInt("element", -1), args.optString("text"))
+            "type_text" -> {
+                val target = typeTarget(args.optInt("element", -1))
+                if (target?.isPassword == true) {
+                    return JSONObject().put("status", "password_field").put("screen", readScreen())
+                }
+                target != null && typeInto(target, args.optString("text"))
+            }
             "press_enter" -> pressEnter()
             "scroll" -> scroll(args.optString("direction") != "up")
             "go_back" -> performGlobalAction(GLOBAL_ACTION_BACK)
@@ -147,17 +155,28 @@ class PhoneControl : AccessibilityService() {
         return gesture(px, py, px, py, 60)
     }
 
-    private fun typeText(index: Int, text: String): Boolean {
+    private fun typeTarget(index: Int): AccessibilityNodeInfo? {
         val chosen = elements.getOrNull(index)
+        chosen?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         chosen?.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-        val node = when {
-            chosen?.isEditable == true -> chosen
-            else -> rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        } ?: return false
-        if (node.isPassword) return false
+        return if (chosen?.isEditable == true) chosen
+        else rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+    }
+
+    private fun typeInto(node: AccessibilityNodeInfo, text: String): Boolean {
         val bundle = Bundle()
         bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
-        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
+        node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
+        Thread.sleep(TYPE_CHECK_MS)
+        node.refresh()
+        if (node.text?.toString()?.contains(text) == true) return true
+        // Kuch websites seedha text nahi letin, wahan paste karke dekho
+        getSystemService(ClipboardManager::class.java)
+            .setPrimaryClip(ClipData.newPlainText("Sahayak", text))
+        node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        Thread.sleep(TYPE_CHECK_MS)
+        node.refresh()
+        return node.text?.toString()?.contains(text) == true
     }
 
     private fun pressEnter(): Boolean {
@@ -234,15 +253,14 @@ class PhoneControl : AccessibilityService() {
                 .put("y", box.centerY() * 1000 / metrics.heightPixels)
             if (!node.isPassword) item.put("text", label(node).take(60))
             if (node.isEditable) item.put("input", true)
+            if (node.isPassword) item.put("password", true)
             items.put(item)
         }
         return items
     }
 
     private fun sensitiveReason(): String? {
-        val nodes = visibleNodes()
-        if (nodes.any { it.isPassword }) return "password_screen"
-        val words = nodes.joinToString(" ") { label(it) }.lowercase()
+        val words = visibleNodes().joinToString(" ") { label(it) }.lowercase()
         return if (STOP_WORDS.any { it in words }) "payment_or_secret_screen" else null
     }
 
@@ -251,6 +269,7 @@ class PhoneControl : AccessibilityService() {
             private set
 
         private const val MIN_SETTLE_MS = 300L
+        private const val TYPE_CHECK_MS = 250L
         private const val MAX_SETTLE_MS = 4_000L
         private const val SETTLE_STEP_MS = 200L
         private const val LOAD_GRACE_MS = 1_200L
