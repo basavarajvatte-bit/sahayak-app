@@ -1,16 +1,19 @@
 package com.sahayak.app
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Path
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
@@ -44,6 +47,11 @@ class PhoneControl : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     fun run(name: String, args: JSONObject): JSONObject {
+        val current = rootInActiveWindow?.packageName?.toString().orEmpty()
+        if (isFinance(current)) {
+            return JSONObject().put("status", "stopped").put("reason", "finance_app")
+        }
+        if (name == "open_whatsapp_chat") return openWhatsApp(args)
         val blocked = sensitiveReason()
         if (name != "get_screen" && blocked != null) {
             return JSONObject().put("status", "stopped").put("reason", blocked)
@@ -57,7 +65,13 @@ class PhoneControl : AccessibilityService() {
             }
             "open_url" -> openUrl(args.optString("url"))
             "tap_text" -> tapText(args.optString("text"))
-            "open_app" -> openApp(args.optString("name"))
+            "open_app" -> {
+                if (financeMatch(args.optString("name"))) {
+                    return JSONObject().put("status", "stopped").put("reason", "finance_app")
+                }
+                openApp(args.optString("name"))
+            }
+            "compose_email" -> composeEmail(args)
             "tap" -> tapElement(args.optInt("element", -1))
             "tap_position" -> tapPosition(args.optInt("x", -1), args.optInt("y", -1))
             "type_text" -> {
@@ -79,6 +93,7 @@ class PhoneControl : AccessibilityService() {
             .put("screen", readScreen())
         if (after != null) result.put("status", "stopped").put("reason", after)
         else if (name == "type_text" && done) result.put("next", "Text is typed but not sent. Submit it now.")
+        else if (name == "compose_email" && done) result.put("next", "Check the fields, then tap the send button now.")
         return result
     }
 
@@ -98,6 +113,70 @@ class PhoneControl : AccessibilityService() {
             last = now
             if (stable >= 2 && (now != before || waited >= LOAD_GRACE_MS)) return
         }
+    }
+
+    private fun isFinance(pkg: String): Boolean =
+        pkg in FINANCE_PACKAGES || FINANCE_PARTS.any { it in pkg.lowercase() }
+
+    private fun financeMatch(name: String): Boolean {
+        val wanted = name.lowercase()
+        return FINANCE_NAMES.any { it in wanted }
+    }
+
+    private fun composeEmail(args: JSONObject): Boolean {
+        val to = args.optString("to").trim()
+        if (!to.contains("@")) return false
+        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(to)))
+            .putExtra(Intent.EXTRA_SUBJECT, args.optString("subject"))
+            .putExtra(Intent.EXTRA_TEXT, args.optString("body"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.setPackage(GMAIL).resolveActivity(packageManager) == null) intent.setPackage(null)
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    /** Contact se seedha WhatsApp chat. Do milte naam hon to pehle puchhna hoga. */
+    private fun openWhatsApp(args: JSONObject): JSONObject {
+        if (checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return JSONObject().put("status", "no_contacts_permission")
+        }
+        val name = args.optString("contact").trim()
+        if (name.isEmpty()) return JSONObject().put("status", "failed")
+        val found = LinkedHashMap<String, String>()
+        val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(name))
+        val columns = arrayOf(
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER
+        )
+        contentResolver.query(uri, columns, null, null, null)?.use { row ->
+            while (row.moveToNext()) {
+                val label = row.getString(0).orEmpty()
+                if (label.isNotEmpty() && label !in found) found[label] = row.getString(1).orEmpty()
+            }
+        }
+        val exact = found.keys.filter { it.equals(name, ignoreCase = true) }
+        val chosen = when {
+            exact.size == 1 -> exact[0]
+            found.size == 1 -> found.keys.first()
+            found.isEmpty() -> return JSONObject().put("status", "contact_not_found")
+            else -> return JSONObject().put("status", "choose_contact").put("names", JSONArray(found.keys.take(5)))
+        }
+        val digits = found[chosen].orEmpty().filter { it.isDigit() }
+        val phone = if (digits.length == 10) "91$digits" else digits.trimStart('0')
+        val link = "https://wa.me/" + phone + "?text=" + Uri.encode(args.optString("message"))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.setPackage("com.whatsapp").resolveActivity(packageManager) == null) {
+            return JSONObject().put("status", "whatsapp_not_found")
+        }
+        startActivity(intent)
+        waitUntilSettled("")
+        return JSONObject().put("status", "ok").put("contact", chosen)
+            .put("next", "Check the chat name matches this contact, then tap send.")
+            .put("screen", readScreen())
     }
 
     private fun openUrl(url: String): Boolean {
@@ -239,9 +318,10 @@ class PhoneControl : AccessibilityService() {
         (node.text ?: node.contentDescription ?: node.hintText ?: "").toString().trim()
 
     private fun readScreen(): JSONArray {
-        val list = visibleNodes().filter {
-            label(it).isNotEmpty() || it.isClickable || it.isEditable
-        }.take(MAX_ELEMENTS)
+        val useful = visibleNodes().filter { label(it).isNotEmpty() || it.isClickable || it.isEditable }
+        // Pehle dabane wali cheezen, taaki AI ko chhoti list mile
+        val list = (useful.filter { it.isClickable || it.isEditable } + useful.filter { !it.isClickable && !it.isEditable })
+            .take(MAX_ELEMENTS)
         elements = list
         val items = JSONArray()
         val box = Rect()
@@ -275,7 +355,15 @@ class PhoneControl : AccessibilityService() {
         private const val LOAD_GRACE_MS = 800L
         private const val GESTURE_WAIT_MS = 3_000L
         private const val MAX_SCAN = 1_500
-        private const val MAX_ELEMENTS = 80
+        private const val MAX_ELEMENTS = 60
+        private const val GMAIL = "com.google.android.gm"
+        private val FINANCE_PACKAGES = setOf(
+            "com.phonepe.app", "net.one97.paytm", "com.google.android.apps.nbu.paisa.user",
+            "in.org.npci.upiapp", "in.amazon.mShop.android.shopping.pay", "com.sbi.lotusintouch",
+            "com.csam.icici.bank.imobile", "com.snapwork.hdfc", "com.axis.mobile", "com.dreamplug.androidapp"
+        )
+        private val FINANCE_PARTS = listOf(".bank", "bank.", "banking", "upi", "wallet")
+        private val FINANCE_NAMES = listOf("phonepe", "paytm", "google pay", "gpay", "bhim", "yono", "bank", "cred")
         private val STOP_WORDS = listOf(
             "pay now", "pay ₹", "pay rs", "proceed to pay", "continue to pay", "make payment",
             "payment method", "payment options", "select payment", "upi id", "upi pin",

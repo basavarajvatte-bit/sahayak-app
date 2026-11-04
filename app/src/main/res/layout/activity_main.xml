@@ -218,6 +218,23 @@
                 android:maxLines="1"
                 android:textSize="17sp" />
 
+            <Button
+                android:id="@+id/reportButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:text="Report copy karo"
+                android:textAllCaps="false"
+                android:textSize="17sp" />
+
+            <TextView
+                android:id="@+id/reportText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textColor="#667085"
+                android:textSize="12sp" />
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

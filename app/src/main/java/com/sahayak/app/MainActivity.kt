@@ -2,6 +2,8 @@ package com.sahayak.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionConfig
@@ -54,6 +56,13 @@ class MainActivity : Activity() {
             settingsPanel.visibility = if (settingsPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
         batteryButton.setOnClickListener { askBattery() }
+        findViewById<Button>(R.id.reportButton).setOnClickListener {
+            val report = RunLog.read(this).ifEmpty { "Abhi koi record nahi hai" }
+            getSystemService(ClipboardManager::class.java)
+                .setPrimaryClip(ClipData.newPlainText("Sahayak report", report))
+            findViewById<TextView>(R.id.reportText).text = report.takeLast(1_500)
+            statusText.text = "Report copy ho gaya."
+        }
         val volumeBar = findViewById<SeekBar>(R.id.volumeBar)
         volumeBar.progress = prefs.getInt(PREF_VOLUME, DEFAULT_VOLUME)
         AssistState.volume = volumeBar.progress.coerceAtLeast(MIN_VOLUME) / 100f
@@ -148,6 +157,11 @@ class MainActivity : Activity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             needed.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        if (PhoneControl.instance != null &&
+            checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed.add(Manifest.permission.READ_CONTACTS)
         }
         if (needed.isEmpty()) askScreen() else requestPermissions(needed.toTypedArray(), REQUEST_PERMISSIONS)
     }

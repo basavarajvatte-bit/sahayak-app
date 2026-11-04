@@ -53,6 +53,7 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var stopRequested = false
     private var pressedAt = 0L
     private var autoStep = false
+    private var controlLostShown = false
     private var tools: JSONArray? = null
     private val actions = HandlerThread("sahayak-actions").apply { start() }
     private val actionHandler = Handler(actions.looper)
@@ -90,6 +91,11 @@ class AssistService : Service(), GeminiLive.Callback {
         override fun run() {
             if (stopping) return
             maybeNudge()
+            if (tools != null && PhoneControl.instance == null && !controlLostShown) {
+                controlLostShown = true
+                RunLog.add(this@AssistService, "control_lost")
+                AssistState.set(true, "Phone control band ho gaya. Sahayak app kholkar dobara chalu kijiye.")
+            }
             workerHandler.postDelayed(this, NUDGE_TICK_MS)
         }
     }
@@ -267,6 +273,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 setBusy(false)
                 live?.sendText(Prompts.STOP)
                 AssistState.set(true, "Kaam rok diya.")
+                RunLog.add(this, "stopped_by_person")
                 return@post
             }
             stopRequested = false
@@ -299,6 +306,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     AssistState.set(true, "Awaaz samajh nahi aayi. Dot dabakar dobara boliye.")
                 } else {
                     releasedAt = System.currentTimeMillis()
+                    RunLog.add(this, "order listener")
                     live?.sendText(words)
                 }
             }
@@ -329,8 +337,10 @@ class AssistService : Service(), GeminiLive.Callback {
             val text = whisper?.transcribe(audio).orEmpty()
             if (text.isBlank()) throw IOException("empty")
             releasedAt = System.currentTimeMillis()
+            RunLog.add(this, "order whisper")
             live?.sendText(text)
         } catch (e: IOException) {
+            RunLog.add(this, "order whisper_failed_audio_used")
             var start = 0
             while (start < audio.size) {
                 val size = minOf(AUDIO_CHUNK, audio.size - start)
@@ -383,6 +393,7 @@ class AssistService : Service(), GeminiLive.Callback {
         val now = System.currentTimeMillis()
         if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
             val seconds = (now - releasedAt) / 100 / 10.0
+            RunLog.add(this, "reply ${seconds}s")
             AssistState.set(true, "Pichhla jawab: $seconds second")
             releasedAt = 0L
         }
@@ -403,12 +414,14 @@ class AssistService : Service(), GeminiLive.Callback {
 
     override fun onTurnComplete() {
         setBusy(false)
+        RunLog.add(this, "turn_done")
     }
 
     override fun onToolCall(id: String, name: String, args: JSONObject) {
         setBusy(true)
         actionHandler.post {
             val control = PhoneControl.instance
+            val began = System.currentTimeMillis()
             val result = when {
                 stopRequested || stopping -> JSONObject().put("status", "cancelled_by_person")
                 control == null -> JSONObject().put("status", "control_off")
@@ -419,6 +432,8 @@ class AssistService : Service(), GeminiLive.Callback {
                     JSONObject().put("status", "failed")
                 }
             }
+            RunLog.add(this, name + " " + result.optString("status") + " " +
+                (System.currentTimeMillis() - began) + "ms " + result.optString("app"))
             live?.sendToolResult(id, name, result)
         }
     }
