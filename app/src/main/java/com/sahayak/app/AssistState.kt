@@ -9,6 +9,8 @@ object AssistState {
 
     @Volatile var running = false
         private set
+    /** Sahayak ki awaaz, 0.1 se 1.0 tak. */
+    @Volatile var volume = 0.5f
     @Volatile var status = ""
         private set
     var listener: (() -> Unit)? = null

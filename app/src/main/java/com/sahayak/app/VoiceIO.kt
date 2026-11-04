@@ -88,6 +88,8 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
             }
         }, "sahayak-mic").apply { start() }
 
+        var applied = AssistState.volume
+        player.setVolume(applied)
         playThread = Thread({
             while (running) {
                 val chunk = try {
@@ -95,6 +97,11 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
                 } catch (e: InterruptedException) {
                     null
                 } ?: continue
+                val wanted = AssistState.volume
+                if (wanted != applied) {
+                    player.setVolume(wanted)
+                    applied = wanted
+                }
                 player.write(chunk, 0, chunk.size)
             }
         }, "sahayak-speaker").apply { start() }

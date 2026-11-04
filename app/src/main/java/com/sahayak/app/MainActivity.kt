@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.RadioGroup
+import android.widget.SeekBar
 import android.widget.TextView
 
 class MainActivity : Activity() {
@@ -41,6 +42,19 @@ class MainActivity : Activity() {
         nameInput = findViewById(R.id.nameInput)
         autoStep = findViewById(R.id.autoStep)
         controlButton = findViewById(R.id.controlButton)
+        val volumeBar = findViewById<SeekBar>(R.id.volumeBar)
+        volumeBar.progress = prefs.getInt(PREF_VOLUME, DEFAULT_VOLUME)
+        AssistState.volume = volumeBar.progress.coerceAtLeast(MIN_VOLUME) / 100f
+        volumeBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                AssistState.volume = progress.coerceAtLeast(MIN_VOLUME) / 100f
+                prefs.edit().putInt(PREF_VOLUME, progress).apply()
+            }
+
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        })
         controlButton.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
@@ -154,6 +168,9 @@ class MainActivity : Activity() {
         private const val PREF_NAME = "name"
         private const val PREF_VOICE = "voice"
         private const val PREF_AUTO = "auto_step"
+        private const val PREF_VOLUME = "volume"
+        private const val DEFAULT_VOLUME = 50
+        private const val MIN_VOLUME = 10
         private const val VOICE_FEMALE = "Aoede"
         private const val VOICE_MALE = "Puck"
         private const val HINDI = "Hindi"

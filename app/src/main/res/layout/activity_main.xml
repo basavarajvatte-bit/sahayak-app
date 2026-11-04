@@ -68,7 +68,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Bhasha"
+            android:text="Pehli bhasha (phir jis bhasha mein bologe, usi mein jawab)"
             android:textColor="#1D2433"
             android:textSize="17sp"
             android:textStyle="bold" />
@@ -144,6 +144,21 @@
             android:inputType="textPersonName"
             android:maxLines="1"
             android:textSize="17sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Sahayak ki awaaz"
+            android:textColor="#1D2433"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <SeekBar
+            android:id="@+id/volumeBar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:max="100" />
 
         <CheckBox
             android:id="@+id/autoStep"
