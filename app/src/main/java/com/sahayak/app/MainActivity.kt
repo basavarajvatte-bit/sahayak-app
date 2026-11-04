@@ -2,6 +2,7 @@ package com.sahayak.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -58,6 +59,7 @@ class MainActivity : Activity() {
             settingsPanel.visibility = if (settingsPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
         batteryButton.setOnClickListener { askBattery() }
+        findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
         findViewById<Button>(R.id.reportButton).setOnClickListener {
             val report = RunLog.read(this).ifEmpty { "Abhi koi record nahi hai" }
             getSystemService(ClipboardManager::class.java)
@@ -123,7 +125,52 @@ class MainActivity : Activity() {
         controlButton.text = if (PhoneControl.instance != null) "✓ Phone control chalu hai" else "Phone control chalu karo"
         renderWork()
         renderMemory()
+        renderSkills()
         batteryButton.text = if (batteryFree()) "✓ Background mein chalne ki ijazat hai" else "Background ki ijazat do"
+    }
+
+    private fun askTeachName() {
+        val control = PhoneControl.instance
+        if (control == null) {
+            statusText.text = "Pehle Phone control chalu kijiye."
+            return
+        }
+        val input = EditText(this).apply { hint = "Jaise: Aai ko photo bhejna" }
+        AlertDialog.Builder(this)
+            .setTitle("Kaam ka naam")
+            .setView(input)
+            .setPositiveButton("Shuru karo") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    control.startTeaching(name)
+                    moveTaskToBack(true)
+                }
+            }
+            .setNegativeButton("Rehne do", null)
+            .show()
+    }
+
+    private fun renderSkills() {
+        val box = findViewById<LinearLayout>(R.id.skillBox)
+        box.removeAllViews()
+        Skills.all(this).forEach { skill ->
+            val name = skill.optString("name")
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(TextView(this).apply {
+                text = name
+                textSize = 16f
+                setTextColor(0xFF1D2433.toInt())
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(Button(this).apply {
+                text = "Hatao"
+                isAllCaps = false
+                setOnClickListener {
+                    Skills.remove(this@MainActivity, name)
+                    renderSkills()
+                }
+            })
+            box.addView(row)
+        }
     }
 
     private fun renderMemory() {

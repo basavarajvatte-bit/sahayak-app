@@ -9,13 +9,18 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Path
+import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.view.Gravity
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Button
+import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
@@ -42,7 +47,95 @@ class PhoneControl : AccessibilityService() {
         super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    private var teachName = ""
+    private var teachSteps: ArrayList<String>? = null
+    private var lastApp = ""
+    private var teachBar: Button? = null
+
+    /** Sikhana shuru: ab aapke tap aur type steps ban jate hain. */
+    fun startTeaching(name: String) {
+        stopBar()
+        teachName = name
+        teachSteps = ArrayList()
+        lastApp = ""
+        val manager = getSystemService(WindowManager::class.java)
+        val density = resources.displayMetrics.density
+        val bar = Button(this).apply {
+            text = "Sikhana poora"
+            isAllCaps = false
+            setOnClickListener { finishTeaching() }
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT, (52 * density).toInt(),
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            y = (56 * density).toInt()
+        }
+        manager.addView(bar, params)
+        teachBar = bar
+    }
+
+    private fun stopBar() {
+        teachBar?.let { getSystemService(WindowManager::class.java).removeView(it) }
+        teachBar = null
+    }
+
+    private fun finishTeaching() {
+        val steps = teachSteps
+        teachSteps = null
+        stopBar()
+        if (steps.isNullOrEmpty()) {
+            Toast.makeText(this, "Koi step record nahi hua", Toast.LENGTH_LONG).show()
+            return
+        }
+        Skills.add(this, teachName, steps)
+        Toast.makeText(this, "Sikh liya: $teachName", Toast.LENGTH_LONG).show()
+    }
+
+    private fun addStep(step: String) {
+        val steps = teachSteps ?: return
+        if (steps.size < MAX_TEACH_STEPS && steps.lastOrNull() != step) steps.add(step)
+    }
+
+    private fun recordStep(event: AccessibilityEvent) {
+        val steps = teachSteps ?: return
+        val pkg = event.packageName?.toString().orEmpty()
+        if (pkg.isEmpty() || pkg == packageName || pkg == "com.android.systemui" || isFinance(pkg)) return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (pkg != lastApp && "launcher" !in pkg) {
+                lastApp = pkg
+                val app = try {
+                    packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+                } catch (e: PackageManager.NameNotFoundException) {
+                    pkg
+                }
+                addStep("open app $app")
+            }
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                val text = event.text.joinToString(" ").ifBlank { event.contentDescription?.toString().orEmpty() }.trim()
+                if (text.isNotEmpty()) {
+                    addStep("tap \"" + text.take(60) + "\"")
+                } else {
+                    val box = Rect()
+                    event.source?.getBoundsInScreen(box)
+                    val metrics = resources.displayMetrics
+                    addStep("tap the icon at x=" + box.centerX() * 1000 / metrics.widthPixels +
+                        " y=" + box.centerY() * 1000 / metrics.heightPixels)
+                }
+            }
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> if (!event.isPassword) {
+                val text = event.text.joinToString(" ").take(200)
+                if (steps.lastOrNull()?.startsWith("type ") == true) steps.removeAt(steps.size - 1)
+                if (text.isNotEmpty()) addStep("type \"$text\"")
+            }
+        }
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null) recordStep(event)
+    }
 
     override fun onInterrupt() = Unit
 
@@ -454,6 +547,7 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
+        private const val MAX_TEACH_STEPS = 60
         private const val SEND_TRIES = 8
         private const val SEND_CHECK_MS = 400L
         private val WHATSAPP_SEND_IDS = listOf(

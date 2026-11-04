@@ -158,7 +158,7 @@ class AssistService : Service(), GeminiLive.Callback {
         whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
         tools = if (canControl) GeminiLive.phoneTools() else null
-        systemText = Prompts.system(language, userName, canControl, Memory.all(this))
+        systemText = Prompts.system(language, userName, canControl, Memory.all(this) + Skills.promptLines(this))
 
         val manager = getSystemService(MediaProjectionManager::class.java)
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -447,7 +447,7 @@ class AssistService : Service(), GeminiLive.Callback {
         plannerHandler.post {
             val began = System.currentTimeMillis()
             val app = PhoneControl.instance?.rootInActiveWindow?.packageName?.toString().orEmpty()
-            val plan = think.plan(text, app, Memory.all(this))
+            val plan = think.plan(text, app, Memory.all(this) + Skills.promptLines(this))
             RunLog.add(this, "plan " + (if (plan != null) "ok " else "skipped ") + (System.currentTimeMillis() - began) + "ms")
             if (stopRequested) return@post
             workerHandler.post {
