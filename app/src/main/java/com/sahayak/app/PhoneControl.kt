@@ -272,7 +272,7 @@ class PhoneControl : AccessibilityService() {
         private const val TYPE_CHECK_MS = 250L
         private const val MAX_SETTLE_MS = 4_000L
         private const val SETTLE_STEP_MS = 200L
-        private const val LOAD_GRACE_MS = 1_200L
+        private const val LOAD_GRACE_MS = 800L
         private const val GESTURE_WAIT_MS = 3_000L
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 80

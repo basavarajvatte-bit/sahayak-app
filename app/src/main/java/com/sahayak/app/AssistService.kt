@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.speech.SpeechRecognizer
 import android.view.WindowManager
 import okhttp3.OkHttpClient
 import org.json.JSONArray
@@ -57,6 +58,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private var dot: TalkDot? = null
     private var caption: Caption? = null
     private val heard = StringBuilder()
+    private var listener: LiveListener? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endTalk = Runnable { finishTalk() }
     private var endPending = false
@@ -162,6 +164,12 @@ class AssistService : Service(), GeminiLive.Callback {
                 dot = TalkDot(host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type)
                     .also { it.show() }
                 caption = Caption(host, type)
+                if (SpeechRecognizer.isRecognitionAvailable(this)) {
+                    val primary = if (language == "Marathi") "mr-IN" else "hi-IN"
+                    listener = LiveListener(this, primary,
+                        onWords = { words -> if (talking) caption?.show(words) },
+                        onBroken = { useAudioFallback() })
+                }
             }
         }
         connect()
@@ -197,8 +205,8 @@ class AssistService : Service(), GeminiLive.Callback {
             setBusy(false)
             speakingUntil = 0L
             voice?.interrupt()
-            live?.activityStart()
-            voice?.setMic(true)
+            val active = listener
+            if (active != null) mainHandler.post { active.start() } else voice?.setMic(true)
             dotState(TalkDot.State.TALKING)
             updateNotification()
             AssistState.set(true, "Sun raha hai...")
@@ -216,7 +224,9 @@ class AssistService : Service(), GeminiLive.Callback {
             if (System.currentTimeMillis() - pressedAt < STOP_TAP_MS) {
                 // Ek chhota tap: chal raha kaam turant roko
                 stopRequested = true
-                finishTalk()
+                mainHandler.post { listener?.cancel() }
+                voice?.setMic(false)
+                endPending = false
                 setBusy(false)
                 live?.sendText(Prompts.STOP)
                 AssistState.set(true, "Kaam rok diya.")
@@ -229,10 +239,34 @@ class AssistService : Service(), GeminiLive.Callback {
 
     private fun finishTalk() {
         endPending = false
-        voice?.setMic(false)
-        live?.activityEnd()
         releasedAt = System.currentTimeMillis()
+        val active = listener
+        if (active == null) {
+            voice?.setMic(false)
+            live?.audioEnd()
+            setBusy(true)
+            return
+        }
         setBusy(true)
+        mainHandler.post {
+            active.finish { words ->
+                if (words.isBlank()) {
+                    setBusy(false)
+                    AssistState.set(true, "Awaaz samajh nahi aayi. Dot dabakar dobara boliye.")
+                } else {
+                    releasedAt = System.currentTimeMillis()
+                    live?.sendText(words)
+                }
+            }
+        }
+    }
+
+    /** Is phone par speech recognition na chale to seedha awaaz Gemini ko bhejo. */
+    private fun useAudioFallback() {
+        listener?.destroy()
+        listener = null
+        caption?.show("Dobara boliye")
+        workerHandler.post { if (talking) voice?.setMic(true) }
     }
 
     /** Screen rukne ke baad, jab koi bol nahi raha, Sahayak ko dekhne ko kehta hai. */
@@ -265,6 +299,7 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onAudio(pcm: ByteArray) {
+        if (talking) return // aap bol rahe ho to Sahayak chup
         val now = System.currentTimeMillis()
         if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
             val seconds = (now - releasedAt) / 100 / 10.0
@@ -279,7 +314,7 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Mic chalu rehne tak hi likhta hai. Dot chhodte hi text hat jata hai. */
     override fun onTranscript(text: String) {
         mainHandler.post {
-            if (talking) {
+            if (talking && listener == null) {
                 heard.append(text)
                 caption?.show(heard.toString())
             }
@@ -358,6 +393,8 @@ class AssistService : Service(), GeminiLive.Callback {
             dot = null
             caption?.hide()
             caption = null
+            listener?.destroy()
+            listener = null
         }
         live?.close()
         screen?.stop()
