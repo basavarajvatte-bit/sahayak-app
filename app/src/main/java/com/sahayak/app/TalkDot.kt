@@ -7,7 +7,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.os.Build
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -19,7 +18,8 @@ import android.view.WindowManager
 class TalkDot(
     context: Context,
     private val onPress: () -> Unit,
-    private val onRelease: () -> Unit
+    private val onRelease: () -> Unit,
+    windowType: Int
 ) : View(context) {
     enum class State { CONNECTING, READY, TALKING }
 
@@ -37,7 +37,7 @@ class TalkDot(
 
     private val params = WindowManager.LayoutParams(
         size, size,
-        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        windowType,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT
     ).apply {

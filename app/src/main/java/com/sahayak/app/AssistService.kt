@@ -15,7 +15,10 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
+import android.view.WindowManager
 import okhttp3.OkHttpClient
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.IOException
 
 /** Background mein screen, mic aur Gemini ko jodne wala kaam. */
@@ -46,6 +49,9 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var releasedAt = 0L
     @Volatile private var talking = false
     private var autoStep = false
+    private var tools: JSONArray? = null
+    private val actions = HandlerThread("sahayak-actions").apply { start() }
+    private val actionHandler = Handler(actions.looper)
     private var dot: TalkDot? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endTalk = Runnable { finishTalk() }
@@ -86,7 +92,9 @@ class AssistService : Service(), GeminiLive.Callback {
         userName = intent.getStringExtra(EXTRA_NAME).orEmpty()
         voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
         autoStep = intent.getBooleanExtra(EXTRA_AUTO, false)
-        systemText = Prompts.system(language, userName)
+        val canControl = PhoneControl.instance != null
+        tools = if (canControl) GeminiLive.phoneTools() else null
+        systemText = Prompts.system(language, userName, canControl)
 
         val manager = getSystemService(MediaProjectionManager::class.java)
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -142,7 +150,13 @@ class AssistService : Service(), GeminiLive.Callback {
         live = GeminiLive(http, this)
         mainHandler.post {
             if (!stopping) {
-                dot = TalkDot(this, onPress = { pressDot() }, onRelease = { releaseDot() }).also { it.show() }
+                // Phone control chalu ho to dot IRCTC jaise apps par bhi dikhta hai.
+                val control = PhoneControl.instance
+                val host: android.content.Context = control ?: this
+                val type = if (control != null) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                dot = TalkDot(host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type)
+                    .also { it.show() }
             }
         }
         connect()
@@ -204,7 +218,7 @@ class AssistService : Service(), GeminiLive.Callback {
 
     private fun connect() {
         val model = models.getOrElse(modelIndex) { GeminiLive.DEFAULT_MODEL }
-        live?.connect(apiKey, model, systemText, voiceName)
+        live?.connect(apiKey, model, systemText, voiceName, tools)
     }
 
     override fun onReady(resumed: Boolean) {
@@ -223,6 +237,24 @@ class AssistService : Service(), GeminiLive.Callback {
         }
         speakingUntil = maxOf(now, speakingUntil) + pcm.size / BYTES_PER_MS
         voice?.play(pcm)
+    }
+
+    /** Dot dabate hi automatic kaam ruk jata hai, taaki control aapke haath mein rahe. */
+    override fun onToolCall(id: String, name: String, args: JSONObject) {
+        actionHandler.post {
+            val control = PhoneControl.instance
+            val result = when {
+                talking || stopping -> JSONObject().put("status", "cancelled_by_person")
+                control == null -> JSONObject().put("status", "control_off")
+                else -> try {
+                    AssistState.set(true, "Sahayak phone chala raha hai. Rokne ke liye dot dabaiye.")
+                    control.run(name, args)
+                } catch (e: RuntimeException) {
+                    JSONObject().put("status", "failed")
+                }
+            }
+            live?.sendToolResult(id, name, result)
+        }
     }
 
     override fun onInterrupted() {
@@ -285,6 +317,7 @@ class AssistService : Service(), GeminiLive.Callback {
     override fun onDestroy() {
         finish("Band ho gaya")
         worker.quitSafely()
+        actions.quitSafely()
         super.onDestroy()
     }
 

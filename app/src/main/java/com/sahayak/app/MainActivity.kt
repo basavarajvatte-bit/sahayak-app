@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private lateinit var voiceGroup: RadioGroup
     private lateinit var nameInput: EditText
     private lateinit var autoStep: CheckBox
+    private lateinit var controlButton: Button
     private val prefs by lazy { getSharedPreferences("sahayak", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +40,10 @@ class MainActivity : Activity() {
         voiceGroup = findViewById(R.id.voiceGroup)
         nameInput = findViewById(R.id.nameInput)
         autoStep = findViewById(R.id.autoStep)
+        controlButton = findViewById(R.id.controlButton)
+        controlButton.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
         autoStep.isChecked = prefs.getBoolean(PREF_AUTO, false)
 
         keyInput.setText(prefs.getString(PREF_KEY, ""))
@@ -67,6 +72,7 @@ class MainActivity : Activity() {
         assistButton.visibility = if (running) View.GONE else View.VISIBLE
         stopButton.visibility = if (running) View.VISIBLE else View.GONE
         statusText.text = AssistState.status
+        controlButton.text = if (PhoneControl.instance != null) "Phone control: chalu" else "Phone control chalu karo"
     }
 
     private fun language(): String =
@@ -86,7 +92,7 @@ class MainActivity : Activity() {
             .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice())
             .putBoolean(PREF_AUTO, autoStep.isChecked).apply()
 
-        if (!Settings.canDrawOverlays(this)) {
+        if (PhoneControl.instance == null && !Settings.canDrawOverlays(this)) {
             statusText.text = "Sahayak ke saamne Allow chalu kijiye, phir wapas aakar Assist dabaiye."
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return

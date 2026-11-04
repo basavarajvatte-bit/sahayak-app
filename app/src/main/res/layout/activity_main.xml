@@ -48,6 +48,14 @@
             android:textSize="20sp"
             android:visibility="gone" />
 
+        <Button
+            android:id="@+id/controlButton"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="8dp"
+            android:textAllCaps="false"
+            android:textSize="18sp" />
+
         <TextView
             android:id="@+id/statusText"
             android:layout_width="match_parent"
