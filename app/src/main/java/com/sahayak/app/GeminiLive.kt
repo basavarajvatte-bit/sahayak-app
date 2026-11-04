@@ -21,6 +21,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         fun onInterrupted()
         fun onGoAway()
         fun onTurnComplete()
+        fun onTranscript(text: String)
         fun onToolCall(id: String, name: String, args: JSONObject)
         fun onClosed(code: Int, reason: String)
     }
@@ -84,6 +85,8 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         }
         val content = msg.optJSONObject("serverContent") ?: return
         if (content.optBoolean("interrupted", false)) callback.onInterrupted()
+        content.optJSONObject("inputTranscription")?.optString("text")?.takeIf { it.isNotEmpty() }
+            ?.let { callback.onTranscript(it) }
         content.optJSONObject("modelTurn")?.optJSONArray("parts")?.let { parts ->
             for (i in 0 until parts.length()) {
                 val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data").orEmpty()
@@ -199,6 +202,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                 .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemText))))
                 .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection",
                     JSONObject().put("disabled", true)))
+                .put("inputAudioTranscription", JSONObject())
                 .put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
                 .put("sessionResumption", resumption)
             if (tools != null) setup.put("tools", tools)

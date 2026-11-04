@@ -55,6 +55,8 @@ class AssistService : Service(), GeminiLive.Callback {
     private val actions = HandlerThread("sahayak-actions").apply { start() }
     private val actionHandler = Handler(actions.looper)
     private var dot: TalkDot? = null
+    private var caption: Caption? = null
+    private val heard = StringBuilder()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endTalk = Runnable { finishTalk() }
     private var endPending = false
@@ -159,6 +161,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 dot = TalkDot(host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type)
                     .also { it.show() }
+                caption = Caption(host, type)
             }
         }
         connect()
@@ -187,6 +190,10 @@ class AssistService : Service(), GeminiLive.Callback {
             }
             talking = true
             pressedAt = System.currentTimeMillis()
+            mainHandler.post {
+                heard.setLength(0)
+                caption?.show("Boliye...")
+            }
             setBusy(false)
             speakingUntil = 0L
             voice?.interrupt()
@@ -202,6 +209,7 @@ class AssistService : Service(), GeminiLive.Callback {
         workerHandler.post {
             if (!talking) return@post
             talking = false
+            mainHandler.post { caption?.hide() }
             dotState(TalkDot.State.READY)
             updateNotification()
             endPending = true
@@ -268,6 +276,16 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     /** Dot dabate hi automatic kaam ruk jata hai, taaki control aapke haath mein rahe. */
+    /** Mic chalu rehne tak hi likhta hai. Dot chhodte hi text hat jata hai. */
+    override fun onTranscript(text: String) {
+        mainHandler.post {
+            if (talking) {
+                heard.append(text)
+                caption?.show(heard.toString())
+            }
+        }
+    }
+
     override fun onTurnComplete() {
         setBusy(false)
     }
@@ -338,6 +356,8 @@ class AssistService : Service(), GeminiLive.Callback {
         mainHandler.post {
             dot?.remove()
             dot = null
+            caption?.hide()
+            caption = null
         }
         live?.close()
         screen?.stop()
