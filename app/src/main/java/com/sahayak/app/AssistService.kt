@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import okhttp3.OkHttpClient
 import java.io.IOException
 
@@ -42,7 +43,13 @@ class AssistService : Service(), GeminiLive.Callback {
     // Screen badalne par Sahayak khud agla step bole, iska hisaab
     @Volatile private var screenChangedAt = 0L
     @Volatile private var speakingUntil = 0L
-    @Volatile private var userVoiceAt = 0L
+    @Volatile private var releasedAt = 0L
+    @Volatile private var talking = false
+    private var autoStep = false
+    private var dot: TalkDot? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val endTalk = Runnable { finishTalk() }
+    private var endPending = false
     private var lastNudgeAt = 0L
     private val nudgeCheck = object : Runnable {
         override fun run() {
@@ -74,6 +81,7 @@ class AssistService : Service(), GeminiLive.Callback {
         language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "Hindi"
         userName = intent.getStringExtra(EXTRA_NAME).orEmpty()
         voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
+        autoStep = intent.getBooleanExtra(EXTRA_AUTO, false)
         systemText = Prompts.system(language, userName)
 
         val manager = getSystemService(MediaProjectionManager::class.java)
@@ -113,10 +121,7 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         try {
-            val io = VoiceIO(this) { pcm, size ->
-                if (isVoice(pcm, size)) userVoiceAt = System.currentTimeMillis()
-                live?.sendAudio(pcm, size)
-            }
+            val io = VoiceIO(this) { pcm, size -> live?.sendAudio(pcm, size) }
             io.start()
             voice = io
             val feed = ScreenFeed(
@@ -131,27 +136,60 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         live = GeminiLive(http, this)
+        mainHandler.post {
+            if (!stopping) {
+                dot = TalkDot(this, onPress = { pressDot() }, onRelease = { releaseDot() }).also { it.show() }
+            }
+        }
         connect()
         workerHandler.postDelayed(nudgeCheck, NUDGE_TICK_MS)
     }
 
-    private fun isVoice(pcm: ByteArray, size: Int): Boolean {
-        var peak = 0
-        var i = 0
-        while (i + 1 < size) {
-            val sample = (pcm[i].toInt() and 255) or (pcm[i + 1].toInt() shl 8)
-            peak = maxOf(peak, kotlin.math.abs(sample))
-            i += 2
+    private fun dotState(state: TalkDot.State) {
+        mainHandler.post { dot?.setState(state) }
+    }
+
+    private fun pressDot() {
+        if (live?.isReady != true) return
+        workerHandler.post {
+            if (endPending) {
+                workerHandler.removeCallbacks(endTalk)
+                finishTalk()
+            }
+            talking = true
+            speakingUntil = 0L
+            voice?.interrupt()
+            live?.activityStart()
+            voice?.setMic(true)
+            dotState(TalkDot.State.TALKING)
+            AssistState.set(true, "Sun raha hai...")
         }
-        return peak > VOICE_PEAK
+    }
+
+    private fun releaseDot() {
+        workerHandler.post {
+            if (!talking) return@post
+            talking = false
+            dotState(TalkDot.State.READY)
+            endPending = true
+            workerHandler.postDelayed(endTalk, MIC_TAIL_MS) // aakhri shabd na kate
+        }
+    }
+
+    private fun finishTalk() {
+        endPending = false
+        voice?.setMic(false)
+        live?.activityEnd()
+        releasedAt = System.currentTimeMillis()
     }
 
     /** Screen rukne ke baad, jab koi bol nahi raha, Sahayak ko dekhne ko kehta hai. */
     private fun maybeNudge() {
+        if (!autoStep || talking) return
         val changedAt = screenChangedAt
         val now = System.currentTimeMillis()
         if (changedAt == 0L || now - changedAt < SCREEN_SETTLE_MS) return
-        if (now < speakingUntil + AFTER_SPEECH_MS || now - userVoiceAt < AFTER_SPEECH_MS) return
+        if (now < speakingUntil + AFTER_SPEECH_MS || now - releasedAt < AFTER_SPEECH_MS) return
         if (now - lastNudgeAt < NUDGE_GAP_MS || live?.isReady != true) return
         screenChangedAt = 0L
         lastNudgeAt = now
@@ -166,16 +204,16 @@ class AssistService : Service(), GeminiLive.Callback {
     override fun onReady(resumed: Boolean) {
         wasReady = true
         retries = 0
-        AssistState.set(true, "Sahayak sun raha hai. Ab boliye.")
-        if (!resumed) live?.sendText(Prompts.greeting(language, userName))
+        dotState(TalkDot.State.READY)
+        AssistState.set(true, "Taiyar. Dot dabakar boliye, chhodne par jawab milega.")
     }
 
     override fun onAudio(pcm: ByteArray) {
         val now = System.currentTimeMillis()
-        if (now >= speakingUntil && now - userVoiceAt < LATENCY_WINDOW_MS) {
-            val seconds = (now - userVoiceAt) / 100 / 10.0
-            AssistState.set(true, "Sahayak sun raha hai. Pichhla jawab: $seconds second")
-            userVoiceAt = 0L
+        if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
+            val seconds = (now - releasedAt) / 100 / 10.0
+            AssistState.set(true, "Pichhla jawab: $seconds second")
+            releasedAt = 0L
         }
         speakingUntil = maxOf(now, speakingUntil) + pcm.size / BYTES_PER_MS
         voice?.play(pcm)
@@ -212,6 +250,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 retries < MAX_RETRIES -> {
                     retries++
                     AssistState.set(true, "Connection dobara jod raha hai...")
+                    dotState(TalkDot.State.CONNECTING)
                     workerHandler.postDelayed({ if (!stopping) connect() }, RETRY_DELAY_MS)
                 }
                 else -> finish("Connection toot gaya ($lastClose). Dobara Assist dabaiye.")
@@ -222,6 +261,10 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun finish(message: String) {
         if (stopping) return
         stopping = true
+        mainHandler.post {
+            dot?.remove()
+            dot = null
+        }
         live?.close()
         screen?.stop()
         voice?.stop()
@@ -270,6 +313,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val EXTRA_LANGUAGE = "language"
         private const val EXTRA_NAME = "name"
         private const val EXTRA_VOICE = "voice"
+        private const val EXTRA_AUTO = "auto"
         private const val CHANNEL_ID = "sahayak_live"
         private const val NOTIFICATION_ID = 7
         private const val MAX_RETRIES = 5
@@ -279,10 +323,10 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val AFTER_SPEECH_MS = 800L
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
-        private const val VOICE_PEAK = 2_500
+        private const val MIC_TAIL_MS = 150L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
-        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String) {
+        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean) {
             context.startForegroundService(
                 Intent(context, AssistService::class.java)
                     .putExtra(EXTRA_RESULT, resultCode)
@@ -291,6 +335,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     .putExtra(EXTRA_LANGUAGE, language)
                     .putExtra(EXTRA_NAME, name)
                     .putExtra(EXTRA_VOICE, voice)
+                    .putExtra(EXTRA_AUTO, autoStep)
             )
         }
 

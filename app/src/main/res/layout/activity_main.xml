@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Button dabaiye, phir bolkar madad lijiye"
+            android:text="Assist dabaiye, phir chamakte dot ko dabakar boliye"
             android:textColor="#667085"
             android:textSize="17sp" />
 
@@ -135,6 +135,15 @@
             android:importantForAutofill="no"
             android:inputType="textPersonName"
             android:maxLines="1"
+            android:textSize="17sp" />
+
+        <CheckBox
+            android:id="@+id/autoStep"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="48dp"
+            android:text="Screen badalne par khud agla step bole"
             android:textSize="17sp" />
 
         <TextView

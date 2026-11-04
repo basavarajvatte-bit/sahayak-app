@@ -25,6 +25,7 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
     private var micThread: Thread? = null
     private var playThread: Thread? = null
     @Volatile private var running = false
+    @Volatile private var micOn = false
 
     @SuppressLint("MissingPermission")
     fun start() {
@@ -73,14 +74,17 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
         track = player
 
         running = true
-        rec.startRecording()
         player.play()
 
         micThread = Thread({
             val buffer = ByteArray(MIC_CHUNK)
             while (running) {
+                if (!micOn) {
+                    Thread.sleep(15)
+                    continue
+                }
                 val count = rec.read(buffer, 0, buffer.size)
-                if (count > 0) onMic(buffer, count)
+                if (count > 0 && micOn) onMic(buffer, count)
             }
         }, "sahayak-mic").apply { start() }
 
@@ -94,6 +98,19 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
                 player.write(chunk, 0, chunk.size)
             }
         }, "sahayak-speaker").apply { start() }
+    }
+
+    /** Mic sirf dot dabane par chalta hai. */
+    fun setMic(on: Boolean) {
+        val rec = recorder ?: return
+        if (on == micOn) return
+        if (on) {
+            rec.startRecording()
+            micOn = true
+        } else {
+            micOn = false
+            rec.runCatching { stop() }
+        }
     }
 
     fun play(pcm: ByteArray) {
@@ -127,6 +144,7 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
 
     fun stop() {
         running = false
+        micOn = false
         micThread?.join(500)
         playThread?.join(500)
         playQueue.clear()

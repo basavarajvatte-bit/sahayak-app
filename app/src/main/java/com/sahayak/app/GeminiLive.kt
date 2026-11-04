@@ -90,6 +90,14 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
     fun sendJpeg(jpeg: ByteArray) =
         sendMedia("video", "image/jpeg", jpeg, jpeg.size, MAX_FRAME_QUEUE_BYTES)
 
+    fun activityStart() = sendActivity("activityStart")
+
+    fun activityEnd() = sendActivity("activityEnd")
+
+    private fun sendActivity(field: String) {
+        if (ready) socket?.send(JSONObject().put("realtimeInput", JSONObject().put(field, JSONObject())).toString())
+    }
+
     fun sendText(text: String) {
         if (ready) socket?.send(JSONObject().put("realtimeInput", JSONObject().put("text", text)).toString())
     }
@@ -135,10 +143,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                         .put("prebuiltVoiceConfig", JSONObject().put("voiceName", voiceName)))))
                 .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemText))))
                 .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection",
-                    JSONObject()
-                        .put("startOfSpeechSensitivity", "START_SENSITIVITY_HIGH")
-                        .put("prefixPaddingMs", 100)
-                        .put("silenceDurationMs", 500)))
+                    JSONObject().put("disabled", true)))
                 .put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
                 .put("sessionResumption", resumption)
             return JSONObject().put("setup", setup)

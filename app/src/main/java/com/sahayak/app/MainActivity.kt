@@ -6,10 +6,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionConfig
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -22,6 +25,7 @@ class MainActivity : Activity() {
     private lateinit var languageGroup: RadioGroup
     private lateinit var voiceGroup: RadioGroup
     private lateinit var nameInput: EditText
+    private lateinit var autoStep: CheckBox
     private val prefs by lazy { getSharedPreferences("sahayak", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +38,8 @@ class MainActivity : Activity() {
         languageGroup = findViewById(R.id.languageGroup)
         voiceGroup = findViewById(R.id.voiceGroup)
         nameInput = findViewById(R.id.nameInput)
+        autoStep = findViewById(R.id.autoStep)
+        autoStep.isChecked = prefs.getBoolean(PREF_AUTO, false)
 
         keyInput.setText(prefs.getString(PREF_KEY, ""))
         languageGroup.check(
@@ -77,7 +83,14 @@ class MainActivity : Activity() {
             return
         }
         prefs.edit().putString(PREF_KEY, key).putString(PREF_LANGUAGE, language())
-            .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice()).apply()
+            .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice())
+            .putBoolean(PREF_AUTO, autoStep.isChecked).apply()
+
+        if (!Settings.canDrawOverlays(this)) {
+            statusText.text = "Sahayak ke saamne Allow chalu kijiye, phir wapas aakar Assist dabaiye."
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            return
+        }
 
         val needed = ArrayList<String>()
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -119,7 +132,7 @@ class MainActivity : Activity() {
         if (resultCode == RESULT_OK && data != null) {
             AssistService.start(
                 this, resultCode, data, prefs.getString(PREF_KEY, "").orEmpty(), language(),
-                prefs.getString(PREF_NAME, "").orEmpty(), voice()
+                prefs.getString(PREF_NAME, "").orEmpty(), voice(), autoStep.isChecked
             )
             moveTaskToBack(true) // app peeche chala jaye, phone ka home dikhe
         } else {
@@ -134,6 +147,7 @@ class MainActivity : Activity() {
         private const val PREF_LANGUAGE = "language"
         private const val PREF_NAME = "name"
         private const val PREF_VOICE = "voice"
+        private const val PREF_AUTO = "auto_step"
         private const val VOICE_FEMALE = "Aoede"
         private const val VOICE_MALE = "Puck"
         private const val HINDI = "Hindi"
