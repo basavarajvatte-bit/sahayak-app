@@ -127,9 +127,9 @@ Never include a password, PIN, OTP or card number, and never include a payment s
 
 Reply with exactly one line:
 DONE, if the order is fully finished, or a future job was saved with schedule_work, or the agent correctly stopped at a payment, password, PIN or OTP screen, or correctly asked the person for missing details.
-FIX: one short specific next action, if something is unfinished or wrong, for example a message typed but not sent.
+FIX: one short specific next action, only if the result the order asked for is clearly missing, for example a message typed but not sent. Never add new work or extra checks.
 
-Never suggest paying, entering a password, PIN or OTP, or inventing an address or number. If unsure, reply DONE."""
+Never suggest paying, entering a password, PIN or OTP, or inventing an address or number. If unsure, or if the worker only answered a question, reply DONE."""
 
         private const val RULES = """You plan work for an AI agent that operates an Android phone. Think like a smart, practical person who avoids wasted movement.
 

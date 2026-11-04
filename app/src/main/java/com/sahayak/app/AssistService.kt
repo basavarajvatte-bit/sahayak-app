@@ -221,7 +221,10 @@ class AssistService : Service(), GeminiLive.Callback {
             val feed = ScreenFeed(
                 mediaProjection,
                 onChanged = { screenChangedAt = System.currentTimeMillis() },
-                onFrame = { jpeg -> if (!framesPaused) live?.sendJpeg(jpeg) }
+                onFrame = { jpeg ->
+                    val idle = tools != null && System.currentTimeMillis() > orderUntil
+                    if (!framesPaused && !idle) live?.sendJpeg(jpeg)
+                }
             )
             feed.start()
             screen = feed
@@ -473,10 +476,8 @@ class AssistService : Service(), GeminiLive.Callback {
             if (done) {
                 setBusy(false)
                 silentTurn = false
-                mainHandler.post {
-                    caption?.show("Ho gaya")
-                    mainHandler.postDelayed(hideReply, FAST_DONE_MS)
-                }
+                endOrder()
+                mainHandler.post { caption?.hide() }
             } else {
                 sendPlanned(text)
             }
@@ -506,8 +507,9 @@ class AssistService : Service(), GeminiLive.Callback {
                 stopRequested || result.reason == "stopped" -> setBusy(false)
                 result.done -> {
                     setBusy(false)
-                    showBrief("Ho gaya")
+                    mainHandler.post { caption?.hide() }
                     silentTurn = false
+                    endOrder()
                     finishPractice(true)
                 }
                 result.reason == "step_failed" -> {
@@ -539,6 +541,7 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Pehle soch, phir kaam: plan banakar order bhejta hai. */
     private fun sendPlanned(text: String) {
         val think = planner
+        screen?.latest()?.let { live?.sendJpeg(it) } // order ke saath abhi ki screen
         if (think == null || PhoneControl.instance == null) {
             live?.sendText(text)
             return
@@ -583,7 +586,11 @@ class AssistService : Service(), GeminiLive.Callback {
         val order = currentOrder ?: return
         val think = planner ?: return
         if (stopRequested) return
-        if (stepLog.isEmpty()) return // AI ne abhi sirf jawab diya, kaam shayad aage hai
+        if (stepLog.isEmpty()) {
+            // AI ne sirf jawab diya: thodi der baad phone control apne aap band
+            orderUntil = minOf(orderUntil, System.currentTimeMillis() + AFTER_ANSWER_MS)
+            return
+        }
         if (reviews >= MAX_REVIEWS) {
             if (!stuck) {
                 DailyLearning.note(this, "result: not finished")
@@ -612,6 +619,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 }
                 else -> {
                     silentTurn = quietOrder
+                    orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
                     live?.sendText("[REVIEW] $fix")
                 }
             }
@@ -751,7 +759,9 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onAudio(pcm: ByteArray) {
-        if (talking || silentTurn || stopRequested) return // chup rehne wali halat
+        // Order ke bina Sahayak chup rahe
+        if (talking || silentTurn || stopRequested) return
+        if (tools != null && System.currentTimeMillis() > orderUntil) return
         val now = System.currentTimeMillis()
         if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
             val seconds = (now - releasedAt) / 100 / 10.0
@@ -983,11 +993,11 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val MIC_TAIL_MS = 80L
         private const val ORDER_WINDOW_MS = 120_000L
         private const val HISTORY_SIZE = 8
-        private const val MAX_REVIEWS = 2
+        private const val MAX_REVIEWS = 1
         private const val REVIEW_DELAY_MS = 1_200L
         private const val REPEAT_LIMIT = 3
         private const val STEP_LIMIT = 40
-        private const val FAST_DONE_MS = 1_500L
+        private const val AFTER_ANSWER_MS = 8_000L
         private const val MIN_LIST_SIZE = 8
         private const val PARTIAL_MS = 2_000L
         private const val MIN_AUDIO_BYTES = 8_000
