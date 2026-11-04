@@ -15,8 +15,9 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
     private val client = http.newBuilder().callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS).build()
 
     /** Plan na ban paye to null. Tab order seedha chalega. */
-    fun plan(order: String, app: String): String? {
-        val parts = JSONArray().put(JSONObject().put("text", "Open app: $app\nOrder: $order"))
+    fun plan(order: String, app: String, facts: List<String>): String? {
+        val parts = JSONArray().put(JSONObject().put("text",
+            "Known facts: " + facts.joinToString("; ") + "\nOpen app: $app\nOrder: $order"))
         return ask(RULES, parts, 0.3, 1500)
     }
 
@@ -71,10 +72,13 @@ Never suggest paying, entering a password, PIN or OTP, or inventing an address o
 
         private const val RULES = """You plan work for an AI agent that operates an Android phone. Think like a smart, practical person who avoids wasted movement.
 
+First work out the true goal, what is known and missing, and the likely options with their risks and costs. Pick the most effective one, then check: is this sound, what could go wrong, is there a simpler way? Prefer accuracy over speed when a mistake would be costly. Do not show this reasoning.
+
 Write only this format, in English, under 12 lines:
 CONTENT: any text the order needs written, complete and ready to use. Write it yourself. Use the language of the order. Omit this line if nothing needs writing.
 STEPS: the fewest numbered steps, each one action.
 MISSING: exact details that are missing, or none.
+RISK: one short warning only if the order seems mistaken or could cause real loss, otherwise omit.
 
 Rules:
 - Never use ChatGPT or any other AI app to write something unless the order explicitly names that app. You write it in CONTENT.

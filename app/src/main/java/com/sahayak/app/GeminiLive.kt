@@ -181,6 +181,10 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                 .put(tool("list_work", "List saved future jobs."))
                 .put(tool("cancel_work", "Cancel a saved job.",
                     JSONObject().put("id", prop("STRING", "Job id")), listOf("id")))
+                .put(tool("remember", "Save a lasting fact or correction about the person. Never secrets.",
+                    JSONObject().put("fact", prop("STRING", "Short fact")), listOf("fact")))
+                .put(tool("forget", "Remove a saved fact that is wrong.",
+                    JSONObject().put("fact", prop("STRING", "Exact saved fact")), listOf("fact")))
                 .put(tool("open_url", "Open a website address in the browser.",
                     JSONObject().put("url", prop("STRING", "Full https address")), listOf("url")))
                 .put(tool("tap_text", "Tap the item showing these words. Best way to tap.",

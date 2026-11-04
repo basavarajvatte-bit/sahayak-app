@@ -122,7 +122,30 @@ class MainActivity : Activity() {
         statusText.text = AssistState.status
         controlButton.text = if (PhoneControl.instance != null) "✓ Phone control chalu hai" else "Phone control chalu karo"
         renderWork()
+        renderMemory()
         batteryButton.text = if (batteryFree()) "✓ Background mein chalne ki ijazat hai" else "Background ki ijazat do"
+    }
+
+    private fun renderMemory() {
+        val box = findViewById<LinearLayout>(R.id.memoryBox)
+        box.removeAllViews()
+        Memory.all(this).forEach { fact ->
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(TextView(this).apply {
+                text = fact
+                textSize = 15f
+                setTextColor(0xFF1D2433.toInt())
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(Button(this).apply {
+                text = "Hatao"
+                isAllCaps = false
+                setOnClickListener {
+                    Memory.remove(this@MainActivity, fact)
+                    renderMemory()
+                }
+            })
+            box.addView(row)
+        }
     }
 
     private fun renderWork() {

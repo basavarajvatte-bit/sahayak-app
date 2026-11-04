@@ -158,7 +158,7 @@ class AssistService : Service(), GeminiLive.Callback {
         whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
         tools = if (canControl) GeminiLive.phoneTools() else null
-        systemText = Prompts.system(language, userName, canControl)
+        systemText = Prompts.system(language, userName, canControl, Memory.all(this))
 
         val manager = getSystemService(MediaProjectionManager::class.java)
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -447,7 +447,7 @@ class AssistService : Service(), GeminiLive.Callback {
         plannerHandler.post {
             val began = System.currentTimeMillis()
             val app = PhoneControl.instance?.rootInActiveWindow?.packageName?.toString().orEmpty()
-            val plan = think.plan(text, app)
+            val plan = think.plan(text, app, Memory.all(this))
             RunLog.add(this, "plan " + (if (plan != null) "ok " else "skipped ") + (System.currentTimeMillis() - began) + "ms")
             if (stopRequested) return@post
             workerHandler.post {
@@ -671,6 +671,12 @@ class AssistService : Service(), GeminiLive.Callback {
             val result = when {
                 stopRequested || stopping || currentOrder == null -> JSONObject().put("status", "cancelled_by_person")
                 control == null -> JSONObject().put("status", "control_off")
+                name == "remember" -> JSONObject().put("status",
+                    if (Memory.add(this, args.optString("fact"))) "ok" else "not_saved")
+                name == "forget" -> {
+                    Memory.remove(this, args.optString("fact"))
+                    JSONObject().put("status", "ok")
+                }
                 name == "schedule_work" -> scheduleWork(args)
                 name == "list_work" -> JSONObject().put("status", "ok").put("jobs",
                     JSONArray(WorkList.all(this).map { it.optString("id") + ": " + WorkList.label(it) }))
