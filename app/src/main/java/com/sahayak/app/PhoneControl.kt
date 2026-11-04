@@ -122,34 +122,67 @@ class PhoneControl : AccessibilityService() {
         return when (item.optString("kind")) {
             "whatsapp" -> {
                 val opened = openWhatsApp(JSONObject().put("contact", item.optString("to")).put("message", item.optString("message")))
-                opened.optString("status") == "ok" && sendWhatsApp(opened.optString("contact"), item.optString("to"))
+                opened.optString("status") == "ok" &&
+                    (item.optString("to").none { it.isLetter() } || contactShown(opened.optString("contact"))) &&
+                    pressWhatsAppSend()
             }
             "email" -> {
                 val args = JSONObject().put("to", item.optString("to")).put("subject", item.optString("subject"))
                     .put("body", item.optString("message"))
                 composeEmail(args) && run {
                     waitUntilSettled("")
-                    rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.google.android.gm:id/send")
-                        ?.firstOrNull()?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+                    sendNode(listOf("com.google.android.gm:id/send"))?.let { tapNode(it) } == true
                 }
             }
             else -> false
         }
     }
 
-    private fun sendWhatsApp(contact: String, to: String): Boolean {
-        val send = rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")?.firstOrNull()
-            ?: return false
-        if (to.any { it.isLetter() } && !visibleNodes().any { label(it).equals(contact, ignoreCase = true) }) return false
-        return send.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    private fun tapWhatsAppSend(contact: String): Boolean =
+        contactShown(contact) && pressWhatsAppSend()
+
+    private fun contactShown(contact: String): Boolean = visibleNodes().any {
+        val text = label(it)
+        text.isNotEmpty() && (text.contains(contact, ignoreCase = true) || contact.contains(text, ignoreCase = true))
     }
 
-    private fun tapWhatsAppSend(contact: String): Boolean {
-        val shown = visibleNodes().any { label(it).equals(contact, ignoreCase = true) }
-        if (!shown) return false
-        val send = rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")?.firstOrNull()
-            ?: return false
-        return send.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    private fun sendNode(ids: List<String>): AccessibilityNodeInfo? {
+        val root = rootInActiveWindow ?: return null
+        ids.forEach { id -> root.findAccessibilityNodeInfosByViewId(id)?.firstOrNull { it.isVisibleToUser }?.let { return it } }
+        return visibleNodes().firstOrNull { node ->
+            (node.contentDescription?.toString()?.trim()?.lowercase() ?: "") in SEND_WORDS
+        }
+    }
+
+    private fun whatsAppBox(): AccessibilityNodeInfo? =
+        rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.whatsapp:id/entry")?.firstOrNull()
+
+    /** Send dhoondhkar dabao, phir check karo ki likhne ka box khali hua. */
+    private fun pressWhatsAppSend(): Boolean {
+        repeat(SEND_TRIES) {
+            val box = whatsAppBox()
+            val send = sendNode(WHATSAPP_SEND_IDS)
+            val tapped = when {
+                send != null -> tapNode(send)
+                box != null -> {
+                    // Button na mile to box ke theek daayin taraf dabao
+                    val rect = Rect()
+                    box.getBoundsInScreen(rect)
+                    val x = resources.displayMetrics.widthPixels - 40 * resources.displayMetrics.density
+                    gesture(x, rect.exactCenterY(), x, rect.exactCenterY(), 60)
+                }
+                else -> false
+            }
+            if (tapped) {
+                Thread.sleep(SEND_CHECK_MS)
+                val left = whatsAppBox()
+                left?.refresh()
+                val text = left?.text?.toString().orEmpty()
+                if (left != null && (text.isEmpty() || text == left.hintText?.toString())) return true
+            }
+            Thread.sleep(SEND_CHECK_MS)
+        }
+        return false
     }
 
     private fun screenText(): String = visibleNodes().joinToString("|") { label(it) }
@@ -421,6 +454,13 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
+        private const val SEND_TRIES = 8
+        private const val SEND_CHECK_MS = 400L
+        private val WHATSAPP_SEND_IDS = listOf(
+            "com.whatsapp:id/send", "com.whatsapp:id/conversation_entry_action_button",
+            "com.whatsapp:id/send_container", "com.whatsapp:id/send_btn"
+        )
+        private val SEND_WORDS = setOf("send", "भेजें", "भेजना", "पाठवा", "पाठवा.")
         private const val GMAIL = "com.google.android.gm"
         private val FINANCE_PACKAGES = setOf(
             "com.phonepe.app", "net.one97.paytm", "com.google.android.apps.nbu.paisa.user",
