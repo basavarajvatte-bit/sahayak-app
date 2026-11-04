@@ -46,9 +46,13 @@ class AssistService : Service(), GeminiLive.Callback {
         if (projection != null) return START_NOT_STICKY
 
         // Android ka niyam: projection lene se pehle foreground notification zaroori hai.
-        val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        startForeground(NOTIFICATION_ID, buildNotification(), types)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            startForeground(NOTIFICATION_ID, buildNotification(), types)
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
 
         apiKey = intent.getStringExtra(EXTRA_KEY).orEmpty()
         language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "Hindi"

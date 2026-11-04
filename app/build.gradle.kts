@@ -9,19 +9,28 @@ android {
 
     defaultConfig {
         applicationId = "com.sahayak.app"
-        minSdk = 29
+        minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     // Test key: har build par same rehti hai, taaki app update ho sake.
     signingConfigs {
-        getByName("debug") {
+        create("test") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("test")
         }
     }
 
