@@ -16,13 +16,18 @@ import kotlin.math.min
  * Screen ki tasveer JPEG banakar bhejta hai: badlav par har second tak,
  * aur screen na badle to har 5 second mein ek baar.
  */
-class ScreenFeed(private val projection: MediaProjection, private val onFrame: (ByteArray) -> Unit) {
+class ScreenFeed(
+    private val projection: MediaProjection,
+    private val onChanged: () -> Unit,
+    private val onFrame: (ByteArray) -> Unit
+) {
     private val thread = HandlerThread("sahayak-screen")
     private lateinit var handler: Handler
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
     private var lastJpeg: ByteArray? = null
     private var lastSentAt = 0L
+    private var signature: IntArray? = null
     @Volatile private var running = false
 
     fun start() {
@@ -69,6 +74,7 @@ class ScreenFeed(private val projection: MediaProjection, private val onFrame: (
                 val out = ByteArrayOutputStream()
                 cropped.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
                 jpeg = out.toByteArray()
+                checkChange(cropped)
                 if (cropped !== full) cropped.recycle()
                 full.recycle()
             }
@@ -80,6 +86,23 @@ class ScreenFeed(private val projection: MediaProjection, private val onFrame: (
             lastSentAt = now
             onFrame(frame)
         }
+    }
+
+    /** Chhoti tasveer se dekhta hai ki screen sach mein badli ya nahi. */
+    private fun checkChange(bitmap: Bitmap) {
+        val small = Bitmap.createScaledBitmap(bitmap, SIG_WIDTH, SIG_HEIGHT, true)
+        val pixels = IntArray(SIG_WIDTH * SIG_HEIGHT)
+        small.getPixels(pixels, 0, SIG_WIDTH, 0, 0, SIG_WIDTH, SIG_HEIGHT)
+        if (small !== bitmap) small.recycle()
+        val next = IntArray(pixels.size) { i ->
+            val p = pixels[i]
+            ((p shr 16 and 255) + (p shr 8 and 255) + (p and 255)) / 3
+        }
+        val old = signature
+        signature = next
+        if (old == null) return
+        val moved = next.indices.count { kotlin.math.abs(next[it] - old[it]) > CELL_DIFF }
+        if (moved >= next.size * CHANGE_SHARE) onChanged()
     }
 
     fun stop() {
@@ -99,5 +122,9 @@ class ScreenFeed(private val projection: MediaProjection, private val onFrame: (
         private const val JPEG_QUALITY = 60
         private const val FRAME_MS = 1_000L
         private const val HEARTBEAT_MS = 5_000L
+        private const val SIG_WIDTH = 24
+        private const val SIG_HEIGHT = 42
+        private const val CELL_DIFF = 24
+        private const val CHANGE_SHARE = 0.03
     }
 }

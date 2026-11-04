@@ -34,22 +34,30 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         val request = Request.Builder().url(WS_URL + "?key=" + apiKey).build()
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (webSocket !== socket) return
                 webSocket.send(setupMessage(model, systemText, resumeHandle).toString())
             }
 
-            override fun onMessage(webSocket: WebSocket, text: String) = handle(text, resuming)
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                if (webSocket === socket) handle(text, resuming)
+            }
 
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) =
-                handle(bytes.utf8(), resuming)
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                if (webSocket === socket) handle(bytes.utf8(), resuming)
+            }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                ready = false
                 webSocket.close(1000, null)
+                if (webSocket !== socket) return // purana connection, ise chhod do
+                ready = false
+                socket = null
                 callback.onClosed(code, reason)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (webSocket !== socket) return
                 ready = false
+                socket = null
                 callback.onClosed(response?.code ?: -1, t.message ?: "connection failed")
             }
         })
@@ -93,9 +101,12 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
 
     fun close() {
         ready = false
-        socket?.close(1000, null)
+        val old = socket
         socket = null
+        old?.close(1000, null)
     }
+
+    val isReady: Boolean get() = ready
 
     companion object {
         private const val MAX_QUEUE_BYTES = 2_000_000L

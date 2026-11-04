@@ -35,6 +35,20 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var stopping = false
     @Volatile private var wasReady = false
     private var retries = 0
+    private var lastClose = ""
+
+    // Screen badalne par Sahayak khud agla step bole, iska hisaab
+    @Volatile private var screenChangedAt = 0L
+    @Volatile private var speakingUntil = 0L
+    @Volatile private var userVoiceAt = 0L
+    private var lastNudgeAt = 0L
+    private val nudgeCheck = object : Runnable {
+        override fun run() {
+            if (stopping) return
+            maybeNudge()
+            workerHandler.postDelayed(this, NUDGE_TICK_MS)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -95,10 +109,17 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         try {
-            val io = VoiceIO(this) { pcm, size -> live?.sendAudio(pcm, size) }
+            val io = VoiceIO(this) { pcm, size ->
+                if (isVoice(pcm, size)) userVoiceAt = System.currentTimeMillis()
+                live?.sendAudio(pcm, size)
+            }
             io.start()
             voice = io
-            val feed = ScreenFeed(mediaProjection) { jpeg -> live?.sendJpeg(jpeg) }
+            val feed = ScreenFeed(
+                mediaProjection,
+                onChanged = { screenChangedAt = System.currentTimeMillis() },
+                onFrame = { jpeg -> live?.sendJpeg(jpeg) }
+            )
             feed.start()
             screen = feed
         } catch (e: RuntimeException) {
@@ -107,6 +128,30 @@ class AssistService : Service(), GeminiLive.Callback {
         }
         live = GeminiLive(http, this)
         connect()
+        workerHandler.postDelayed(nudgeCheck, NUDGE_TICK_MS)
+    }
+
+    private fun isVoice(pcm: ByteArray, size: Int): Boolean {
+        var peak = 0
+        var i = 0
+        while (i + 1 < size) {
+            val sample = (pcm[i].toInt() and 255) or (pcm[i + 1].toInt() shl 8)
+            peak = maxOf(peak, kotlin.math.abs(sample))
+            i += 2
+        }
+        return peak > VOICE_PEAK
+    }
+
+    /** Screen rukne ke baad, jab koi bol nahi raha, Sahayak ko dekhne ko kehta hai. */
+    private fun maybeNudge() {
+        val changedAt = screenChangedAt
+        val now = System.currentTimeMillis()
+        if (changedAt == 0L || now - changedAt < SCREEN_SETTLE_MS) return
+        if (now < speakingUntil + AFTER_SPEECH_MS || now - userVoiceAt < AFTER_SPEECH_MS) return
+        if (now - lastNudgeAt < NUDGE_GAP_MS || live?.isReady != true) return
+        screenChangedAt = 0L
+        lastNudgeAt = now
+        live?.sendText(Prompts.SCREEN_UPDATE)
     }
 
     private fun connect() {
@@ -122,10 +167,13 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onAudio(pcm: ByteArray) {
+        val now = System.currentTimeMillis()
+        speakingUntil = maxOf(now, speakingUntil) + pcm.size / BYTES_PER_MS
         voice?.play(pcm)
     }
 
     override fun onInterrupted() {
+        speakingUntil = 0L
         voice?.interrupt()
     }
 
@@ -142,6 +190,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (stopping) return
         workerHandler.post {
             val text = reason.lowercase()
+            lastClose = "code $code" + if (reason.isBlank()) "" else ": " + reason.take(120)
             when {
                 stopping -> Unit
                 code == 429 || "quota" in text || "resource_exhausted" in text ->
@@ -150,13 +199,13 @@ class AssistService : Service(), GeminiLive.Callback {
                     modelIndex++
                     connect()
                 }
-                !wasReady -> finish("Gemini se connection nahi hua (code $code).")
+                !wasReady -> finish("Gemini se connection nahi hua ($lastClose).")
                 retries < MAX_RETRIES -> {
                     retries++
                     AssistState.set(true, "Connection dobara jod raha hai...")
                     workerHandler.postDelayed({ if (!stopping) connect() }, RETRY_DELAY_MS)
                 }
-                else -> finish("Connection toot gaya. Internet check karke dobara Assist dabaiye.")
+                else -> finish("Connection toot gaya ($lastClose). Dobara Assist dabaiye.")
             }
         }
     }
@@ -214,6 +263,12 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NOTIFICATION_ID = 7
         private const val MAX_RETRIES = 5
         private const val RETRY_DELAY_MS = 2_000L
+        private const val NUDGE_TICK_MS = 1_000L
+        private const val SCREEN_SETTLE_MS = 2_000L
+        private const val AFTER_SPEECH_MS = 2_000L
+        private const val NUDGE_GAP_MS = 8_000L
+        private const val VOICE_PEAK = 2_500
+        private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
         fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String) {
             context.startForegroundService(
