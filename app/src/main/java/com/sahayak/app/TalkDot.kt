@@ -7,11 +7,13 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.RectF
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 
 /** Screen par chamakta dot: dabakar rakho to mic chalu, chhodo to jawab. */
 @SuppressLint("ViewConstructor")
@@ -28,6 +30,9 @@ class TalkDot(
     private val size = (TOUCH_DP * density).toInt()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var glow = 0f
+    private var spin = 0f
+    private var busy = false
+    private val ring = RectF()
     private var state = State.CONNECTING
     private var attached = false
     private var startX = 0
@@ -56,6 +61,24 @@ class TalkDot(
         }
     }
 
+    private val spinner = ValueAnimator.ofFloat(0f, 360f).apply {
+        duration = 900L
+        repeatCount = ValueAnimator.INFINITE
+        interpolator = LinearInterpolator()
+        addUpdateListener {
+            spin = it.animatedValue as Float
+            invalidate()
+        }
+    }
+
+    /** Kaam chalte waqt dot ke chaaron taraf ghoomta circle. */
+    fun setBusy(on: Boolean) {
+        if (busy == on) return
+        busy = on
+        if (on && attached) spinner.start() else spinner.cancel()
+        invalidate()
+    }
+
     fun show() {
         if (attached) return
         windows.addView(this, params)
@@ -66,6 +89,7 @@ class TalkDot(
     fun remove() {
         if (!attached) return
         pulse.cancel()
+        spinner.cancel()
         windows.removeView(this)
         attached = false
     }
@@ -88,6 +112,19 @@ class TalkDot(
         canvas.drawCircle(center, center, core + (center - core) * glow, paint)
         paint.alpha = 255
         canvas.drawCircle(center, center, core, paint)
+        if (busy) {
+            val radius = core + RING_GAP_DP * density
+            ring.set(center - radius, center - radius, center + radius, center + radius)
+            paint.style = Paint.Style.STROKE
+            paint.strokeCap = Paint.Cap.ROUND
+            paint.color = Color.argb(170, 0, 0, 0)
+            paint.strokeWidth = 6 * density
+            canvas.drawArc(ring, spin, ARC_DEGREES, false, paint)
+            paint.color = Color.WHITE
+            paint.strokeWidth = 3 * density
+            canvas.drawArc(ring, spin, ARC_DEGREES, false, paint)
+            paint.style = Paint.Style.FILL
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -114,5 +151,7 @@ class TalkDot(
     companion object {
         private const val TOUCH_DP = 76
         private const val DOT_DP = 26
+        private const val RING_GAP_DP = 9
+        private const val ARC_DEGREES = 250f
     }
 }

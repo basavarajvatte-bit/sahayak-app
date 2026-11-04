@@ -163,6 +163,15 @@ class AssistService : Service(), GeminiLive.Callback {
         workerHandler.postDelayed(nudgeCheck, NUDGE_TICK_MS)
     }
 
+    private val busyTimeout = Runnable { setBusy(false) }
+
+    /** Order chalne tak ghoomta circle. Kisi jawab ke bina 45 second baad khud band. */
+    private fun setBusy(on: Boolean) {
+        mainHandler.removeCallbacks(busyTimeout)
+        if (on) mainHandler.postDelayed(busyTimeout, BUSY_TIMEOUT_MS)
+        mainHandler.post { dot?.setBusy(on) }
+    }
+
     private fun dotState(state: TalkDot.State) {
         mainHandler.post { dot?.setState(state) }
     }
@@ -175,6 +184,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 finishTalk()
             }
             talking = true
+            setBusy(false)
             speakingUntil = 0L
             voice?.interrupt()
             live?.activityStart()
@@ -201,6 +211,7 @@ class AssistService : Service(), GeminiLive.Callback {
         voice?.setMic(false)
         live?.activityEnd()
         releasedAt = System.currentTimeMillis()
+        setBusy(true)
     }
 
     /** Screen rukne ke baad, jab koi bol nahi raha, Sahayak ko dekhne ko kehta hai. */
@@ -240,7 +251,12 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     /** Dot dabate hi automatic kaam ruk jata hai, taaki control aapke haath mein rahe. */
+    override fun onTurnComplete() {
+        setBusy(false)
+    }
+
     override fun onToolCall(id: String, name: String, args: JSONObject) {
+        setBusy(true)
         actionHandler.post {
             val control = PhoneControl.instance
             val result = when {
@@ -259,6 +275,7 @@ class AssistService : Service(), GeminiLive.Callback {
 
     override fun onInterrupted() {
         speakingUntil = 0L
+        setBusy(false)
         voice?.interrupt()
     }
 
@@ -289,6 +306,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     retries++
                     AssistState.set(true, "Connection dobara jod raha hai...")
                     dotState(TalkDot.State.CONNECTING)
+                    setBusy(false)
                     workerHandler.postDelayed({ if (!stopping) connect() }, RETRY_DELAY_MS)
                 }
                 else -> finish("Connection toot gaya ($lastClose). Dobara Assist dabaiye.")
@@ -299,6 +317,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun finish(message: String) {
         if (stopping) return
         stopping = true
+        mainHandler.removeCallbacks(busyTimeout)
         mainHandler.post {
             dot?.remove()
             dot = null
@@ -377,6 +396,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 150L
+        private const val BUSY_TIMEOUT_MS = 45_000L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
         fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean) {

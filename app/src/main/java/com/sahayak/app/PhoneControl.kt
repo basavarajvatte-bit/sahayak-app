@@ -5,6 +5,7 @@ import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -49,6 +50,7 @@ class PhoneControl : AccessibilityService() {
             "tap" -> tapElement(args.optInt("element", -1))
             "tap_position" -> tapPosition(args.optInt("x", -1), args.optInt("y", -1))
             "type_text" -> typeText(args.optInt("element", -1), args.optString("text"))
+            "press_enter" -> pressEnter()
             "scroll" -> scroll(args.optString("direction") != "up")
             "go_back" -> performGlobalAction(GLOBAL_ACTION_BACK)
             else -> false
@@ -57,6 +59,7 @@ class PhoneControl : AccessibilityService() {
         val after = sensitiveReason()
         val result = JSONObject().put("status", if (done) "ok" else "failed").put("screen", readScreen())
         if (after != null) result.put("status", "stopped").put("reason", after)
+        else if (name == "type_text" && done) result.put("next", "Text is typed but not sent. Submit it now.")
         return result
     }
 
@@ -102,6 +105,12 @@ class PhoneControl : AccessibilityService() {
         val bundle = Bundle()
         bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
+    }
+
+    private fun pressEnter(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val node = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
+        return node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
     }
 
     private fun scroll(down: Boolean): Boolean {

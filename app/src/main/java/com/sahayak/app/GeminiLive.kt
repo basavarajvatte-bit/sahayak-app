@@ -20,6 +20,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         fun onAudio(pcm: ByteArray)
         fun onInterrupted()
         fun onGoAway()
+        fun onTurnComplete()
         fun onToolCall(id: String, name: String, args: JSONObject)
         fun onClosed(code: Int, reason: String)
     }
@@ -83,11 +84,13 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         }
         val content = msg.optJSONObject("serverContent") ?: return
         if (content.optBoolean("interrupted", false)) callback.onInterrupted()
-        val parts = content.optJSONObject("modelTurn")?.optJSONArray("parts") ?: return
-        for (i in 0 until parts.length()) {
-            val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data").orEmpty()
-            if (data.isNotEmpty()) callback.onAudio(Base64.decode(data, Base64.DEFAULT))
+        content.optJSONObject("modelTurn")?.optJSONArray("parts")?.let { parts ->
+            for (i in 0 until parts.length()) {
+                val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data").orEmpty()
+                if (data.isNotEmpty()) callback.onAudio(Base64.decode(data, Base64.DEFAULT))
+            }
         }
+        if (content.optBoolean("turnComplete", false)) callback.onTurnComplete()
     }
 
     fun sendAudio(pcm: ByteArray, size: Int) =
@@ -166,6 +169,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                     JSONObject().put("x", prop("INTEGER", "0 to 1000")).put("y", prop("INTEGER", "0 to 1000")), listOf("x", "y")))
                 .put(tool("type_text", "Type text into an input element.",
                     JSONObject().put("element", element).put("text", prop("STRING", "Text to type")), listOf("element", "text")))
+                .put(tool("press_enter", "Press the keyboard enter or send key on the focused input."))
                 .put(tool("scroll", "Scroll the screen.",
                     JSONObject().put("direction", prop("STRING", "up or down")), listOf("direction")))
                 .put(tool("go_back", "Press the back button."))

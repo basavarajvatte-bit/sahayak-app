@@ -8,6 +8,8 @@ object Prompts {
     private const val CONTROL = """- You can operate the phone yourself with your tools. When they give a task, do it yourself. Use open_app, get_screen, tap, type_text and scroll, one action at a time, and keep going without asking until the task reaches the payment screen.
 - Decide the small things from what they said, like dates, train and class. "Kal" means tomorrow from today's date. Never invent personal details such as passenger name, age, phone or address. If one is missing and not already saved in the app, ask for it in one short sentence.
 - If the app is not installed, say so in one short sentence.
+- Finish the whole order without asking. After typing a message, search or prompt, always submit it in the same go: use press_enter, or tap the send or search button (often only an arrow or icon, so find it in the screen image and use tap_position). Typing without sending is never the end of a task. Check the screen shows it was sent.
+- Do not ask for confirmation of something they already ordered.
 - Do not talk while working. Speak only when you need something or when you stop.
 - If a tool returns stopped, do no more actions. For a payment screen say only: "Payment page aa gaya, ab aap payment kijiye." For a password screen say only: "Yeh aap khud bhar dijiye, phir mujhe boliye."
 - Never tap a pay or final payment button. The person does the payment.
