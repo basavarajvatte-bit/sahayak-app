@@ -66,6 +66,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private val appVisits = ArrayDeque<String>()
     private var stepCount = 0
     @Volatile private var currentOrder: String? = null
+    @Volatile private var orderUntil = 0L
     @Volatile private var quietOrder = false
     private val stepLog = ArrayList<String>()
     private var reviews = 0
@@ -139,7 +140,9 @@ class AssistService : Service(), GeminiLive.Callback {
             val name = intent.getStringExtra(EXTRA_SKILL).orEmpty()
             if (name.isNotEmpty()) {
                 practiceName = name
-                typedOrder("Practice the taught task \"$name\" now, exactly as taught, from start to end.")
+                val steps = Skills.steps(this, name).joinToString("\n")
+                mainHandler.post { caption?.show("Practice shuru: $name") }
+                typedOrder("Do the taught task \"$name\" now from start to end, using these steps:\n$steps")
             }
             return START_NOT_STICKY
         }
@@ -267,6 +270,9 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun typedOrder(text: String) {
         workerHandler.post {
             if (live?.isReady != true) {
+                practiceName = null
+                mainHandler.post { caption?.show("Connection nahi hai. Dobara try kijiye.") }
+                mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
                 AssistState.set(true, "Abhi connection nahi hai. Thodi der mein dobara likhiye.")
                 return@post
             }
@@ -291,7 +297,7 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Kaam chalte waqt dot dabate hi sab kuch turant band. */
     private fun stopEverything() {
         stopRequested = true
-        currentOrder = null
+        endOrder()
         practiceName = null
         plannerHandler.removeCallbacksAndMessages(null)
         actionHandler.removeCallbacksAndMessages(null)
@@ -395,6 +401,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (active == null) {
             currentOrder = "voice order"
             quietOrder = false
+            orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
             voice?.setMic(false)
             live?.audioEnd()
             setBusy(true)
@@ -420,6 +427,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (stopRequested) return
         currentOrder = text
         quietOrder = silentTurn
+        orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
         val command = LocalCommands.parse(text)
         val control = PhoneControl.instance
         if (command == null || control == null) {
@@ -494,9 +502,10 @@ class AssistService : Service(), GeminiLive.Callback {
         val order = currentOrder ?: return
         val think = planner ?: return
         if (stopRequested) return
-        if (reviews >= MAX_REVIEWS || stepLog.isEmpty()) {
+        if (stepLog.isEmpty()) return // AI ne abhi sirf jawab diya, kaam shayad aage hai
+        if (reviews >= MAX_REVIEWS) {
             if (!stuck) {
-                currentOrder = null // kaam khatam, naye order tak phone control band
+                endOrder()
                 finishPractice(false)
             }
             return
@@ -514,7 +523,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 fix.isNullOrEmpty() -> {
                     setBusy(false)
                     if (!stuck) {
-                        currentOrder = null
+                        endOrder()
                         finishPractice(answer.startsWith("DONE"))
                     }
                 }
@@ -524,6 +533,11 @@ class AssistService : Service(), GeminiLive.Callback {
                 }
             }
         }, REVIEW_DELAY_MS)
+    }
+
+    private fun endOrder() {
+        currentOrder = null
+        orderUntil = 0L // naye order tak phone control band
     }
 
     /** Practice ka result likho, aur safal kaam se steps sudharo. */
@@ -596,6 +610,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (stopRequested) return
             currentOrder = "voice order"
             quietOrder = false
+            orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
             RunLog.add(this, "order whisper_failed_audio_used")
             var start = 0
             while (start < audio.size) {
@@ -698,7 +713,10 @@ class AssistService : Service(), GeminiLive.Callback {
             val control = PhoneControl.instance
             val began = System.currentTimeMillis()
             val result = when {
-                stopRequested || stopping || currentOrder == null -> JSONObject().put("status", "cancelled_by_person")
+                stopRequested || stopping || began > orderUntil -> {
+                    RunLog.add(this, "tool_blocked " + name + " stop=" + stopRequested)
+                    JSONObject().put("status", "cancelled_by_person")
+                }
                 control == null -> JSONObject().put("status", "control_off")
                 name == "remember" -> JSONObject().put("status",
                     if (Memory.add(this, args.optString("fact"))) "ok" else "not_saved")
@@ -722,6 +740,9 @@ class AssistService : Service(), GeminiLive.Callback {
             // List khali ho to AI ko wahi screen photo se dikhao
             if ((result.optJSONArray("screen")?.length() ?: 99) < MIN_LIST_SIZE) {
                 screen?.latest()?.let { live?.sendJpeg(it) }
+            }
+            if (result.optString("status") != "cancelled_by_person") {
+                orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS // kaam chal raha hai
             }
             RunLog.add(this, name + " " + result.optString("status") + " " +
                 (System.currentTimeMillis() - began) + "ms " + result.optString("app"))
@@ -875,6 +896,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 80L
+        private const val ORDER_WINDOW_MS = 120_000L
         private const val HISTORY_SIZE = 8
         private const val MAX_REVIEWS = 2
         private const val REVIEW_DELAY_MS = 1_200L
