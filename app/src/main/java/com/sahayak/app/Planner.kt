@@ -12,8 +12,8 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Sahayak ka sochne wala dimag: kaam se pehle poora plan aur likhne wala content taiyar karta hai. */
-class Planner(http: OkHttpClient, private val apiKey: String) {
-    private val client = http.newBuilder().callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS).build()
+class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Long = TIMEOUT_SECONDS) {
+    private val client = http.newBuilder().callTimeout(timeoutSeconds, TimeUnit.SECONDS).build()
 
     /** Plan na ban paye to null. Tab order seedha chalega. */
     fun plan(order: String, app: String, facts: List<String>): String? {
@@ -31,6 +31,18 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
                 .put("data", Base64.encodeToString(screen, Base64.NO_WRAP))))
         }
         return ask(REVIEW_RULES, parts, 0.1, 300)
+    }
+
+    /** Din ke orders se aadatein nikalta hai. */
+    fun learn(facts: List<String>, journal: List<String>): JSONObject? {
+        val text = "Current memory:\n" + facts.joinToString("\n") + "\n\nToday's activity:\n" + journal.joinToString("\n")
+        val answer = ask(LEARN_RULES, JSONArray().put(JSONObject().put("text", text)), 0.1, 900) ?: return null
+        val clean = answer.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+        return try {
+            JSONObject(clean)
+        } catch (e: JSONException) {
+            null
+        }
     }
 
     /** Ek ya kai demos se saaf, general kaam banata hai. */
@@ -83,6 +95,17 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
     companion object {
         private const val TIMEOUT_SECONDS = 6L
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
+        private const val LEARN_RULES = """You maintain the memory of a personal phone assistant. Read today's activity and the current memory. Reply with JSON only:
+{"add":["short fact"],"remove":["exact old fact"],"summary":"one simple Hinglish sentence on what was learned today"}
+
+Keep only practical habits that help future orders: preferred apps, who they usually message and how, usual times, preferred language, reply length, repeated tasks, and corrections.
+Rules:
+- Add a habit only if it appears at least twice, or the person clearly stated it.
+- State it as what they do, never a judgement of their personality.
+- Remove facts that are outdated, duplicates or contradicted. Merge similar ones.
+- Never save passwords, PINs, OTPs, card or bank numbers, or health, religion, politics, money, relationships or other sensitive matters.
+- If nothing is worth saving, use empty lists."""
+
         private const val DIGEST_RULES = """You turn phone task demonstrations into a reliable reusable procedure. Reply with JSON only:
 {"goal":"one sentence on what the task achieves","steps":["step one","step two"]}
 

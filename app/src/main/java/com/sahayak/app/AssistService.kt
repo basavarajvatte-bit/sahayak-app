@@ -427,6 +427,7 @@ class AssistService : Service(), GeminiLive.Callback {
         currentOrder = text
         quietOrder = silentTurn
         orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+        DailyLearning.note(this, "order: $text")
         val command = LocalCommands.parse(text)
         val control = PhoneControl.instance
         if (command == null || control == null) {
@@ -504,6 +505,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (stepLog.isEmpty()) return // AI ne abhi sirf jawab diya, kaam shayad aage hai
         if (reviews >= MAX_REVIEWS) {
             if (!stuck) {
+                DailyLearning.note(this, "result: not finished")
                 endOrder()
                 finishPractice(false)
             }
@@ -522,6 +524,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 fix.isNullOrEmpty() -> {
                     setBusy(false)
                     if (!stuck) {
+                        DailyLearning.note(this, "result: " + if (answer.startsWith("DONE")) "finished" else "unclear")
                         endOrder()
                         finishPractice(answer.startsWith("DONE"))
                     }

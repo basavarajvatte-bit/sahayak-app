@@ -309,6 +309,38 @@
                 android:maxLines="1"
                 android:textSize="17sp" />
 
+            <CheckBox
+                android:id="@+id/learnBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:text="Meri aadatein roz seekho"
+                android:textSize="17sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Chalu karne par aapke orders phone par save honge aur din mein ek baar seekhne ke liye Gemini ko jayenge. Lambe number chhupaye jate hain. Band karne par din ka record mit jata hai."
+                android:textColor="#667085"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/learnSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="#1F5C4D"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/clearLearning"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:text="Seekha hua sab mitao"
+                android:textAllCaps="false"
+                android:textSize="16sp" />
+
             <TextView style="@style/Label" android:text="Sahayak ko kya yaad hai" />
 
             <LinearLayout

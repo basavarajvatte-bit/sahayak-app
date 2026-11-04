@@ -62,6 +62,19 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        val learnBox = findViewById<CheckBox>(R.id.learnBox)
+        learnBox.isChecked = DailyLearning.isEnabled(this)
+        learnBox.setOnCheckedChangeListener { _, on ->
+            DailyLearning.setEnabled(this, on)
+            renderMemory()
+        }
+        findViewById<Button>(R.id.clearLearning).setOnClickListener {
+            DailyLearning.clear(this)
+            Memory.all(this).forEach { Memory.remove(this, it) }
+            renderMemory()
+            statusText.text = "Seekha hua sab mita diya."
+        }
+        DailyLearning.runIfDue(this)
         findViewById<Button>(R.id.backupButton).setOnClickListener {
             startActivityForResult(
                 Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
@@ -254,6 +267,8 @@ class MainActivity : Activity() {
     }
 
     private fun renderMemory() {
+        val summary = DailyLearning.summary(this)
+        findViewById<TextView>(R.id.learnSummary).text = if (summary.isEmpty()) "" else "Aaj seekha: $summary"
         val box = findViewById<LinearLayout>(R.id.memoryBox)
         box.removeAllViews()
         Memory.all(this).forEach { fact ->

@@ -105,7 +105,10 @@ object Skills {
 
     /** Aapne bola galat hua: galti yaad rakho, aur naya version kharab ho to pichhla wapas. */
     fun markWrong(context: Context, name: String, lessonText: String) {
-        if (lessonText.isNotBlank()) lesson(context, name, lessonText)
+        if (lessonText.isNotBlank()) {
+            lesson(context, name, lessonText)
+            DailyLearning.note(context, "correction for $name: $lessonText")
+        }
         change(context, name) { skill ->
             skill.put("good", maxOf(0, skill.optInt("good") - 1))
             restoreIfImproved(skill)
