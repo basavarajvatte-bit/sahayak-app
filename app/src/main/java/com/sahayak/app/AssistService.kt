@@ -66,6 +66,10 @@ class AssistService : Service(), GeminiLive.Callback {
             finish("Band ho gaya")
             return START_NOT_STICKY
         }
+        if (intent.action == ACTION_TALK) {
+            if (talking) releaseDot() else pressDot()
+            return START_NOT_STICKY
+        }
         if (projection != null) return START_NOT_STICKY
 
         // Android ka niyam: projection lene se pehle foreground notification zaroori hai.
@@ -162,6 +166,7 @@ class AssistService : Service(), GeminiLive.Callback {
             live?.activityStart()
             voice?.setMic(true)
             dotState(TalkDot.State.TALKING)
+            updateNotification()
             AssistState.set(true, "Sun raha hai...")
         }
     }
@@ -171,6 +176,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (!talking) return@post
             talking = false
             dotState(TalkDot.State.READY)
+            updateNotification()
             endPending = true
             workerHandler.postDelayed(endTalk, MIC_TAIL_MS) // aakhri shabd na kate
         }
@@ -282,6 +288,10 @@ class AssistService : Service(), GeminiLive.Callback {
         super.onDestroy()
     }
 
+    private fun updateNotification() {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
+    }
+
     private fun buildNotification(): Notification {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
@@ -295,18 +305,28 @@ class AssistService : Service(), GeminiLive.Callback {
             this, 1, Intent(this, AssistService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val talk = PendingIntent.getService(
+            this, 2, Intent(this, AssistService::class.java).setAction(ACTION_TALK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val talkLabel = if (talking) "Bas, jawab do" else "Bolo"
+        val text = if (talking) "Sun raha hai. Boliye, phir Bas, jawab do dabaiye."
+        else "Dot na dikhe to Bolo dabaiye"
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Sahayak screen dekh raha hai")
-            .setContentText("Band karne ke liye Band karo dabaiye")
+            .setContentTitle("Sahayak chalu hai")
+            .setContentText(text)
             .setContentIntent(open)
+            .addAction(Notification.Action.Builder(null, talkLabel, talk).build())
             .addAction(Notification.Action.Builder(null, "Band karo", stop).build())
+            .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
     }
 
     companion object {
         private const val ACTION_STOP = "com.sahayak.app.STOP"
+        private const val ACTION_TALK = "com.sahayak.app.TALK"
         private const val EXTRA_RESULT = "result"
         private const val EXTRA_DATA = "data"
         private const val EXTRA_KEY = "key"
