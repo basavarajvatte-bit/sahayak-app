@@ -21,7 +21,8 @@ class TalkDot(
     context: Context,
     private val onPress: () -> Unit,
     private val onRelease: () -> Unit,
-    windowType: Int
+    windowType: Int,
+    private val onMoved: (Int, Int) -> Unit = { _, _ -> }
 ) : View(context) {
     enum class State { CONNECTING, READY, TALKING }
 
@@ -86,6 +87,9 @@ class TalkDot(
         pulse.start()
     }
 
+    val windowX: Int get() = params.x
+    val windowY: Int get() = params.y
+
     fun remove() {
         if (!attached) return
         pulse.cancel()
@@ -142,6 +146,7 @@ class TalkDot(
                 params.x = startX + (event.rawX - touchX).toInt()
                 params.y = startY + (event.rawY - touchY).toInt()
                 if (attached) windows.updateViewLayout(this, params)
+                onMoved(params.x, params.y)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> onRelease()
         }

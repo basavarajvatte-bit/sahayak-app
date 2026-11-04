@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.RemoteInput
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -61,6 +62,10 @@ class AssistService : Service(), GeminiLive.Callback {
     private var caption: Caption? = null
     private val heard = StringBuilder()
     private var listener: LiveListener? = null
+    private var typeBar: TypeBar? = null
+    @Volatile private var silentTurn = false
+    private val replyText = StringBuilder()
+    private val hideReply = Runnable { if (!talking) caption?.hide() }
     private var whisper: Whisper? = null
     private val spoken = ByteArrayOutputStream()
     private val whisperThread = HandlerThread("sahayak-whisper").apply { start() }
@@ -105,6 +110,12 @@ class AssistService : Service(), GeminiLive.Callback {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null || intent.action == ACTION_STOP) {
             finish("Band ho gaya")
+            return START_NOT_STICKY
+        }
+        if (intent.action == ACTION_TYPE) {
+            val typed = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(REPLY_KEY)?.toString().orEmpty().trim()
+            if (typed.isNotEmpty()) typedOrder(typed)
+            updateNotification()
             return START_NOT_STICKY
         }
         if (intent.action == ACTION_TALK) {
@@ -194,8 +205,15 @@ class AssistService : Service(), GeminiLive.Callback {
                 val host: android.content.Context = control ?: this
                 val type = if (control != null) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                 else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                dot = TalkDot(host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type)
-                    .also { it.show() }
+                val bar = TypeBar(host, type) { text -> typedOrder(text) }
+                typeBar = bar
+                val talkDot = TalkDot(
+                    host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type,
+                    onMoved = { x, y -> bar.move(x, y) }
+                )
+                talkDot.show()
+                dot = talkDot
+                bar.show(talkDot.windowX, talkDot.windowY)
                 caption = Caption(host, type)
                 if (whisper == null && SpeechRecognizer.isRecognitionAvailable(this)) {
                     val primary = if (language == "Marathi") "mr-IN" else "hi-IN"
@@ -218,6 +236,27 @@ class AssistService : Service(), GeminiLive.Callback {
         mainHandler.post { dot?.setBusy(on) }
     }
 
+    /** Likhkar diya order: Sahayak chup rehkar kaam karta hai, jawab screen par dikhta hai. */
+    private fun typedOrder(text: String) {
+        workerHandler.post {
+            if (live?.isReady != true) {
+                AssistState.set(true, "Abhi connection nahi hai. Thodi der mein dobara likhiye.")
+                return@post
+            }
+            stopRequested = false
+            silentTurn = true
+            voice?.interrupt()
+            mainHandler.post {
+                replyText.setLength(0)
+                mainHandler.removeCallbacks(hideReply)
+            }
+            releasedAt = System.currentTimeMillis()
+            RunLog.add(this, "order typed")
+            setBusy(true)
+            live?.sendText(text)
+        }
+    }
+
     private fun dotState(state: TalkDot.State) {
         mainHandler.post { dot?.setState(state) }
     }
@@ -230,6 +269,8 @@ class AssistService : Service(), GeminiLive.Callback {
                 finishTalk()
             }
             talking = true
+            silentTurn = false
+            mainHandler.removeCallbacks(hideReply)
             pressedAt = System.currentTimeMillis()
             mainHandler.post {
                 heard.setLength(0)
@@ -388,8 +429,16 @@ class AssistService : Service(), GeminiLive.Callback {
         )
     }
 
+    override fun onReplyText(text: String) {
+        if (!silentTurn) return
+        mainHandler.post {
+            replyText.append(text)
+            caption?.show(replyText.toString())
+        }
+    }
+
     override fun onAudio(pcm: ByteArray) {
-        if (talking) return // aap bol rahe ho to Sahayak chup
+        if (talking || silentTurn) return // chup rehne wali halat
         val now = System.currentTimeMillis()
         if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
             val seconds = (now - releasedAt) / 100 / 10.0
@@ -414,6 +463,10 @@ class AssistService : Service(), GeminiLive.Callback {
 
     override fun onTurnComplete() {
         setBusy(false)
+        if (silentTurn) {
+            silentTurn = false
+            mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
+        }
         RunLog.add(this, "turn_done")
     }
 
@@ -486,6 +539,9 @@ class AssistService : Service(), GeminiLive.Callback {
         mainHandler.post {
             dot?.remove()
             dot = null
+            typeBar?.remove()
+            typeBar = null
+            mainHandler.removeCallbacks(hideReply)
             caption?.hide()
             caption = null
             listener?.destroy()
@@ -531,6 +587,13 @@ class AssistService : Service(), GeminiLive.Callback {
             this, 2, Intent(this, AssistService::class.java).setAction(ACTION_TALK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+        val typeIntent = PendingIntent.getService(
+            this, 3, Intent(this, AssistService::class.java).setAction(ACTION_TYPE),
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val typeAction = Notification.Action.Builder(null, "Likho", typeIntent)
+            .addRemoteInput(RemoteInput.Builder(REPLY_KEY).setLabel("Hindi ya English mein likhiye").build())
+            .build()
         val talkLabel = if (talking) "Bas, jawab do" else "Bolo"
         val text = if (talking) "Sun raha hai. Boliye, phir Bas, jawab do dabaiye."
         else "Dot na dikhe to Bolo dabaiye"
@@ -540,6 +603,7 @@ class AssistService : Service(), GeminiLive.Callback {
             .setContentText(text)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, talkLabel, talk).build())
+            .addAction(typeAction)
             .addAction(Notification.Action.Builder(null, "Band karo", stop).build())
             .setOnlyAlertOnce(true)
             .setOngoing(true)
@@ -549,6 +613,9 @@ class AssistService : Service(), GeminiLive.Callback {
     companion object {
         private const val ACTION_STOP = "com.sahayak.app.STOP"
         private const val ACTION_TALK = "com.sahayak.app.TALK"
+        private const val ACTION_TYPE = "com.sahayak.app.TYPE"
+        private const val REPLY_KEY = "typed_order"
+        private const val REPLY_SHOW_MS = 5_000L
         private const val EXTRA_RESULT = "result"
         private const val EXTRA_DATA = "data"
         private const val EXTRA_KEY = "key"

@@ -70,7 +70,7 @@ How to guide:
         val address = if (name.isBlank()) "Call the person Sir or Madam." else "The person's name is $name. Use \"$name ji\" only sometimes."
         val today = SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(Date())
         val role = if (canControl) OPERATOR else GUIDE
-        return "Today is $today. $address You see the phone screen through images. The person's orders usually arrive as text from speech recognition, so quietly fix obvious mishearing.\n\n" +
+        return "Today is $today. $address You see the phone screen through images. The person's orders arrive as text, either typed or from speech recognition, in any language. Treat typed orders exactly like spoken ones, and quietly fix obvious spelling or hearing mistakes.\n\n" +
             role + "\n\n" + SHARED.replace("LANGUAGE", language)
     }
 

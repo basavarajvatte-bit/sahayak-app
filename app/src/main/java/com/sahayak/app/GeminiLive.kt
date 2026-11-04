@@ -22,6 +22,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         fun onGoAway()
         fun onTurnComplete()
         fun onTranscript(text: String)
+        fun onReplyText(text: String)
         fun onToolCall(id: String, name: String, args: JSONObject)
         fun onClosed(code: Int, reason: String)
     }
@@ -87,6 +88,8 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         if (content.optBoolean("interrupted", false)) callback.onInterrupted()
         content.optJSONObject("inputTranscription")?.optString("text")?.takeIf { it.isNotEmpty() }
             ?.let { callback.onTranscript(it) }
+        content.optJSONObject("outputTranscription")?.optString("text")?.takeIf { it.isNotEmpty() }
+            ?.let { callback.onReplyText(it) }
         content.optJSONObject("modelTurn")?.optJSONArray("parts")?.let { parts ->
             for (i in 0 until parts.length()) {
                 val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data").orEmpty()
@@ -201,6 +204,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                         .put("prebuiltVoiceConfig", JSONObject().put("voiceName", voiceName)))))
                 .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemText))))
                 .put("inputAudioTranscription", JSONObject())
+                .put("outputAudioTranscription", JSONObject())
                 .put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
                 .put("sessionResumption", resumption)
             if (tools != null) setup.put("tools", tools)
