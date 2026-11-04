@@ -48,6 +48,8 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var speakingUntil = 0L
     @Volatile private var releasedAt = 0L
     @Volatile private var talking = false
+    @Volatile private var stopRequested = false
+    private var pressedAt = 0L
     private var autoStep = false
     private var tools: JSONArray? = null
     private val actions = HandlerThread("sahayak-actions").apply { start() }
@@ -184,6 +186,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 finishTalk()
             }
             talking = true
+            pressedAt = System.currentTimeMillis()
             setBusy(false)
             speakingUntil = 0L
             voice?.interrupt()
@@ -202,6 +205,16 @@ class AssistService : Service(), GeminiLive.Callback {
             dotState(TalkDot.State.READY)
             updateNotification()
             endPending = true
+            if (System.currentTimeMillis() - pressedAt < STOP_TAP_MS) {
+                // Ek chhota tap: chal raha kaam turant roko
+                stopRequested = true
+                finishTalk()
+                setBusy(false)
+                live?.sendText(Prompts.STOP)
+                AssistState.set(true, "Kaam rok diya.")
+                return@post
+            }
+            stopRequested = false
             workerHandler.postDelayed(endTalk, MIC_TAIL_MS) // aakhri shabd na kate
         }
     }
@@ -260,10 +273,10 @@ class AssistService : Service(), GeminiLive.Callback {
         actionHandler.post {
             val control = PhoneControl.instance
             val result = when {
-                talking || stopping -> JSONObject().put("status", "cancelled_by_person")
+                stopRequested || stopping -> JSONObject().put("status", "cancelled_by_person")
                 control == null -> JSONObject().put("status", "control_off")
                 else -> try {
-                    AssistState.set(true, "Sahayak phone chala raha hai. Rokne ke liye dot dabaiye.")
+                    AssistState.set(true, "Kaam chal raha hai. Rokne ke liye dot par ek chhota tap kijiye.")
                     control.run(name, args)
                 } catch (e: RuntimeException) {
                     JSONObject().put("status", "failed")
@@ -396,6 +409,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 150L
+        private const val STOP_TAP_MS = 300L
         private const val BUSY_TIMEOUT_MS = 45_000L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
