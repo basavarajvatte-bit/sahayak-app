@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F6F5F1"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Sahayak"
+            android:textColor="#1D2433"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Button dabaiye, phir bolkar madad lijiye"
+            android:textColor="#667085"
+            android:textSize="17sp" />
+
+        <Button
+            android:id="@+id/assistButton"
+            android:layout_width="match_parent"
+            android:layout_height="96dp"
+            android:layout_marginTop="24dp"
+            android:backgroundTint="#1F5C4D"
+            android:text="Assist"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp" />
+
+        <Button
+            android:id="@+id/stopButton"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginTop="8dp"
+            android:text="Band karo"
+            android:textAllCaps="false"
+            android:textSize="20sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:textColor="#1D2433"
+            android:textSize="18sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Bhasha"
+            android:textColor="#1D2433"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/languageGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/langHindi"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Hindi"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/langMarathi"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="24dp"
+                android:text="Marathi"
+                android:textSize="17sp" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Gemini key"
+            android:textColor="#1D2433"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/keyInput"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:hint="Yahan paste kijiye"
+            android:importantForAutofill="no"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:textSize="17sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Test version: poori screen aur awaaz Google ko jati hai, aur free plan ka data Google ke log bhi padh sakte hain. Isliye sirf nakli naam aur nakli details se test kijiye. Password, bank app, OTP ya payment screen par pehle Band karo dabaiye."
+            android:textColor="#B42318"
+            android:textSize="15sp" />
+    </LinearLayout>
+</ScrollView>

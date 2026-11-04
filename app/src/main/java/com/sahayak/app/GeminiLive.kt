@@ -1,0 +1,156 @@
+package com.sahayak.app
+
+import android.util.Base64
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import okio.ByteString
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.util.concurrent.TimeUnit
+
+/** Gemini Live API se WebSocket connection. */
+class GeminiLive(private val client: OkHttpClient, private val callback: Callback) {
+
+    interface Callback {
+        fun onReady(resumed: Boolean)
+        fun onAudio(pcm: ByteArray)
+        fun onInterrupted()
+        fun onGoAway()
+        fun onClosed(code: Int, reason: String)
+    }
+
+    private var socket: WebSocket? = null
+    @Volatile private var ready = false
+    @Volatile var resumeHandle: String? = null
+        private set
+
+    fun connect(apiKey: String, model: String, systemText: String) {
+        ready = false
+        val resuming = resumeHandle != null
+        val request = Request.Builder().url(WS_URL + "?key=" + apiKey).build()
+        socket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                webSocket.send(setupMessage(model, systemText, resumeHandle).toString())
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) = handle(text, resuming)
+
+            override fun onMessage(webSocket: WebSocket, bytes: ByteString) =
+                handle(bytes.utf8(), resuming)
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                ready = false
+                webSocket.close(1000, null)
+                callback.onClosed(code, reason)
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                ready = false
+                callback.onClosed(response?.code ?: -1, t.message ?: "connection failed")
+            }
+        })
+    }
+
+    private fun handle(text: String, resuming: Boolean) {
+        val msg = try { JSONObject(text) } catch (e: Exception) { return }
+        if (msg.has("setupComplete")) {
+            ready = true
+            callback.onReady(resuming)
+        }
+        msg.optJSONObject("sessionResumptionUpdate")?.let { update ->
+            val handle = update.optString("newHandle")
+            if (update.optBoolean("resumable", false) && handle.isNotEmpty()) resumeHandle = handle
+        }
+        if (msg.has("goAway")) callback.onGoAway()
+        val content = msg.optJSONObject("serverContent") ?: return
+        if (content.optBoolean("interrupted", false)) callback.onInterrupted()
+        val parts = content.optJSONObject("modelTurn")?.optJSONArray("parts") ?: return
+        for (i in 0 until parts.length()) {
+            val data = parts.optJSONObject(i)?.optJSONObject("inlineData")?.optString("data").orEmpty()
+            if (data.isNotEmpty()) callback.onAudio(Base64.decode(data, Base64.DEFAULT))
+        }
+    }
+
+    fun sendAudio(pcm: ByteArray, size: Int) = sendMedia("audio", "audio/pcm;rate=16000", pcm, size)
+
+    fun sendJpeg(jpeg: ByteArray) = sendMedia("video", "image/jpeg", jpeg, jpeg.size)
+
+    fun sendText(text: String) {
+        if (ready) socket?.send(JSONObject().put("realtimeInput", JSONObject().put("text", text)).toString())
+    }
+
+    private fun sendMedia(field: String, mime: String, bytes: ByteArray, size: Int) {
+        val ws = socket ?: return
+        if (!ready || ws.queueSize() > MAX_QUEUE_BYTES) return
+        val blob = JSONObject().put("mimeType", mime)
+            .put("data", Base64.encodeToString(bytes, 0, size, Base64.NO_WRAP))
+        ws.send(JSONObject().put("realtimeInput", JSONObject().put(field, blob)).toString())
+    }
+
+    fun close() {
+        ready = false
+        socket?.close(1000, null)
+        socket = null
+    }
+
+    companion object {
+        private const val MAX_QUEUE_BYTES = 2_000_000L
+        private const val WS_URL = "wss://generativelanguage.googleapis.com/ws/" +
+            "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        private const val MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+        const val DEFAULT_MODEL = "gemini-3.1-flash-live-preview"
+
+        fun newClient(): OkHttpClient = OkHttpClient.Builder()
+            .readTimeout(0, TimeUnit.MILLISECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
+
+        fun setupMessage(model: String, systemText: String, handle: String?): JSONObject {
+            val resumption = JSONObject()
+            if (handle != null) resumption.put("handle", handle)
+            val setup = JSONObject()
+                .put("model", "models/$model")
+                .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("AUDIO")))
+                .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemText))))
+                .put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
+                .put("sessionResumption", resumption)
+            return JSONObject().put("setup", setup)
+        }
+
+        /** Key par chalne wale Live models. Key galat ho to IOException deta hai. */
+        fun liveModels(client: OkHttpClient, apiKey: String): List<String> {
+            val request = Request.Builder().url(MODELS_URL).header("x-goog-api-key", apiKey).build()
+            client.newCall(request).execute().use { response ->
+                if (response.code == 400 || response.code == 401 || response.code == 403) {
+                    throw IOException("bad key")
+                }
+                if (!response.isSuccessful) return listOf(DEFAULT_MODEL)
+                return rankModels(response.body?.string().orEmpty()).ifEmpty { listOf(DEFAULT_MODEL) }
+            }
+        }
+
+        fun rankModels(json: String): List<String> {
+            val models = JSONObject(json).optJSONArray("models") ?: return emptyList()
+            val names = ArrayList<String>()
+            for (i in 0 until models.length()) {
+                val model = models.optJSONObject(i) ?: continue
+                val methods = model.optJSONArray("supportedGenerationMethods") ?: continue
+                val live = (0 until methods.length()).any { methods.optString(it) == "bidiGenerateContent" }
+                val name = model.optString("name").removePrefix("models/")
+                if (live && name.isNotEmpty() && !name.contains("translate")) names.add(name)
+            }
+            return names.sortedBy { name ->
+                when {
+                    name == DEFAULT_MODEL -> 0
+                    name.contains("flash-live") -> 1
+                    name.contains("native-audio") -> 2
+                    else -> 3
+                }
+            }
+        }
+    }
+}
