@@ -90,7 +90,14 @@ class MainActivity : Activity() {
             if (prefs.getString(PREF_LANGUAGE, HINDI) == MARATHI) R.id.langMarathi else R.id.langHindi
         )
         nameInput.setText(prefs.getString(PREF_NAME, ""))
-        voiceGroup.check(if (prefs.getString(PREF_VOICE, VOICE_FEMALE) == VOICE_MALE) R.id.voiceMale else R.id.voiceFemale)
+        voiceGroup.check(
+            when (prefs.getString(PREF_VOICE, VOICE_FEMALE)) {
+                VOICE_MALE -> R.id.voiceMale
+                VOICE_SOFT -> R.id.voiceSoft
+                VOICE_DEEP -> R.id.voiceDeep
+                else -> R.id.voiceFemale
+            }
+        )
         assistButton.setOnClickListener { onAssist() }
         stopButton.setOnClickListener { AssistService.stop(this) }
     }
@@ -126,8 +133,12 @@ class MainActivity : Activity() {
     private fun language(): String =
         if (languageGroup.checkedRadioButtonId == R.id.langMarathi) MARATHI else HINDI
 
-    private fun voice(): String =
-        if (voiceGroup.checkedRadioButtonId == R.id.voiceMale) VOICE_MALE else VOICE_FEMALE
+    private fun voice(): String = when (voiceGroup.checkedRadioButtonId) {
+        R.id.voiceMale -> VOICE_MALE
+        R.id.voiceSoft -> VOICE_SOFT
+        R.id.voiceDeep -> VOICE_DEEP
+        else -> VOICE_FEMALE
+    }
 
     private fun onAssist() {
         val key = keyInput.text.toString().trim()
@@ -214,6 +225,8 @@ class MainActivity : Activity() {
         private const val MIN_VOLUME = 10
         private const val VOICE_FEMALE = "Aoede"
         private const val VOICE_MALE = "Puck"
+        private const val VOICE_SOFT = "Kore"
+        private const val VOICE_DEEP = "Charon"
         private const val HINDI = "Hindi"
         private const val MARATHI = "Marathi"
     }

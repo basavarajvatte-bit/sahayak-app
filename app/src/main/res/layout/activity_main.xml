@@ -147,21 +147,31 @@
                 android:id="@+id/voiceGroup"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="vertical">
 
                 <RadioButton
                     android:id="@+id/voiceFemale"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="Mahila"
+                    android:text="Mahila: madhur"
                     android:textSize="17sp" />
-
+                <RadioButton
+                    android:id="@+id/voiceSoft"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Mahila: naram"
+                    android:textSize="17sp" />
                 <RadioButton
                     android:id="@+id/voiceMale"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:layout_marginStart="24dp"
-                    android:text="Purush"
+                    android:text="Purush: smart"
+                    android:textSize="17sp" />
+                <RadioButton
+                    android:id="@+id/voiceDeep"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="Purush: bhaari"
                     android:textSize="17sp" />
             </RadioGroup>
 
