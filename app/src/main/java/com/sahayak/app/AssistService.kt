@@ -71,6 +71,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private val stepLog = ArrayList<String>()
     private var reviews = 0
     private var practiceName: String? = null
+    private var lastOrder: String? = null
     private var controlLostShown = false
     private var tools: JSONArray? = null
     private val actions = HandlerThread("sahayak-actions").apply { start() }
@@ -140,8 +141,11 @@ class AssistService : Service(), GeminiLive.Callback {
             val name = intent.getStringExtra(EXTRA_SKILL).orEmpty()
             if (name.isNotEmpty()) {
                 practiceName = name
-                mainHandler.post { caption?.show("Practice shuru: $name") }
-                typedOrder("Do the taught task \"$name\" now from start to end. Use get_taught_task first. If a placeholder has no value, use the example value from before.")
+                workerHandler.post {
+                    stopRequested = false
+                    silentTurn = true
+                    runSkill(name, true)
+                }
             }
             return START_NOT_STICKY
         }
@@ -296,6 +300,7 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Kaam chalte waqt dot dabate hi sab kuch turant band. */
     private fun stopEverything() {
         stopRequested = true
+        PhoneControl.instance?.abort = true
         endOrder()
         practiceName = null
         plannerHandler.removeCallbacksAndMessages(null)
@@ -424,6 +429,29 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Chhota order phone par turant, baaki AI ko. */
     private fun dispatchOrder(text: String) {
         if (stopRequested) return
+        val repeat = LocalCommands.repeatTarget(text)
+        if (repeat != null) {
+            val named = Skills.exactName(this, repeat)
+            val previous = lastOrder
+            when {
+                named != null -> runSkill(named, false)
+                repeat.isEmpty() && previous != null -> dispatchOrder(previous)
+                else -> {
+                    setBusy(false)
+                    mainHandler.post {
+                        caption?.show("Kaunsa kaam dohrana hai? Uska naam boliye.")
+                        mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
+                    }
+                }
+            }
+            return
+        }
+        lastOrder = text
+        val taught = Skills.exactName(this, text)
+        if (taught != null) {
+            runSkill(taught, false)
+            return
+        }
         currentOrder = text
         quietOrder = silentTurn
         orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
@@ -452,6 +480,59 @@ class AssistService : Service(), GeminiLive.Callback {
             } else {
                 sendPlanned(text)
             }
+        }
+    }
+
+    /** Sikhaya kaam seedhe chalao. Atke to AI wahi se aage badhaye. */
+    private fun runSkill(name: String, practice: Boolean) {
+        val control = PhoneControl.instance
+        if (control == null) {
+            live?.sendText(name)
+            return
+        }
+        val steps = Skills.lastDemo(this, name)
+        if (practice) practiceName = name
+        lastOrder = name
+        setBusy(true)
+        mainHandler.post { caption?.show("Kaam chal raha hai: $name") }
+        actionHandler.post {
+            val began = System.currentTimeMillis()
+            val result = control.replay(steps)
+            RunLog.add(this, "replay " + (if (result.done) "ok " else "stopped step " + result.failedAt + " " + result.reason + " ") +
+                (System.currentTimeMillis() - began) + "ms")
+            stepLog.clear()
+            stepLog.addAll(steps)
+            when {
+                stopRequested || result.reason == "stopped" -> setBusy(false)
+                result.done -> {
+                    setBusy(false)
+                    showBrief("Ho gaya")
+                    silentTurn = false
+                    finishPractice(true)
+                }
+                result.reason == "step_failed" -> {
+                    val step = steps.getOrNull(result.failedAt).orEmpty()
+                    currentOrder = name
+                    quietOrder = silentTurn
+                    orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+                    live?.sendText("The taught task \"$name\" stopped at this step: $step. Look at the screen, finish this step another way, then do these remaining steps: " +
+                        steps.drop(result.failedAt + 1).joinToString(" | "))
+                }
+                else -> {
+                    setBusy(false)
+                    silentTurn = false
+                    showBrief(if (result.reason == "finance_app") "Bank ya UPI app, ise aap khud chalaiye" else "Payment ya code screen aa gayi, ab aap kijiye")
+                    finishPractice(true)
+                }
+            }
+        }
+    }
+
+    private fun showBrief(text: String) {
+        mainHandler.post {
+            caption?.show(text)
+            mainHandler.removeCallbacks(hideReply)
+            mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
         }
     }
 

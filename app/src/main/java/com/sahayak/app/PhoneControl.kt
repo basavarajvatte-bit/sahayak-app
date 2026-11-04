@@ -282,6 +282,58 @@ class PhoneControl : AccessibilityService() {
         return false
     }
 
+    @Volatile var abort = false
+
+    data class Replay(val done: Boolean, val failedAt: Int, val reason: String)
+
+    /** Sikhaye steps seedhe chalata hai. Ruke to batata hai kis step par. */
+    fun replay(steps: List<String>): Replay {
+        abort = false
+        steps.forEachIndexed { index, step ->
+            if (abort) return Replay(false, index, "stopped")
+            val current = rootInActiveWindow?.packageName?.toString().orEmpty()
+            if (isFinance(current)) return Replay(false, index, "finance_app")
+            val reason = sensitiveReason()
+            if (reason != null) return Replay(false, index, reason)
+            if (!replayStep(step)) return Replay(false, index, "step_failed")
+        }
+        return Replay(true, -1, "")
+    }
+
+    private fun replayStep(step: String): Boolean {
+        val before = screenText()
+        val done = OPEN_STEP.find(step)?.let { openApp(it.groupValues[1]) }
+            ?: QUOTED_TAP.find(step)?.let { match -> retry { tapText(match.groupValues[1]) } }
+            ?: POINT_TAP.find(step)?.let { tapPosition(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
+            ?: QUOTED_TYPE.find(step)?.let { match -> retry { typeFocused(match.groupValues[1]) } }
+            ?: when {
+                step.startsWith("press enter") -> pressEnter()
+                step.startsWith("wait") -> {
+                    Thread.sleep(REPLAY_WAIT_MS)
+                    true
+                }
+                step.startsWith("screen shows") -> true
+                else -> false
+            }
+        if (done) waitUntilSettled(before)
+        return done
+    }
+
+    private fun retry(action: () -> Boolean): Boolean {
+        repeat(REPLAY_TRIES) {
+            if (abort) return false
+            if (action()) return true
+            Thread.sleep(REPLAY_RETRY_MS)
+        }
+        return false
+    }
+
+    private fun typeFocused(text: String): Boolean {
+        val node = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            ?: visibleNodes().firstOrNull { it.isEditable } ?: return false
+        return !node.isPassword && typeInto(node, text)
+    }
+
     private fun screenText(): String = visibleNodes().joinToString("|") { label(it) }
 
     /** Screen shaant hone tak ruko, taaki Sahayak adhuri screen na padhe. */
@@ -551,6 +603,13 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
+        private const val REPLAY_TRIES = 10
+        private const val REPLAY_RETRY_MS = 300L
+        private const val REPLAY_WAIT_MS = 2_000L
+        private val OPEN_STEP = Regex("^open app (.+)$")
+        private val QUOTED_TAP = Regex("^tap \"(.+)\"$")
+        private val POINT_TAP = Regex("^tap the icon at x=(\\d+) y=(\\d+)$")
+        private val QUOTED_TYPE = Regex("^type \"(.*)\"$")
         private const val MAX_TEACH_STEPS = 120
         private const val SEND_TRIES = 8
         private const val SEND_CHECK_MS = 400L

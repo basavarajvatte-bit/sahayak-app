@@ -23,6 +23,16 @@ object LocalCommands {
         "इंस्टाग्राम" to "Instagram", "फेसबुक" to "Facebook", "मैप्स" to "Maps", "चैटजीपीटी" to "ChatGPT"
     )
 
+    private val REPEAT = Regex(
+        "^(?:phir se |fir se |dobara |wapas |please )?(.*?)\\s*" +
+            "(?:dohrao|dohra do|dobara karo|fir se karo|phir se karo|wapas karo|repeat|repeat it|दोहराओ|दोहरा दो|दोबारा करो|फिर से करो|पुन्हा कर|पुन्हा करा)" + END,
+        RegexOption.IGNORE_CASE
+    )
+
+    /** "dohrao" ya "Mausam dekhna dohrao": null matlab repeat order nahi. */
+    fun repeatTarget(raw: String): String? =
+        REPEAT.find(raw.trim().trim('"'))?.groupValues?.get(1)?.trim()?.removeSuffix("ko")?.trim()
+
     fun parse(raw: String): Command? {
         val text = raw.trim().trim('"')
         if (text.isEmpty() || text.length > 120) return null

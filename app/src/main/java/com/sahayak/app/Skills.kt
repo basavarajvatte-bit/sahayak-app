@@ -88,6 +88,19 @@ object Skills {
         }
     }
 
+    /** Aakhri demo ke asli steps: dohrane ke liye sabse pakka rasta. */
+    fun lastDemo(context: Context, name: String): List<String> {
+        val demos = find(context, name)?.optJSONArray("demos")
+        val demo = demos?.optJSONArray((demos.length()) - 1)
+        return if (demo != null) List(demo.length()) { demo.optString(it) } else steps(context, name)
+    }
+
+    /** Bola gaya naam kisi sikhaye kaam se poora mile to uska naam. */
+    fun exactName(context: Context, text: String): String? {
+        val wanted = text.trim().trimEnd('.', '!', '?', '।').lowercase()
+        return all(context).firstOrNull { it.optString("name").trim().lowercase() == wanted }?.optString("name")
+    }
+
     fun steps(context: Context, name: String): List<String> = list(find(context, name), "steps")
 
     fun detail(context: Context, name: String): JSONObject? {
