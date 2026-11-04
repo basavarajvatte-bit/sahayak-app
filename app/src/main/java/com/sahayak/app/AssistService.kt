@@ -249,7 +249,11 @@ class AssistService : Service(), GeminiLive.Callback {
         wasReady = true
         retries = 0
         dotState(TalkDot.State.READY)
-        AssistState.set(true, "Taiyar. Dot dabakar boliye, chhodne par jawab milega.")
+        AssistState.set(
+            true,
+            if (tools != null) "Taiyar. Dot dabakar order dijiye."
+            else "Phone control band hai, Sahayak sirf bolkar batayega. Khud kaam karwane ke liye control chalu kijiye."
+        )
     }
 
     override fun onAudio(pcm: ByteArray) {

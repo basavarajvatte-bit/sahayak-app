@@ -2,9 +2,11 @@ package com.sahayak.app
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
@@ -44,8 +46,15 @@ class PhoneControl : AccessibilityService() {
         if (name != "get_screen" && blocked != null) {
             return JSONObject().put("status", "stopped").put("reason", blocked)
         }
+        val before = screenText()
         val done = when (name) {
             "get_screen" -> true
+            "wait" -> {
+                Thread.sleep(args.optInt("seconds", 2).coerceIn(1, 10) * 1_000L)
+                true
+            }
+            "open_url" -> openUrl(args.optString("url"))
+            "tap_text" -> tapText(args.optString("text"))
             "open_app" -> openApp(args.optString("name"))
             "tap" -> tapElement(args.optInt("element", -1))
             "tap_position" -> tapPosition(args.optInt("x", -1), args.optInt("y", -1))
@@ -55,12 +64,52 @@ class PhoneControl : AccessibilityService() {
             "go_back" -> performGlobalAction(GLOBAL_ACTION_BACK)
             else -> false
         }
-        if (name != "get_screen") Thread.sleep(SETTLE_MS)
+        if (name != "get_screen") waitUntilSettled(before)
         val after = sensitiveReason()
-        val result = JSONObject().put("status", if (done) "ok" else "failed").put("screen", readScreen())
+        val result = JSONObject().put("status", if (done) "ok" else "failed")
+            .put("app", rootInActiveWindow?.packageName?.toString().orEmpty())
+            .put("screen", readScreen())
         if (after != null) result.put("status", "stopped").put("reason", after)
         else if (name == "type_text" && done) result.put("next", "Text is typed but not sent. Submit it now.")
         return result
+    }
+
+    private fun screenText(): String = visibleNodes().joinToString("|") { label(it) }
+
+    /** Screen shaant hone tak ruko, taaki Sahayak adhuri screen na padhe. */
+    private fun waitUntilSettled(before: String) {
+        Thread.sleep(MIN_SETTLE_MS)
+        var last = screenText()
+        var stable = 0
+        var waited = MIN_SETTLE_MS
+        while (waited < MAX_SETTLE_MS) {
+            Thread.sleep(SETTLE_STEP_MS)
+            waited += SETTLE_STEP_MS
+            val now = screenText()
+            stable = if (now == last) stable + 1 else 0
+            last = now
+            if (stable >= 2 && (now != before || waited >= LOAD_GRACE_MS)) return
+        }
+    }
+
+    private fun openUrl(url: String): Boolean {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return false
+        return try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    private fun tapText(text: String): Boolean {
+        val wanted = text.trim().lowercase()
+        if (wanted.isEmpty()) return false
+        val nodes = visibleNodes()
+        val node = nodes.firstOrNull { label(it).lowercase() == wanted }
+            ?: nodes.firstOrNull { label(it).lowercase().contains(wanted) }
+            ?: return false
+        return tapNode(node)
     }
 
     private fun openApp(name: String): Boolean {
@@ -78,6 +127,10 @@ class PhoneControl : AccessibilityService() {
 
     private fun tapElement(index: Int): Boolean {
         val node = elements.getOrNull(index) ?: return false
+        return tapNode(node)
+    }
+
+    private fun tapNode(node: AccessibilityNodeInfo): Boolean {
         var target: AccessibilityNodeInfo? = node
         while (target != null && !target.isClickable) target = target.parent
         if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
@@ -197,7 +250,10 @@ class PhoneControl : AccessibilityService() {
         @Volatile var instance: PhoneControl? = null
             private set
 
-        private const val SETTLE_MS = 1_200L
+        private const val MIN_SETTLE_MS = 300L
+        private const val MAX_SETTLE_MS = 4_000L
+        private const val SETTLE_STEP_MS = 200L
+        private const val LOAD_GRACE_MS = 1_200L
         private const val GESTURE_WAIT_MS = 3_000L
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 80

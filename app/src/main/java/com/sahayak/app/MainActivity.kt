@@ -9,6 +9,7 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
@@ -28,7 +29,10 @@ class MainActivity : Activity() {
     private lateinit var nameInput: EditText
     private lateinit var autoStep: CheckBox
     private lateinit var controlButton: Button
+    private lateinit var batteryButton: Button
+    private lateinit var settingsPanel: View
     private val prefs by lazy { getSharedPreferences("sahayak", MODE_PRIVATE) }
+    private val secure by lazy { SecureStore(prefs) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +46,12 @@ class MainActivity : Activity() {
         nameInput = findViewById(R.id.nameInput)
         autoStep = findViewById(R.id.autoStep)
         controlButton = findViewById(R.id.controlButton)
+        batteryButton = findViewById(R.id.batteryButton)
+        settingsPanel = findViewById(R.id.settingsPanel)
+        findViewById<Button>(R.id.settingsButton).setOnClickListener {
+            settingsPanel.visibility = if (settingsPanel.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        batteryButton.setOnClickListener { askBattery() }
         val volumeBar = findViewById<SeekBar>(R.id.volumeBar)
         volumeBar.progress = prefs.getInt(PREF_VOLUME, DEFAULT_VOLUME)
         AssistState.volume = volumeBar.progress.coerceAtLeast(MIN_VOLUME) / 100f
@@ -60,7 +70,9 @@ class MainActivity : Activity() {
         }
         autoStep.isChecked = prefs.getBoolean(PREF_AUTO, false)
 
-        keyInput.setText(prefs.getString(PREF_KEY, ""))
+        val savedKey = secure.load()
+        keyInput.setText(savedKey)
+        if (savedKey.isEmpty()) settingsPanel.visibility = View.VISIBLE
         languageGroup.check(
             if (prefs.getString(PREF_LANGUAGE, HINDI) == MARATHI) R.id.langMarathi else R.id.langHindi
         )
@@ -86,7 +98,16 @@ class MainActivity : Activity() {
         assistButton.visibility = if (running) View.GONE else View.VISIBLE
         stopButton.visibility = if (running) View.VISIBLE else View.GONE
         statusText.text = AssistState.status
-        controlButton.text = if (PhoneControl.instance != null) "Phone control: chalu" else "Phone control chalu karo"
+        controlButton.text = if (PhoneControl.instance != null) "✓ Phone control chalu hai" else "Phone control chalu karo"
+        batteryButton.text = if (batteryFree()) "✓ Background mein chalne ki ijazat hai" else "Background ki ijazat do"
+    }
+
+    private fun batteryFree(): Boolean =
+        getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+
+    private fun askBattery() {
+        if (batteryFree()) return
+        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
     }
 
     private fun language(): String =
@@ -98,11 +119,13 @@ class MainActivity : Activity() {
     private fun onAssist() {
         val key = keyInput.text.toString().trim()
         if (key.isEmpty()) {
-            statusText.text = "Pehle Gemini key daliye."
+            statusText.text = "Pehle Settings mein Gemini key daliye."
+            settingsPanel.visibility = View.VISIBLE
             keyInput.requestFocus()
             return
         }
-        prefs.edit().putString(PREF_KEY, key).putString(PREF_LANGUAGE, language())
+        secure.save(key)
+        prefs.edit().putString(PREF_LANGUAGE, language())
             .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice())
             .putBoolean(PREF_AUTO, autoStep.isChecked).apply()
 
@@ -151,7 +174,7 @@ class MainActivity : Activity() {
         if (requestCode != REQUEST_SCREEN) return
         if (resultCode == RESULT_OK && data != null) {
             AssistService.start(
-                this, resultCode, data, prefs.getString(PREF_KEY, "").orEmpty(), language(),
+                this, resultCode, data, secure.load(), language(),
                 prefs.getString(PREF_NAME, "").orEmpty(), voice(), autoStep.isChecked
             )
             moveTaskToBack(true) // app peeche chala jaye, phone ka home dikhe
@@ -163,7 +186,6 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_PERMISSIONS = 1
         private const val REQUEST_SCREEN = 2
-        private const val PREF_KEY = "gemini_key"
         private const val PREF_LANGUAGE = "language"
         private const val PREF_NAME = "name"
         private const val PREF_VOICE = "voice"

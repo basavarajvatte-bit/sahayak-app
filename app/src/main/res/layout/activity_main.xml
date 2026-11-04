@@ -9,191 +9,210 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="32dp"
+        android:paddingBottom="28dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Sahayak"
             android:textColor="#1D2433"
-            android:textSize="32sp"
+            android:textSize="34sp"
             android:textStyle="bold" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Assist dabaiye, phir chamakte dot ko dabakar boliye"
+            android:layout_marginTop="2dp"
+            android:text="Aap boliye, baaki main karunga"
             android:textColor="#667085"
             android:textSize="17sp" />
 
-        <Button
-            android:id="@+id/assistButton"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="96dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:backgroundTint="#1F5C4D"
-            android:text="Assist"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="28sp" />
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <Button
-            android:id="@+id/stopButton"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:layout_marginTop="8dp"
-            android:text="Band karo"
-            android:textAllCaps="false"
-            android:textSize="20sp"
-            android:visibility="gone" />
+            <Button
+                android:id="@+id/assistButton"
+                android:layout_width="match_parent"
+                android:layout_height="92dp"
+                android:backgroundTint="#1F5C4D"
+                android:text="Assist"
+                android:textAllCaps="false"
+                android:textColor="#FFFFFF"
+                android:textSize="28sp" />
 
-        <Button
-            android:id="@+id/controlButton"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_marginTop="8dp"
-            android:textAllCaps="false"
-            android:textSize="18sp" />
+            <Button
+                android:id="@+id/stopButton"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:text="Band karo"
+                android:textAllCaps="false"
+                android:textSize="20sp"
+                android:visibility="gone" />
 
-        <TextView
-            android:id="@+id/statusText"
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:textColor="#1D2433"
+                android:textSize="17sp" />
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:textColor="#1D2433"
-            android:textSize="18sp" />
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Pehli bhasha (phir jis bhasha mein bologe, usi mein jawab)"
-            android:textColor="#1D2433"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Taiyari"
+                android:textColor="#1D2433"
+                android:textSize="18sp"
+                android:textStyle="bold" />
 
-        <RadioGroup
-            android:id="@+id/languageGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <RadioButton
-                android:id="@+id/langHindi"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Hindi"
+            <Button
+                android:id="@+id/controlButton"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="8dp"
+                android:textAllCaps="false"
                 android:textSize="17sp" />
 
-            <RadioButton
-                android:id="@+id/langMarathi"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="24dp"
-                android:text="Marathi"
+            <Button
+                android:id="@+id/batteryButton"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:textAllCaps="false"
                 android:textSize="17sp" />
-        </RadioGroup>
+        </LinearLayout>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Awaaz"
-            android:textColor="#1D2433"
-            android:textSize="17sp"
-            android:textStyle="bold" />
-
-        <RadioGroup
-            android:id="@+id/voiceGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <RadioButton
-                android:id="@+id/voiceFemale"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:text="Mahila"
-                android:textSize="17sp" />
-
-            <RadioButton
-                android:id="@+id/voiceMale"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="24dp"
-                android:text="Purush"
-                android:textSize="17sp" />
-        </RadioGroup>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Aapka naam"
-            android:textColor="#1D2433"
-            android:textSize="17sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/nameInput"
+        <Button
+            android:id="@+id/settingsButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:hint="Jaise Rahul"
-            android:importantForAutofill="no"
-            android:inputType="textPersonName"
-            android:maxLines="1"
+            android:layout_marginTop="14dp"
+            android:text="Settings"
+            android:textAllCaps="false"
             android:textSize="17sp" />
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/settingsPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Sahayak ki awaaz"
-            android:textColor="#1D2433"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+            android:layout_marginTop="8dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
 
-        <SeekBar
-            android:id="@+id/volumeBar"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:max="100" />
+            <TextView style="@style/Label" android:text="Pehli bhasha" />
 
-        <CheckBox
-            android:id="@+id/autoStep"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:minHeight="48dp"
-            android:text="Screen badalne par khud agla step bole"
-            android:textSize="17sp" />
+            <RadioGroup
+                android:id="@+id/languageGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Gemini key"
-            android:textColor="#1D2433"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+                <RadioButton
+                    android:id="@+id/langHindi"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:text="Hindi"
+                    android:textSize="17sp" />
 
-        <EditText
-            android:id="@+id/keyInput"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:hint="Yahan paste kijiye"
-            android:importantForAutofill="no"
-            android:inputType="textPassword"
-            android:maxLines="1"
-            android:textSize="17sp" />
+                <RadioButton
+                    android:id="@+id/langMarathi"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="24dp"
+                    android:text="Marathi"
+                    android:textSize="17sp" />
+            </RadioGroup>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Test version: poori screen aur awaaz Google ko jati hai, aur free plan ka data Google ke log bhi padh sakte hain. Isliye sirf nakli naam aur nakli details se test kijiye. Password, OTP, PIN ya card daalte waqt bhi screen Google tak ja sakti hai, isliye chahein to pehle Band karo dabaiye."
-            android:textColor="#B42318"
-            android:textSize="15sp" />
+            <TextView style="@style/Label" android:text="Awaaz" />
+
+            <RadioGroup
+                android:id="@+id/voiceGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/voiceFemale"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:text="Mahila"
+                    android:textSize="17sp" />
+
+                <RadioButton
+                    android:id="@+id/voiceMale"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="24dp"
+                    android:text="Purush"
+                    android:textSize="17sp" />
+            </RadioGroup>
+
+            <TextView style="@style/Label" android:text="Sahayak ki awaaz" />
+
+            <SeekBar
+                android:id="@+id/volumeBar"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:max="100" />
+
+            <TextView style="@style/Label" android:text="Aapka naam" />
+
+            <EditText
+                android:id="@+id/nameInput"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:hint="Jaise Rahul"
+                android:importantForAutofill="no"
+                android:inputType="textPersonName"
+                android:maxLines="1"
+                android:textSize="17sp" />
+
+            <CheckBox
+                android:id="@+id/autoStep"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="48dp"
+                android:text="Screen badalne par khud bole"
+                android:textSize="17sp" />
+
+            <TextView style="@style/Label" android:text="Gemini key" />
+
+            <EditText
+                android:id="@+id/keyInput"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:hint="Yahan paste kijiye"
+                android:importantForAutofill="no"
+                android:inputType="textPassword"
+                android:maxLines="1"
+                android:textSize="17sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Test version: poori screen aur awaaz Google ko jati hai, aur free plan ka data Google ke log bhi padh sakte hain. Password, OTP, PIN ya card daalte waqt chahein to pehle Band karo dabaiye."
+                android:textColor="#B42318"
+                android:textSize="14sp" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -163,6 +163,12 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                 .put(tool("get_screen", "Read the list of elements on the current screen."))
                 .put(tool("open_app", "Open an installed app by name.",
                     JSONObject().put("name", prop("STRING", "App name")), listOf("name")))
+                .put(tool("open_url", "Open a website address in the browser.",
+                    JSONObject().put("url", prop("STRING", "Full https address")), listOf("url")))
+                .put(tool("tap_text", "Tap the item showing these words. Best way to tap.",
+                    JSONObject().put("text", prop("STRING", "Visible words")), listOf("text")))
+                .put(tool("wait", "Wait for a page or result to load.",
+                    JSONObject().put("seconds", prop("INTEGER", "1 to 10")), listOf("seconds")))
                 .put(tool("tap", "Tap an element from the screen list.",
                     JSONObject().put("element", element), listOf("element")))
                 .put(tool("tap_position", "Tap a point. x and y run from 0 to 1000 across the screen image.",
