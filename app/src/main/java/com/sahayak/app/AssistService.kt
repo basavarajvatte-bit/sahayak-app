@@ -54,6 +54,12 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var stopRequested = false
     private var pressedAt = 0L
     private var autoStep = false
+    private var planner: Planner? = null
+    private val plannerThread = HandlerThread("sahayak-planner").apply { start() }
+    private val plannerHandler = Handler(plannerThread.looper)
+    private val recent = ArrayDeque<String>()
+    private val appVisits = ArrayDeque<String>()
+    private var stepCount = 0
     private var controlLostShown = false
     private var tools: JSONArray? = null
     private val actions = HandlerThread("sahayak-actions").apply { start() }
@@ -139,6 +145,7 @@ class AssistService : Service(), GeminiLive.Callback {
         userName = intent.getStringExtra(EXTRA_NAME).orEmpty()
         voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
         autoStep = intent.getBooleanExtra(EXTRA_AUTO, false)
+        planner = Planner(http, apiKey)
         whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
         tools = if (canControl) GeminiLive.phoneTools() else null
@@ -361,7 +368,7 @@ class AssistService : Service(), GeminiLive.Callback {
         val command = LocalCommands.parse(text)
         val control = PhoneControl.instance
         if (command == null || control == null) {
-            live?.sendText(text)
+            sendPlanned(text)
             return
         }
         actionHandler.post {
@@ -380,7 +387,52 @@ class AssistService : Service(), GeminiLive.Callback {
                     mainHandler.postDelayed(hideReply, FAST_DONE_MS)
                 }
             } else {
-                live?.sendText(text)
+                sendPlanned(text)
+            }
+        }
+    }
+
+    /** Pehle soch, phir kaam: plan banakar order bhejta hai. */
+    private fun sendPlanned(text: String) {
+        val think = planner
+        if (think == null || PhoneControl.instance == null) {
+            live?.sendText(text)
+            return
+        }
+        plannerHandler.post {
+            val began = System.currentTimeMillis()
+            val app = PhoneControl.instance?.rootInActiveWindow?.packageName?.toString().orEmpty()
+            val plan = think.plan(text, app)
+            RunLog.add(this, "plan " + (if (plan != null) "ok " else "skipped ") + (System.currentTimeMillis() - began) + "ms")
+            if (stopRequested) return@post
+            workerHandler.post {
+                recent.clear()
+                appVisits.clear()
+                stepCount = 0
+            }
+            live?.sendText(if (plan == null) text else "ORDER: $text\n\nPLAN:\n$plan")
+        }
+    }
+
+    /** Sahayak chakkar mein phanse to use rokta hai. */
+    private fun checkProgress(name: String, args: JSONObject, result: JSONObject) {
+        stepCount++
+        val mark = name + "|" + args.toString().take(120) + "|" + result.optString("app")
+        recent.addLast(mark)
+        if (recent.size > HISTORY_SIZE) recent.removeFirst()
+        if (name == "open_app") {
+            appVisits.addLast(args.optString("name").lowercase())
+            if (appVisits.size > 4) appVisits.removeFirst()
+        }
+        val visits = appVisits.toList()
+        val bouncing = visits.size == 4 && visits[0] == visits[2] && visits[1] == visits[3] && visits[0] != visits[1]
+        val repeating = recent.count { it == mark } >= REPEAT_LIMIT
+        when {
+            stepCount >= STEP_LIMIT -> result.put("status", "stopped").put("reason", "too_many_steps")
+                .put("warning", "Stop now and tell the person in one sentence what is blocking you.")
+            bouncing || repeating -> {
+                RunLog.add(this, "loop_warning")
+                result.put("warning", "You are going in circles. Do not repeat this. Use what you already have and take a different approach.")
             }
         }
     }
@@ -518,6 +570,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     JSONObject().put("status", "failed")
                 }
             }
+            checkProgress(name, args, result)
             // List khali ho to AI ko wahi screen photo se dikhao
             if ((result.optJSONArray("screen")?.length() ?: 99) < MIN_LIST_SIZE) {
                 screen?.latest()?.let { live?.sendJpeg(it) }
@@ -600,6 +653,7 @@ class AssistService : Service(), GeminiLive.Callback {
         worker.quitSafely()
         actions.quitSafely()
         whisperThread.quitSafely()
+        plannerThread.quitSafely()
         super.onDestroy()
     }
 
@@ -671,6 +725,9 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 80L
+        private const val HISTORY_SIZE = 8
+        private const val REPEAT_LIMIT = 3
+        private const val STEP_LIMIT = 40
         private const val FAST_DONE_MS = 1_500L
         private const val MIN_LIST_SIZE = 8
         private const val PARTIAL_MS = 2_000L

@@ -59,6 +59,11 @@ class PhoneControl : AccessibilityService() {
         val before = screenText()
         val done = when (name) {
             "get_screen" -> true
+            "read_full_text" -> {
+                val words = visibleNodes().filter { !it.isPassword }.map { label(it) }
+                    .filter { it.isNotEmpty() }.joinToString("\n").take(MAX_READ)
+                return JSONObject().put("status", "ok").put("text", words)
+            }
             "wait" -> {
                 Thread.sleep(args.optInt("seconds", 2).coerceIn(1, 10) * 1_000L)
                 true
@@ -380,6 +385,7 @@ class PhoneControl : AccessibilityService() {
         private const val GESTURE_WAIT_MS = 3_000L
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
+        private const val MAX_READ = 6_000
         private const val GMAIL = "com.google.android.gm"
         private val FINANCE_PACKAGES = setOf(
             "com.phonepe.app", "net.one97.paytm", "com.google.android.apps.nbu.paisa.user",

@@ -169,6 +169,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                     JSONObject().put("contact", prop("STRING", "Contact name as spoken")).put("message", prop("STRING", "Message text")), listOf("contact", "message")))
                 .put(tool("compose_email", "Fastest way to write an email. Opens a filled email ready to send.",
                     JSONObject().put("to", prop("STRING", "Email address")).put("subject", prop("STRING", "Subject")).put("body", prop("STRING", "Message")), listOf("to", "subject", "body")))
+                .put(tool("read_full_text", "Read all text on the screen in full. Use once when you need long text such as a reply or article."))
                 .put(tool("open_url", "Open a website address in the browser.",
                     JSONObject().put("url", prop("STRING", "Full https address")), listOf("url")))
                 .put(tool("tap_text", "Tap the item showing these words. Best way to tap.",
