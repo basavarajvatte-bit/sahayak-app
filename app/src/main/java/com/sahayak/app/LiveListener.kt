@@ -2,6 +2,7 @@ package com.sahayak.app
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +21,7 @@ class LiveListener(
     private val onBroken: () -> Unit
 ) : RecognitionListener {
     private val main = Handler(Looper.getMainLooper())
+    private val audio = context.getSystemService(AudioManager::class.java)
     private var recognizer: SpeechRecognizer? = null
     private val finished = StringBuilder()
     private var partial = ""
@@ -29,7 +31,23 @@ class LiveListener(
 
     private fun words(): String = (finished.toString() + " " + partial).trim()
 
+    /** Phone ki beep band: bolne ke dauran yeh awaazen mute. Sahayak ki awaaz chalu rehti hai. */
+    private fun muteBeeps(mute: Boolean) {
+        main.removeCallbacks(unmute)
+        val direction = if (mute) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
+        for (stream in listOf(AudioManager.STREAM_MUSIC, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_SYSTEM)) {
+            try {
+                audio.adjustStreamVolume(stream, direction, 0)
+            } catch (e: SecurityException) {
+                // Do Not Disturb mein yeh mana ho sakta hai
+            }
+        }
+    }
+
+    private val unmute = Runnable { muteBeeps(false) }
+
     fun start() {
+        muteBeeps(true)
         finished.setLength(0)
         partial = ""
         onDone = null
@@ -61,6 +79,7 @@ class LiveListener(
         onDone = done
         recognizer?.stopListening()
         main.postDelayed(giveUp, FINAL_WAIT_MS)
+        main.postDelayed(unmute, UNMUTE_DELAY_MS)
     }
 
     fun cancel() {
@@ -68,10 +87,12 @@ class LiveListener(
         onDone = null
         main.removeCallbacks(giveUp)
         recognizer?.cancel()
+        main.postDelayed(unmute, UNMUTE_DELAY_MS)
     }
 
     fun destroy() {
         cancel()
+        muteBeeps(false)
         recognizer?.destroy()
         recognizer = null
     }
@@ -129,5 +150,6 @@ class LiveListener(
     companion object {
         private const val LONG_SILENCE_MS = 10_000L
         private const val FINAL_WAIT_MS = 500L
+        private const val UNMUTE_DELAY_MS = 800L
     }
 }

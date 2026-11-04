@@ -33,6 +33,8 @@ class MainActivity : Activity() {
     private lateinit var settingsPanel: View
     private val prefs by lazy { getSharedPreferences("sahayak", MODE_PRIVATE) }
     private val secure by lazy { SecureStore(prefs) }
+    private val whisperStore by lazy { SecureStore(prefs, "whisper_key_sealed") }
+    private lateinit var whisperInput: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,6 +72,8 @@ class MainActivity : Activity() {
         }
         autoStep.isChecked = prefs.getBoolean(PREF_AUTO, false)
 
+        whisperInput = findViewById(R.id.whisperInput)
+        whisperInput.setText(whisperStore.load())
         val savedKey = secure.load()
         keyInput.setText(savedKey)
         if (savedKey.isEmpty()) settingsPanel.visibility = View.VISIBLE
@@ -125,6 +129,7 @@ class MainActivity : Activity() {
             return
         }
         secure.save(key)
+        whisperStore.save(whisperInput.text.toString().trim())
         prefs.edit().putString(PREF_LANGUAGE, language())
             .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice())
             .putBoolean(PREF_AUTO, autoStep.isChecked).apply()
@@ -175,7 +180,7 @@ class MainActivity : Activity() {
         if (resultCode == RESULT_OK && data != null) {
             AssistService.start(
                 this, resultCode, data, secure.load(), language(),
-                prefs.getString(PREF_NAME, "").orEmpty(), voice(), autoStep.isChecked
+                prefs.getString(PREF_NAME, "").orEmpty(), voice(), autoStep.isChecked, whisperStore.load()
             )
             moveTaskToBack(true) // app peeche chala jaye, phone ka home dikhe
         } else {

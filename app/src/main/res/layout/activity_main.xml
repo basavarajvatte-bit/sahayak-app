@@ -194,6 +194,18 @@
                 android:text="Screen badalne par khud bole"
                 android:textSize="17sp" />
 
+            <TextView style="@style/Label" android:text="Whisper key (Groq)" />
+
+            <EditText
+                android:id="@+id/whisperInput"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:hint="Sahi samajhne ke liye yahan paste kijiye"
+                android:importantForAutofill="no"
+                android:inputType="textPassword"
+                android:maxLines="1"
+                android:textSize="17sp" />
+
             <TextView style="@style/Label" android:text="Gemini key" />
 
             <EditText

@@ -12,7 +12,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Gemini key ko Android Keystore se encrypt karke rakhta hai. */
-class SecureStore(private val prefs: SharedPreferences) {
+class SecureStore(private val prefs: SharedPreferences, private val sealedName: String = SEALED) {
     private fun secretKey(): SecretKey {
         val store = KeyStore.getInstance(PROVIDER).apply { load(null) }
         (store.getKey(ALIAS, null) as? SecretKey)?.let { return it }
@@ -30,15 +30,17 @@ class SecureStore(private val prefs: SharedPreferences) {
         val cipher = Cipher.getInstance(TRANSFORM)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
         val sealed = cipher.iv + cipher.doFinal(value.toByteArray())
-        prefs.edit().putString(SEALED, Base64.encodeToString(sealed, Base64.NO_WRAP)).remove(OLD_PLAIN).apply()
+        prefs.edit().putString(sealedName, Base64.encodeToString(sealed, Base64.NO_WRAP)).apply { if (sealedName == SEALED) remove(OLD_PLAIN) }.apply()
     }
 
     fun load(): String {
-        prefs.getString(OLD_PLAIN, null)?.let {
-            save(it)
-            return it
+        if (sealedName == SEALED) {
+            prefs.getString(OLD_PLAIN, null)?.let {
+                save(it)
+                return it
+            }
         }
-        val sealed = prefs.getString(SEALED, null) ?: return ""
+        val sealed = prefs.getString(sealedName, null) ?: return ""
         return try {
             val bytes = Base64.decode(sealed, Base64.NO_WRAP)
             val cipher = Cipher.getInstance(TRANSFORM)

@@ -20,6 +20,7 @@ import android.view.WindowManager
 import okhttp3.OkHttpClient
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 /** Background mein screen, mic aur Gemini ko jodne wala kaam. */
@@ -59,6 +60,28 @@ class AssistService : Service(), GeminiLive.Callback {
     private var caption: Caption? = null
     private val heard = StringBuilder()
     private var listener: LiveListener? = null
+    private var whisper: Whisper? = null
+    private val spoken = ByteArrayOutputStream()
+    private val whisperThread = HandlerThread("sahayak-whisper").apply { start() }
+    private val whisperHandler = Handler(whisperThread.looper)
+    private var partialBusy = false
+    private var partialOff = false
+    private val partialTick = object : Runnable {
+        override fun run() {
+            if (!talking || whisper == null) return
+            whisperHandler.postDelayed(this, PARTIAL_MS)
+            val audio = snapshot()
+            if (partialOff || partialBusy || audio.size < MIN_AUDIO_BYTES || !hasVoice(audio)) return
+            partialBusy = true
+            try {
+                val text = whisper?.transcribe(audio).orEmpty()
+                if (talking && text.isNotEmpty()) mainHandler.post { caption?.show(text) }
+            } catch (e: IOException) {
+                partialOff = true // limit par ho to sirf aakhri likhai lo
+            }
+            partialBusy = false
+        }
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
     private val endTalk = Runnable { finishTalk() }
     private var endPending = false
@@ -98,6 +121,7 @@ class AssistService : Service(), GeminiLive.Callback {
         userName = intent.getStringExtra(EXTRA_NAME).orEmpty()
         voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
         autoStep = intent.getBooleanExtra(EXTRA_AUTO, false)
+        whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
         tools = if (canControl) GeminiLive.phoneTools() else null
         systemText = Prompts.system(language, userName, canControl)
@@ -139,7 +163,10 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         try {
-            val io = VoiceIO(this) { pcm, size -> live?.sendAudio(pcm, size) }
+            val io = VoiceIO(this) { pcm, size ->
+                if (whisper != null) synchronized(spoken) { spoken.write(pcm, 0, size) }
+                else live?.sendAudio(pcm, size)
+            }
             io.start()
             voice = io
             val feed = ScreenFeed(
@@ -164,7 +191,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 dot = TalkDot(host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type)
                     .also { it.show() }
                 caption = Caption(host, type)
-                if (SpeechRecognizer.isRecognitionAvailable(this)) {
+                if (whisper == null && SpeechRecognizer.isRecognitionAvailable(this)) {
                     val primary = if (language == "Marathi") "mr-IN" else "hi-IN"
                     listener = LiveListener(this, primary,
                         onWords = { words -> if (talking) caption?.show(words) },
@@ -206,7 +233,16 @@ class AssistService : Service(), GeminiLive.Callback {
             speakingUntil = 0L
             voice?.interrupt()
             val active = listener
-            if (active != null) mainHandler.post { active.start() } else voice?.setMic(true)
+            when {
+                whisper != null -> {
+                    synchronized(spoken) { spoken.reset() }
+                    partialOff = false
+                    voice?.setMic(true)
+                    whisperHandler.postDelayed(partialTick, PARTIAL_MS)
+                }
+                active != null -> mainHandler.post { active.start() }
+                else -> voice?.setMic(true)
+            }
             dotState(TalkDot.State.TALKING)
             updateNotification()
             AssistState.set(true, "Sun raha hai...")
@@ -225,6 +261,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 // Ek chhota tap: chal raha kaam turant roko
                 stopRequested = true
                 mainHandler.post { listener?.cancel() }
+                whisperHandler.removeCallbacks(partialTick)
                 voice?.setMic(false)
                 endPending = false
                 setBusy(false)
@@ -240,6 +277,13 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun finishTalk() {
         endPending = false
         releasedAt = System.currentTimeMillis()
+        if (whisper != null) {
+            whisperHandler.removeCallbacks(partialTick)
+            voice?.setMic(false)
+            setBusy(true)
+            whisperHandler.post { sendWhisperOrder() }
+            return
+        }
         val active = listener
         if (active == null) {
             voice?.setMic(false)
@@ -258,6 +302,42 @@ class AssistService : Service(), GeminiLive.Callback {
                     live?.sendText(words)
                 }
             }
+        }
+    }
+
+    private fun snapshot(): ByteArray = synchronized(spoken) { spoken.toByteArray() }
+
+    private fun hasVoice(pcm: ByteArray): Boolean {
+        var i = 0
+        while (i + 1 < pcm.size) {
+            val sample = (pcm[i].toInt() and 255) or (pcm[i + 1].toInt() shl 8)
+            if (kotlin.math.abs(sample) > VOICE_PEAK) return true
+            i += 2
+        }
+        return false
+    }
+
+    /** Dot chhodne par poori awaaz Whisper ko. Whisper na chale to wahi awaaz Gemini ko. */
+    private fun sendWhisperOrder() {
+        val audio = snapshot()
+        if (audio.size < MIN_AUDIO_BYTES || !hasVoice(audio)) {
+            setBusy(false)
+            AssistState.set(true, "Awaaz nahi aayi. Dot dabakar dobara boliye.")
+            return
+        }
+        try {
+            val text = whisper?.transcribe(audio).orEmpty()
+            if (text.isBlank()) throw IOException("empty")
+            releasedAt = System.currentTimeMillis()
+            live?.sendText(text)
+        } catch (e: IOException) {
+            var start = 0
+            while (start < audio.size) {
+                val size = minOf(AUDIO_CHUNK, audio.size - start)
+                live?.sendAudio(audio.copyOfRange(start, start + size), size)
+                start += size
+            }
+            live?.audioEnd()
         }
     }
 
@@ -411,6 +491,7 @@ class AssistService : Service(), GeminiLive.Callback {
         finish("Band ho gaya")
         worker.quitSafely()
         actions.quitSafely()
+        whisperThread.quitSafely()
         super.onDestroy()
     }
 
@@ -460,6 +541,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val EXTRA_NAME = "name"
         private const val EXTRA_VOICE = "voice"
         private const val EXTRA_AUTO = "auto"
+        private const val EXTRA_WHISPER = "whisper"
         private const val CHANNEL_ID = "sahayak_live"
         private const val NOTIFICATION_ID = 7
         private const val MAX_RETRIES = 5
@@ -470,11 +552,15 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 150L
+        private const val PARTIAL_MS = 2_000L
+        private const val MIN_AUDIO_BYTES = 8_000
+        private const val AUDIO_CHUNK = 3_200
+        private const val VOICE_PEAK = 1_200
         private const val STOP_TAP_MS = 300L
         private const val BUSY_TIMEOUT_MS = 45_000L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
-        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean) {
+        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean, whisperKey: String) {
             context.startForegroundService(
                 Intent(context, AssistService::class.java)
                     .putExtra(EXTRA_RESULT, resultCode)
@@ -484,6 +570,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     .putExtra(EXTRA_NAME, name)
                     .putExtra(EXTRA_VOICE, voice)
                     .putExtra(EXTRA_AUTO, autoStep)
+                    .putExtra(EXTRA_WHISPER, whisperKey)
             )
         }
 
