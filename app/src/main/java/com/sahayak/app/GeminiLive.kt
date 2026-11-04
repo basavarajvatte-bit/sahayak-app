@@ -28,14 +28,14 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
     @Volatile var resumeHandle: String? = null
         private set
 
-    fun connect(apiKey: String, model: String, systemText: String) {
+    fun connect(apiKey: String, model: String, systemText: String, voiceName: String) {
         ready = false
         val resuming = resumeHandle != null
         val request = Request.Builder().url(WS_URL + "?key=" + apiKey).build()
         socket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (webSocket !== socket) return
-                webSocket.send(setupMessage(model, systemText, resumeHandle).toString())
+                webSocket.send(setupMessage(model, systemText, voiceName, resumeHandle).toString())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -124,12 +124,15 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
             .pingInterval(20, TimeUnit.SECONDS)
             .build()
 
-        fun setupMessage(model: String, systemText: String, handle: String?): JSONObject {
+        fun setupMessage(model: String, systemText: String, voiceName: String, handle: String?): JSONObject {
             val resumption = JSONObject()
             if (handle != null) resumption.put("handle", handle)
             val setup = JSONObject()
                 .put("model", "models/$model")
-                .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("AUDIO")))
+                .put("generationConfig", JSONObject()
+                    .put("responseModalities", JSONArray().put("AUDIO"))
+                    .put("speechConfig", JSONObject().put("voiceConfig", JSONObject()
+                        .put("prebuiltVoiceConfig", JSONObject().put("voiceName", voiceName)))))
                 .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemText))))
                 .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection",
                     JSONObject()

@@ -91,6 +91,56 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:text="Awaaz"
+            android:textColor="#1D2433"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/voiceGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/voiceFemale"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Mahila"
+                android:textSize="17sp" />
+
+            <RadioButton
+                android:id="@+id/voiceMale"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="24dp"
+                android:text="Purush"
+                android:textSize="17sp" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Aapka naam"
+            android:textColor="#1D2433"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/nameInput"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:hint="Jaise Rahul"
+            android:importantForAutofill="no"
+            android:inputType="textPersonName"
+            android:maxLines="1"
+            android:textSize="17sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="Gemini key"
             android:textColor="#1D2433"
             android:textSize="17sp"

@@ -30,6 +30,8 @@ class AssistService : Service(), GeminiLive.Callback {
     private var apiKey = ""
     private var systemText = ""
     private var language = ""
+    private var userName = ""
+    private var voiceName = "Aoede"
     private var models: List<String> = emptyList()
     private var modelIndex = 0
     @Volatile private var stopping = false
@@ -70,7 +72,9 @@ class AssistService : Service(), GeminiLive.Callback {
 
         apiKey = intent.getStringExtra(EXTRA_KEY).orEmpty()
         language = intent.getStringExtra(EXTRA_LANGUAGE) ?: "Hindi"
-        systemText = Prompts.system(language)
+        userName = intent.getStringExtra(EXTRA_NAME).orEmpty()
+        voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
+        systemText = Prompts.system(language, userName)
 
         val manager = getSystemService(MediaProjectionManager::class.java)
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -156,14 +160,14 @@ class AssistService : Service(), GeminiLive.Callback {
 
     private fun connect() {
         val model = models.getOrElse(modelIndex) { GeminiLive.DEFAULT_MODEL }
-        live?.connect(apiKey, model, systemText)
+        live?.connect(apiKey, model, systemText, voiceName)
     }
 
     override fun onReady(resumed: Boolean) {
         wasReady = true
         retries = 0
         AssistState.set(true, "Sahayak sun raha hai. Ab boliye.")
-        if (!resumed) live?.sendText(Prompts.greeting(language))
+        if (!resumed) live?.sendText(Prompts.greeting(language, userName))
     }
 
     override fun onAudio(pcm: ByteArray) {
@@ -264,6 +268,8 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val EXTRA_DATA = "data"
         private const val EXTRA_KEY = "key"
         private const val EXTRA_LANGUAGE = "language"
+        private const val EXTRA_NAME = "name"
+        private const val EXTRA_VOICE = "voice"
         private const val CHANNEL_ID = "sahayak_live"
         private const val NOTIFICATION_ID = 7
         private const val MAX_RETRIES = 5
@@ -276,13 +282,15 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val VOICE_PEAK = 2_500
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
-        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String) {
+        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String) {
             context.startForegroundService(
                 Intent(context, AssistService::class.java)
                     .putExtra(EXTRA_RESULT, resultCode)
                     .putExtra(EXTRA_DATA, data)
                     .putExtra(EXTRA_KEY, key)
                     .putExtra(EXTRA_LANGUAGE, language)
+                    .putExtra(EXTRA_NAME, name)
+                    .putExtra(EXTRA_VOICE, voice)
             )
         }
 

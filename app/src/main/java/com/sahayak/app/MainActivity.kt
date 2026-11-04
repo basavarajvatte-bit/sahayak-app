@@ -20,6 +20,8 @@ class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var keyInput: EditText
     private lateinit var languageGroup: RadioGroup
+    private lateinit var voiceGroup: RadioGroup
+    private lateinit var nameInput: EditText
     private val prefs by lazy { getSharedPreferences("sahayak", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,11 +32,15 @@ class MainActivity : Activity() {
         statusText = findViewById(R.id.statusText)
         keyInput = findViewById(R.id.keyInput)
         languageGroup = findViewById(R.id.languageGroup)
+        voiceGroup = findViewById(R.id.voiceGroup)
+        nameInput = findViewById(R.id.nameInput)
 
         keyInput.setText(prefs.getString(PREF_KEY, ""))
         languageGroup.check(
             if (prefs.getString(PREF_LANGUAGE, HINDI) == MARATHI) R.id.langMarathi else R.id.langHindi
         )
+        nameInput.setText(prefs.getString(PREF_NAME, ""))
+        voiceGroup.check(if (prefs.getString(PREF_VOICE, VOICE_FEMALE) == VOICE_MALE) R.id.voiceMale else R.id.voiceFemale)
         assistButton.setOnClickListener { onAssist() }
         stopButton.setOnClickListener { AssistService.stop(this) }
     }
@@ -60,6 +66,9 @@ class MainActivity : Activity() {
     private fun language(): String =
         if (languageGroup.checkedRadioButtonId == R.id.langMarathi) MARATHI else HINDI
 
+    private fun voice(): String =
+        if (voiceGroup.checkedRadioButtonId == R.id.voiceMale) VOICE_MALE else VOICE_FEMALE
+
     private fun onAssist() {
         val key = keyInput.text.toString().trim()
         if (key.isEmpty()) {
@@ -67,7 +76,8 @@ class MainActivity : Activity() {
             keyInput.requestFocus()
             return
         }
-        prefs.edit().putString(PREF_KEY, key).putString(PREF_LANGUAGE, language()).apply()
+        prefs.edit().putString(PREF_KEY, key).putString(PREF_LANGUAGE, language())
+            .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice()).apply()
 
         val needed = ArrayList<String>()
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -107,7 +117,10 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_SCREEN) return
         if (resultCode == RESULT_OK && data != null) {
-            AssistService.start(this, resultCode, data, prefs.getString(PREF_KEY, "").orEmpty(), language())
+            AssistService.start(
+                this, resultCode, data, prefs.getString(PREF_KEY, "").orEmpty(), language(),
+                prefs.getString(PREF_NAME, "").orEmpty(), voice()
+            )
             moveTaskToBack(true) // app peeche chala jaye, phone ka home dikhe
         } else {
             statusText.text = "Screen share ki ijazat nahi mili."
@@ -119,6 +132,10 @@ class MainActivity : Activity() {
         private const val REQUEST_SCREEN = 2
         private const val PREF_KEY = "gemini_key"
         private const val PREF_LANGUAGE = "language"
+        private const val PREF_NAME = "name"
+        private const val PREF_VOICE = "voice"
+        private const val VOICE_FEMALE = "Aoede"
+        private const val VOICE_MALE = "Puck"
         private const val HINDI = "Hindi"
         private const val MARATHI = "Marathi"
     }
