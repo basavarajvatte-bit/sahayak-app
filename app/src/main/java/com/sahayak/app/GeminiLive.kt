@@ -170,6 +170,17 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                 .put(tool("compose_email", "Fastest way to write an email. Opens a filled email ready to send.",
                     JSONObject().put("to", prop("STRING", "Email address")).put("subject", prop("STRING", "Subject")).put("body", prop("STRING", "Message")), listOf("to", "subject", "body")))
                 .put(tool("read_full_text", "Read all text on the screen in full. Use once when you need long text such as a reply or article."))
+                .put(tool("schedule_work", "Save a future job. It runs by itself at the time. kind is whatsapp, email or reminder.",
+                    JSONObject().put("kind", prop("STRING", "whatsapp, email or reminder"))
+                        .put("when", prop("STRING", "Local time as yyyy-MM-dd HH:mm, 24 hour"))
+                        .put("title", prop("STRING", "Short name"))
+                        .put("to", prop("STRING", "WhatsApp number, saved contact name or email address"))
+                        .put("subject", prop("STRING", "Email subject"))
+                        .put("message", prop("STRING", "Exact message text")),
+                    listOf("kind", "when", "title", "message")))
+                .put(tool("list_work", "List saved future jobs."))
+                .put(tool("cancel_work", "Cancel a saved job.",
+                    JSONObject().put("id", prop("STRING", "Job id")), listOf("id")))
                 .put(tool("open_url", "Open a website address in the browser.",
                     JSONObject().put("url", prop("STRING", "Full https address")), listOf("url")))
                 .put(tool("tap_text", "Tap the item showing these words. Best way to tap.",

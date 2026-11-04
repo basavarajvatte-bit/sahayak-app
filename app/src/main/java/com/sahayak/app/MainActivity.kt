@@ -13,10 +13,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
@@ -119,7 +121,33 @@ class MainActivity : Activity() {
         stopButton.visibility = if (running) View.VISIBLE else View.GONE
         statusText.text = AssistState.status
         controlButton.text = if (PhoneControl.instance != null) "✓ Phone control chalu hai" else "Phone control chalu karo"
+        renderWork()
         batteryButton.text = if (batteryFree()) "✓ Background mein chalne ki ijazat hai" else "Background ki ijazat do"
+    }
+
+    private fun renderWork() {
+        val box = findViewById<LinearLayout>(R.id.workBox)
+        box.removeAllViews()
+        val items = WorkList.all(this)
+        findViewById<TextView>(R.id.workEmpty).visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+        items.forEach { item ->
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            val text = TextView(this).apply {
+                setText(WorkList.label(item))
+                textSize = 16f
+                setTextColor(0xFF1D2433.toInt())
+            }
+            row.addView(text, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(Button(this).apply {
+                setText("Hatao")
+                isAllCaps = false
+                setOnClickListener {
+                    WorkList.remove(this@MainActivity, item.optString("id"))
+                    renderWork()
+                }
+            })
+            box.addView(row)
+        }
     }
 
     private fun batteryFree(): Boolean =

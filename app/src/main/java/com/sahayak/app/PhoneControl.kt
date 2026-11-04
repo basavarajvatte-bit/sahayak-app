@@ -116,6 +116,34 @@ class PhoneControl : AccessibilityService() {
         }
     }
 
+    /** Tay samay wala kaam, bina AI ke. */
+    fun runWork(item: JSONObject): Boolean {
+        if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
+        return when (item.optString("kind")) {
+            "whatsapp" -> {
+                val opened = openWhatsApp(JSONObject().put("contact", item.optString("to")).put("message", item.optString("message")))
+                opened.optString("status") == "ok" && sendWhatsApp(opened.optString("contact"), item.optString("to"))
+            }
+            "email" -> {
+                val args = JSONObject().put("to", item.optString("to")).put("subject", item.optString("subject"))
+                    .put("body", item.optString("message"))
+                composeEmail(args) && run {
+                    waitUntilSettled("")
+                    rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.google.android.gm:id/send")
+                        ?.firstOrNull()?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+                }
+            }
+            else -> false
+        }
+    }
+
+    private fun sendWhatsApp(contact: String, to: String): Boolean {
+        val send = rootInActiveWindow?.findAccessibilityNodeInfosByViewId("com.whatsapp:id/send")?.firstOrNull()
+            ?: return false
+        if (to.any { it.isLetter() } && !visibleNodes().any { label(it).equals(contact, ignoreCase = true) }) return false
+        return send.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
     private fun tapWhatsAppSend(contact: String): Boolean {
         val shown = visibleNodes().any { label(it).equals(contact, ignoreCase = true) }
         if (!shown) return false
@@ -173,6 +201,10 @@ class PhoneControl : AccessibilityService() {
         }
         val name = args.optString("contact").trim()
         if (name.isEmpty()) return JSONObject().put("status", "failed")
+        val typedNumber = name.filter { it.isDigit() }
+        if (typedNumber.length >= 10 && name.none { it.isLetter() }) {
+            return openWhatsAppNumber(typedNumber, name, args.optString("message"))
+        }
         val found = LinkedHashMap<String, String>()
         val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(name))
         val columns = arrayOf(
@@ -192,16 +224,19 @@ class PhoneControl : AccessibilityService() {
             found.isEmpty() -> return JSONObject().put("status", "contact_not_found")
             else -> return JSONObject().put("status", "choose_contact").put("names", JSONArray(found.keys.take(5)))
         }
-        val digits = found[chosen].orEmpty().filter { it.isDigit() }
+        return openWhatsAppNumber(found[chosen].orEmpty().filter { it.isDigit() }, chosen, args.optString("message"))
+    }
+
+    private fun openWhatsAppNumber(digits: String, shownName: String, message: String): JSONObject {
         val phone = if (digits.length == 10) "91$digits" else digits.trimStart('0')
-        val link = "https://wa.me/" + phone + "?text=" + Uri.encode(args.optString("message"))
+        val link = "https://wa.me/" + phone + "?text=" + Uri.encode(message)
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (intent.setPackage("com.whatsapp").resolveActivity(packageManager) == null) {
             return JSONObject().put("status", "whatsapp_not_found")
         }
         startActivity(intent)
         waitUntilSettled("")
-        return JSONObject().put("status", "ok").put("contact", chosen)
+        return JSONObject().put("status", "ok").put("contact", shownName)
             .put("next", "Check the chat name matches this contact, then tap send.")
             .put("screen", readScreen())
     }

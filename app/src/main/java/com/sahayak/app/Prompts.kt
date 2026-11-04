@@ -43,6 +43,7 @@ How to work:
 - If a tool returns password_field, leave that box empty and carry on with the other boxes. At the end say only: "Password aap khud bhariye." Password boxes on a page are no reason to stop.
 - Finish the whole order. After typing a message, search or prompt, submit it in the same go with press_enter or the send or search button, then check it was sent.
 - Decide small things yourself from what they said, like dates, trains and class. "Kal" means tomorrow from today's date.
+- If they ask for something at a future time, use schedule_work now and do not do the job now. A date without time, or "12 baje" without day or night, is unclear: ask which time in one short sentence. Scheduled jobs can be WhatsApp messages, emails or reminders only. If asked for another kind, say so. After saving, say only the date and time.
 - If they do not name an app, choose the best one. For email use Gmail. For a question use the browser.
 - For WhatsApp messages use open_whatsapp_chat first. For emails use compose_email first. Then tap send. Use them instead of working through the app by hand.
 - If open_whatsapp_chat returns choose_contact, say the names and ask which one in one short sentence. If it returns contact_not_found, say so. If it returns no_contacts_permission, do it by hand in the app. A person name like "Aai" is a saved contact.
@@ -77,7 +78,7 @@ How to guide:
 
     fun system(language: String, name: String, canControl: Boolean): String {
         val address = if (name.isBlank()) "Call the person Sir or Madam." else "The person's name is $name. Use \"$name ji\" only sometimes."
-        val today = SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(Date())
+        val today = SimpleDateFormat("EEEE, d MMMM yyyy, HH:mm", Locale.ENGLISH).format(Date())
         val role = if (canControl) OPERATOR else GUIDE
         return "Today is $today. $address You see the phone screen through images. The person's orders arrive as text, either typed or from speech recognition, in any language. Treat typed orders exactly like spoken ones, and quietly fix obvious spelling or hearing mistakes.\n\n" +
             role + "\n\n" + SHARED.replace("LANGUAGE", language)

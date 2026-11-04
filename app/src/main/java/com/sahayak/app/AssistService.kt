@@ -22,6 +22,9 @@ import okhttp3.OkHttpClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.io.IOException
 
 /** Background mein screen, mic aur Gemini ko jodne wala kaam. */
@@ -458,6 +461,24 @@ class AssistService : Service(), GeminiLive.Callback {
         }
     }
 
+    private fun scheduleWork(args: JSONObject): JSONObject {
+        val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply { isLenient = false }
+        val at = try {
+            format.parse(args.optString("when"))?.time
+        } catch (e: ParseException) {
+            null
+        } ?: return JSONObject().put("status", "failed").put("reason", "bad_time")
+        if (at <= System.currentTimeMillis()) return JSONObject().put("status", "failed").put("reason", "time_passed")
+        val kind = args.optString("kind")
+        val to = args.optString("to").trim()
+        if (kind !in listOf("whatsapp", "email", "reminder") || (kind != "reminder" && to.isEmpty())) {
+            return JSONObject().put("status", "failed").put("reason", "missing_details")
+        }
+        val item = WorkList.add(this, kind, at, args.optString("title").take(60), to,
+            args.optString("subject"), args.optString("message"))
+        return JSONObject().put("status", "ok").put("saved", WorkList.label(item)).put("id", item.optString("id"))
+    }
+
     /** Doosra model kaam jaanchta hai aur zaroorat par sudhar bhejta hai. */
     private fun reviewWork(stuck: Boolean) {
         val order = currentOrder ?: return
@@ -650,6 +671,11 @@ class AssistService : Service(), GeminiLive.Callback {
             val result = when {
                 stopRequested || stopping || currentOrder == null -> JSONObject().put("status", "cancelled_by_person")
                 control == null -> JSONObject().put("status", "control_off")
+                name == "schedule_work" -> scheduleWork(args)
+                name == "list_work" -> JSONObject().put("status", "ok").put("jobs",
+                    JSONArray(WorkList.all(this).map { it.optString("id") + ": " + WorkList.label(it) }))
+                name == "cancel_work" -> JSONObject().put("status",
+                    if (WorkList.remove(this, args.optString("id"))) "ok" else "failed")
                 else -> try {
                     AssistState.set(true, "Kaam chal raha hai. Rokne ke liye dot dabaiye.")
                     control.run(name, args)

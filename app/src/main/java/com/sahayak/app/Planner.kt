@@ -64,7 +64,7 @@ class Planner(http: OkHttpClient, private val apiKey: String) {
         private const val REVIEW_RULES = """You check the work of an AI agent on an Android phone. You see the order, the steps it took and the current screen.
 
 Reply with exactly one line:
-DONE, if the order is fully finished or the agent correctly stopped at a payment, password, PIN or OTP screen, or correctly asked the person for missing details.
+DONE, if the order is fully finished, or a future job was saved with schedule_work, or the agent correctly stopped at a payment, password, PIN or OTP screen, or correctly asked the person for missing details.
 FIX: one short specific next action, if something is unfinished or wrong, for example a message typed but not sent.
 
 Never suggest paying, entering a password, PIN or OTP, or inventing an address or number. If unsure, reply DONE."""
@@ -82,6 +82,7 @@ Rules:
 - Never go back to an app after its step is done. Every app is opened at most once unless truly required.
 - Use compose_email for email and open_whatsapp_chat for WhatsApp messages.
 - Never make up an email address, phone number or name. A company name is not an address, so list it under MISSING.
+- If the order is for a future time, the only step is schedule_work now. Unclear time such as "12 baje" without day or night goes under MISSING.
 - If something is MISSING, the agent must ask first before doing any steps.
 - The agent never performs a payment or enters a password, PIN or OTP."""
     }
