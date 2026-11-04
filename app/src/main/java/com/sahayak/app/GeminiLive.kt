@@ -83,17 +83,20 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
         }
     }
 
-    fun sendAudio(pcm: ByteArray, size: Int) = sendMedia("audio", "audio/pcm;rate=16000", pcm, size)
+    fun sendAudio(pcm: ByteArray, size: Int) =
+        sendMedia("audio", "audio/pcm;rate=16000", pcm, size, MAX_QUEUE_BYTES)
 
-    fun sendJpeg(jpeg: ByteArray) = sendMedia("video", "image/jpeg", jpeg, jpeg.size)
+    /** Internet dheema ho to photo chhod do, taaki awaaz atke nahi. */
+    fun sendJpeg(jpeg: ByteArray) =
+        sendMedia("video", "image/jpeg", jpeg, jpeg.size, MAX_FRAME_QUEUE_BYTES)
 
     fun sendText(text: String) {
         if (ready) socket?.send(JSONObject().put("realtimeInput", JSONObject().put("text", text)).toString())
     }
 
-    private fun sendMedia(field: String, mime: String, bytes: ByteArray, size: Int) {
+    private fun sendMedia(field: String, mime: String, bytes: ByteArray, size: Int, limit: Long) {
         val ws = socket ?: return
-        if (!ready || ws.queueSize() > MAX_QUEUE_BYTES) return
+        if (!ready || ws.queueSize() > limit) return
         val blob = JSONObject().put("mimeType", mime)
             .put("data", Base64.encodeToString(bytes, 0, size, Base64.NO_WRAP))
         ws.send(JSONObject().put("realtimeInput", JSONObject().put(field, blob)).toString())
@@ -110,6 +113,7 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
 
     companion object {
         private const val MAX_QUEUE_BYTES = 2_000_000L
+        private const val MAX_FRAME_QUEUE_BYTES = 120_000L
         private const val WS_URL = "wss://generativelanguage.googleapis.com/ws/" +
             "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
         private const val MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
@@ -127,6 +131,11 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                 .put("model", "models/$model")
                 .put("generationConfig", JSONObject().put("responseModalities", JSONArray().put("AUDIO")))
                 .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemText))))
+                .put("realtimeInputConfig", JSONObject().put("automaticActivityDetection",
+                    JSONObject()
+                        .put("startOfSpeechSensitivity", "START_SENSITIVITY_HIGH")
+                        .put("prefixPaddingMs", 100)
+                        .put("silenceDurationMs", 500)))
                 .put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
                 .put("sessionResumption", resumption)
             return JSONObject().put("setup", setup)

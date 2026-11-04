@@ -168,6 +168,11 @@ class AssistService : Service(), GeminiLive.Callback {
 
     override fun onAudio(pcm: ByteArray) {
         val now = System.currentTimeMillis()
+        if (now >= speakingUntil && now - userVoiceAt < LATENCY_WINDOW_MS) {
+            val seconds = (now - userVoiceAt) / 100 / 10.0
+            AssistState.set(true, "Sahayak sun raha hai. Pichhla jawab: $seconds second")
+            userVoiceAt = 0L
+        }
         speakingUntil = maxOf(now, speakingUntil) + pcm.size / BYTES_PER_MS
         voice?.play(pcm)
     }
@@ -263,10 +268,11 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NOTIFICATION_ID = 7
         private const val MAX_RETRIES = 5
         private const val RETRY_DELAY_MS = 2_000L
-        private const val NUDGE_TICK_MS = 1_000L
-        private const val SCREEN_SETTLE_MS = 2_000L
-        private const val AFTER_SPEECH_MS = 2_000L
-        private const val NUDGE_GAP_MS = 8_000L
+        private const val NUDGE_TICK_MS = 300L
+        private const val SCREEN_SETTLE_MS = 1_200L
+        private const val AFTER_SPEECH_MS = 800L
+        private const val NUDGE_GAP_MS = 5_000L
+        private const val LATENCY_WINDOW_MS = 15_000L
         private const val VOICE_PEAK = 2_500
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 

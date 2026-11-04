@@ -118,8 +118,8 @@ class ScreenFeed(
     }
 
     companion object {
-        private const val MAX_WIDTH = 720
-        private const val JPEG_QUALITY = 60
+        private const val MAX_WIDTH = 640
+        private const val JPEG_QUALITY = 55
         private const val FRAME_MS = 1_000L
         private const val HEARTBEAT_MS = 5_000L
         private const val SIG_WIDTH = 24

@@ -49,8 +49,8 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
         }
 
         val outputSize = max(
-            AudioTrack.getMinBufferSize(SPEAKER_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT),
-            SPEAKER_RATE
+            AudioTrack.getMinBufferSize(SPEAKER_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 2,
+            SPEAKER_BUFFER
         )
         val player = AudioTrack.Builder()
             .setAudioAttributes(
@@ -67,6 +67,7 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
                     .build()
             )
             .setBufferSizeInBytes(outputSize)
+            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
         track = player
@@ -144,6 +145,7 @@ class VoiceIO(context: Context, private val onMic: (ByteArray, Int) -> Unit) {
     companion object {
         private const val MIC_RATE = 16_000
         private const val SPEAKER_RATE = 24_000
-        private const val MIC_CHUNK = 3_200 // 100 ms
+        private const val MIC_CHUNK = 1_600 // 50 ms
+        private const val SPEAKER_BUFFER = 4_800 // 100 ms
     }
 }
