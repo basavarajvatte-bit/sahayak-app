@@ -230,10 +230,37 @@ class PhoneControl : AccessibilityService() {
         }
     }
 
+    /** Queue ki video ko YouTube app se upload karta hai. */
+    private fun uploadToYouTube(uriText: String, title: String): Boolean {
+        val intent = Intent(Intent.ACTION_SEND).setType("video/*")
+            .putExtra(Intent.EXTRA_STREAM, Uri.parse(uriText))
+            .putExtra(Intent.EXTRA_TITLE, title)
+            .putExtra(Intent.EXTRA_SUBJECT, title)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (!launch(intent, "com.google.android.youtube")) return false
+        var titled = false
+        repeat(UPLOAD_ROUNDS) {
+            Thread.sleep(UPLOAD_WAIT_MS)
+            if (rootInActiveWindow?.packageName?.toString() != "com.google.android.youtube") return@repeat
+            val nodes = visibleNodes()
+            if (!titled) {
+                nodes.firstOrNull { it.isEditable }?.let { titled = typeInto(it, title) }
+            }
+            val words = nodes.map { label(it).lowercase() }
+            val final = listOf("upload short", "upload video", "upload").firstOrNull { it in words }
+            if (final != null) {
+                return tapText(final)
+            }
+            listOf("next", "continue").firstOrNull { it in words }?.let { tapText(it) }
+        }
+        return false
+    }
+
     /** Tay samay wala kaam, bina AI ke. */
     fun runWork(item: JSONObject): Boolean {
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
         return when (item.optString("kind")) {
+            "youtube" -> uploadToYouTube(item.optString("to"), item.optString("message"))
             "whatsapp" -> {
                 val opened = openWhatsApp(JSONObject().put("contact", item.optString("to")).put("message", item.optString("message")))
                 opened.optString("status") == "ok" &&
@@ -843,6 +870,8 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
+        private const val UPLOAD_ROUNDS = 30
+        private const val UPLOAD_WAIT_MS = 2_000L
         private const val LAST_APP_MS = 200L
         private const val REPLAY_TRIES = 10
         private const val REPLAY_RETRY_MS = 300L

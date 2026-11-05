@@ -128,6 +128,27 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
+
+            <TextView
+                style="@style/Label"
+                android:text="Video queue for YouTube" />
+
+            <EditText
+                android:id="@+id/videoGap"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:hint="Hours between videos (default 6)"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/addVideosButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="Add videos"
+                android:textAllCaps="false"
+                android:textSize="17sp" />
         </LinearLayout>
 
         <LinearLayout

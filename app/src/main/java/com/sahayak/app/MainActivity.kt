@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -66,6 +67,14 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        findViewById<Button>(R.id.addVideosButton).setOnClickListener {
+            startActivityForResult(
+                Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*")
+                    .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    .addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                REQUEST_VIDEOS
+            )
+        }
         val learnBox = findViewById<CheckBox>(R.id.learnBox)
         learnBox.isChecked = DailyLearning.isEnabled(this)
         learnBox.setOnCheckedChangeListener { _, on ->
@@ -162,6 +171,29 @@ class MainActivity : Activity() {
         renderSkills()
         renderRatings()
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
+    }
+
+    private fun displayName(uri: Uri): String {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { row ->
+            if (row.moveToFirst()) return row.getString(0).orEmpty().substringBeforeLast(".")
+        }
+        return "My video"
+    }
+
+    private fun queueVideos(data: Intent) {
+        val clip = data.clipData
+        val uris = if (clip != null) List(clip.itemCount) { clip.getItemAt(it).uri } else listOfNotNull(data.data)
+        val gapHours = findViewById<EditText>(R.id.videoGap).text.toString().toLongOrNull()?.coerceIn(1, 168) ?: 6L
+        val latest = WorkList.all(this).filter { it.optString("kind") == "youtube" && it.optString("status") == "pending" }
+            .maxOfOrNull { it.optLong("at") } ?: System.currentTimeMillis()
+        uris.forEachIndexed { index, uri ->
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val name = displayName(uri)
+            val at = latest + (index + 1) * gapHours * 3_600_000L
+            WorkList.add(this, "youtube", at, "YouTube: $name", uri.toString(), "", name)
+        }
+        statusText.text = uris.size.toString() + " videos added to the queue."
+        renderWork()
     }
 
     private fun handleBackup(request: Int, uri: Uri) {
@@ -469,6 +501,10 @@ class MainActivity : Activity() {
     @Deprecated("Plain Activity API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_VIDEOS) {
+            if (resultCode == RESULT_OK && data != null) queueVideos(data)
+            return
+        }
         if (requestCode == REQUEST_BACKUP || requestCode == REQUEST_RESTORE) {
             val uri = data?.data
             if (resultCode == RESULT_OK && uri != null) handleBackup(requestCode, uri)
@@ -491,6 +527,7 @@ class MainActivity : Activity() {
         private const val REQUEST_SCREEN = 2
         private const val LOW_RATING = 5
         private const val REQUEST_BACKUP = 3
+        private const val REQUEST_VIDEOS = 5
         private const val REQUEST_RESTORE = 4
         private const val PREF_LANGUAGE = "language"
         private const val PREF_NAME = "name"
