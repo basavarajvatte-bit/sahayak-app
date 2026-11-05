@@ -389,7 +389,7 @@ class PhoneControl : AccessibilityService() {
         return true
     }
 
-    private fun numberFor(value: String): String {
+    fun numberFor(value: String): String {
         val typed = value.filter { it.isDigit() || it == '+' }
         var number = if (typed.length >= 3 && value.none { it.isLetter() }) typed else ""
         if (number.isEmpty() && checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {

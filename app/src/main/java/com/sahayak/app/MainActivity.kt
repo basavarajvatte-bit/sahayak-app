@@ -44,6 +44,8 @@ class MainActivity : Activity() {
     private val secure by lazy { SecureStore(prefs) }
     private val whisperStore by lazy { SecureStore(prefs, "whisper_key_sealed") }
     private lateinit var whisperInput: EditText
+    private lateinit var taskVoxInput: EditText
+    private val taskVoxStore by lazy { SecureStore(prefs, "taskvox_key_sealed") }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,6 +119,8 @@ class MainActivity : Activity() {
 
         whisperInput = findViewById(R.id.whisperInput)
         whisperInput.setText(whisperStore.load())
+        taskVoxInput = findViewById(R.id.taskVoxInput)
+        taskVoxInput.setText(taskVoxStore.load())
         val savedKey = secure.load()
         keyInput.setText(savedKey)
         if (savedKey.isEmpty()) settingsPanel.visibility = View.VISIBLE
@@ -408,6 +412,7 @@ class MainActivity : Activity() {
         }
         secure.save(key)
         whisperStore.save(whisperInput.text.toString().trim())
+        taskVoxStore.save(taskVoxInput.text.toString().trim())
         prefs.edit().putString(PREF_LANGUAGE, language())
             .putString(PREF_NAME, nameInput.text.toString().trim()).putString(PREF_VOICE, voice())
             .putBoolean(PREF_AUTO, autoStep.isChecked).apply()
@@ -473,7 +478,7 @@ class MainActivity : Activity() {
         if (resultCode == RESULT_OK && data != null) {
             AssistService.start(
                 this, resultCode, data, secure.load(), language(),
-                prefs.getString(PREF_NAME, "").orEmpty(), voice(), autoStep.isChecked, whisperStore.load()
+                prefs.getString(PREF_NAME, "").orEmpty(), voice(), autoStep.isChecked, whisperStore.load(), taskVoxStore.load()
             )
             moveTaskToBack(true) // app peeche chala jaye, phone ka home dikhe
         } else {

@@ -163,6 +163,8 @@ object WorkList {
         notify(context, item.optString("id").hashCode(), text)
     }
 
+    fun notifyText(context: Context, id: Int, text: String) = notify(context, id, text)
+
     private fun notify(context: Context, id: Int, text: String) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Sahayak tasks", NotificationManager.IMPORTANCE_HIGH))
@@ -170,6 +172,7 @@ object WorkList {
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Sahayak")
             .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setAutoCancel(true)
             .build())
     }

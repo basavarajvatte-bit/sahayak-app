@@ -323,6 +323,18 @@
                 android:maxLines="1"
                 android:textSize="17sp" />
 
+            <TextView style="@style/Label" android:text="TaskVox key (AI calls)" />
+
+            <EditText
+                android:id="@+id/taskVoxInput"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:hint="Paste here for AI phone calls"
+                android:importantForAutofill="no"
+                android:inputType="textPassword"
+                android:maxLines="1"
+                android:textSize="17sp" />
+
             <TextView style="@style/Label" android:text="Gemini key" />
 
             <EditText

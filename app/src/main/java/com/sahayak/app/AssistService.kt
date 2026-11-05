@@ -60,6 +60,7 @@ class AssistService : Service(), GeminiLive.Callback {
     @Volatile private var swallowRelease = false
     private var autoStep = false
     private var planner: Planner? = null
+    private var taskVox: TaskVox? = null
     private val plannerThread = HandlerThread("sahayak-planner").apply { start() }
     private val plannerHandler = Handler(plannerThread.looper)
     private val recent = ArrayDeque<String>()
@@ -170,6 +171,7 @@ class AssistService : Service(), GeminiLive.Callback {
         voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
         autoStep = intent.getBooleanExtra(EXTRA_AUTO, false)
         planner = Planner(http, apiKey)
+        taskVox = intent.getStringExtra(EXTRA_TASKVOX).orEmpty().takeIf { it.isNotBlank() }?.let { TaskVox(http, it) }
         whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
         tools = if (canControl) GeminiLive.phoneTools() else null
@@ -577,6 +579,40 @@ class AssistService : Service(), GeminiLive.Callback {
         }
     }
 
+    private fun startAiCall(args: JSONObject, control: PhoneControl): JSONObject {
+        val voiceCall = taskVox ?: return JSONObject().put("status", "failed").put("reason", "Add the TaskVox key in Settings")
+        val number = control.numberFor(args.optString("contact"))
+        if (number.isEmpty()) return JSONObject().put("status", "failed").put("reason", "contact_not_found")
+        return try {
+            val id = voiceCall.dial(number, userName.ifBlank { "the phone owner" }, args.optString("task"))
+            RunLog.add(this, "ai_call started")
+            watchCall(voiceCall, id)
+            JSONObject().put("status", "ok").put("note", "The call has started. The result will appear in a notification.")
+        } catch (e: IOException) {
+            RunLog.add(this, "ai_call failed " + e.message.orEmpty().take(120))
+            JSONObject().put("status", "failed").put("reason", e.message.orEmpty().take(160))
+        }
+    }
+
+    /** Call khatam hone tak dekho, phir notification do. Sahayak band ho to bhi chalta hai. */
+    private fun watchCall(voiceCall: TaskVox, id: String) {
+        val app = applicationContext
+        Thread {
+            var text: String? = null
+            for (round in 0 until CALL_POLLS) {
+                Thread.sleep(CALL_POLL_MS)
+                text = try {
+                    voiceCall.result(id)
+                } catch (e: IOException) {
+                    null
+                }
+                if (text != null) break
+            }
+            WorkList.notifyText(app, id.hashCode(), text ?: "AI call result is not ready. Check TaskVox Call Logs.")
+            RunLog.add(app, "ai_call result")
+        }.start()
+    }
+
     private fun scheduleWork(args: JSONObject): JSONObject {
         val format = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply { isLenient = false }
         val at = try {
@@ -827,6 +863,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     JSONObject().put("status", "cancelled_by_person")
                 }
                 control == null -> JSONObject().put("status", "control_off")
+                name == "ai_call" -> startAiCall(args, control)
                 name == "get_taught_task" -> Skills.detail(this, args.optString("name"))
                     ?.put("status", "ok") ?: JSONObject().put("status", "not_found")
                 name == "remember" -> JSONObject().put("status",
@@ -997,6 +1034,9 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val EXTRA_VOICE = "voice"
         private const val EXTRA_AUTO = "auto"
         private const val EXTRA_WHISPER = "whisper"
+        private const val EXTRA_TASKVOX = "taskvox"
+        private const val CALL_POLLS = 60
+        private const val CALL_POLL_MS = 10_000L
         private const val CHANNEL_ID = "sahayak_live"
         private const val NOTIFICATION_ID = 7
         private const val MAX_RETRIES = 5
@@ -1023,7 +1063,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val BUSY_TIMEOUT_MS = 45_000L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
-        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean, whisperKey: String) {
+        fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean, whisperKey: String, taskVoxKey: String) {
             context.startForegroundService(
                 Intent(context, AssistService::class.java)
                     .putExtra(EXTRA_RESULT, resultCode)
@@ -1034,6 +1074,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     .putExtra(EXTRA_VOICE, voice)
                     .putExtra(EXTRA_AUTO, autoStep)
                     .putExtra(EXTRA_WHISPER, whisperKey)
+                    .putExtra(EXTRA_TASKVOX, taskVoxKey)
             )
         }
 

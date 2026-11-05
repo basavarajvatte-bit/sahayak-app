@@ -147,6 +147,7 @@ Rules:
 - Never go back to an app after its step is done. Every app is opened at most once unless truly required.
 - If a Known fact is a Taught task that matches the order, use its steps as the plan and only change the details.
 - If a Known fact shows a past rating, prefer ways rated 8 or more, and avoid ways rated low.
+- To have an AI speak on a call, the only step is ai_call.
 - Use compose_email for email and open_whatsapp_chat for WhatsApp messages.
 - Never make up an email address, phone number or name. A company name is not an address, so list it under MISSING.
 - If the order is for a future time, the only step is schedule_work now. Unclear time such as "12 o'clock" without AM or PM goes under MISSING.
