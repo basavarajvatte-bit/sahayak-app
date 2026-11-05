@@ -1007,12 +1007,12 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 80L
-        private const val ORDER_WINDOW_MS = 120_000L
+        private const val ORDER_WINDOW_MS = 300_000L
         private const val HISTORY_SIZE = 8
-        private const val MAX_REVIEWS = 1
+        private const val MAX_REVIEWS = 3
         private const val REVIEW_DELAY_MS = 1_200L
         private const val REPEAT_LIMIT = 3
-        private const val STEP_LIMIT = 40
+        private const val STEP_LIMIT = 120
         private const val AFTER_ANSWER_MS = 8_000L
         private const val MIN_LIST_SIZE = 8
         private const val PARTIAL_MS = 2_000L

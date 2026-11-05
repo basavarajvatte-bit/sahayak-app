@@ -150,7 +150,9 @@ Rules:
 - Use compose_email for email and open_whatsapp_chat for WhatsApp messages.
 - Never make up an email address, phone number or name. A company name is not an address, so list it under MISSING.
 - If the order is for a future time, the only step is schedule_work now. Unclear time such as "12 o'clock" without AM or PM goes under MISSING.
-- If something is MISSING, the agent must ask first before doing any steps.
+- Decide everything you reasonably can, with sensible defaults. Do not ask for preferences or confirmation. List under MISSING only an exact fact that cannot be found, like an unknown email address.
+- If a needed app may be missing, include installing it from the Play Store.
+- If something is MISSING, the agent asks for it once, then continues.
 - The agent never performs a payment or enters a password, PIN or OTP."""
     }
 }

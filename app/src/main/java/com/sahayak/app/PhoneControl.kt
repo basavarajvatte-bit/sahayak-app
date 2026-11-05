@@ -403,15 +403,19 @@ class PhoneControl : AccessibilityService() {
 
     private fun dialNumber(value: String): Boolean {
         val number = numberFor(value)
-        return number.isNotEmpty() && launch(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number))))
+        if (number.isEmpty()) return false
+        val allowed = checkSelfPermission(Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+        return launch(Intent(if (allowed) Intent.ACTION_CALL else Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number))))
     }
 
     private fun smsTo(value: String): Boolean {
         val parts = value.split("|", limit = 2)
         val number = numberFor(parts.getOrElse(0) { "" })
         if (number.isEmpty()) return false
-        return launch(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)))
+        val opened = launch(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)))
             .putExtra("sms_body", parts.getOrElse(1) { "" }))
+        if (!opened) return false
+        return retry { sendNode(emptyList())?.let { tapNode(it) } == true }
     }
 
     private fun ringer(mode: Int): Boolean = try {

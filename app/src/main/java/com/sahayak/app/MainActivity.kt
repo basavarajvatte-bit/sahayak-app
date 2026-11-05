@@ -432,6 +432,11 @@ class MainActivity : Activity() {
         ) {
             needed.add(Manifest.permission.READ_CONTACTS)
         }
+        if (PhoneControl.instance != null &&
+            checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed.add(Manifest.permission.CALL_PHONE)
+        }
         if (needed.isEmpty()) askScreen() else requestPermissions(needed.toTypedArray(), REQUEST_PERMISSIONS)
     }
 
