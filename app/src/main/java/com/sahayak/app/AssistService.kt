@@ -83,6 +83,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private var listener: LiveListener? = null
     private var typeBar: TypeBar? = null
     @Volatile private var silentTurn = false
+    @Volatile private var talkMode = false
     @Volatile private var framesPaused = false
     private val replyText = StringBuilder()
     private val hideReply = Runnable { if (!talking) caption?.hide() }
@@ -215,8 +216,11 @@ class AssistService : Service(), GeminiLive.Callback {
         }
         try {
             val io = VoiceIO(this) { pcm, size ->
-                if (whisper != null) synchronized(spoken) { spoken.write(pcm, 0, size) }
-                else live?.sendAudio(pcm, size)
+                when {
+                    talkMode -> live?.sendAudio(pcm, size)
+                    whisper != null -> synchronized(spoken) { spoken.write(pcm, 0, size) }
+                    else -> live?.sendAudio(pcm, size)
+                }
             }
             io.start()
             voice = io
@@ -242,7 +246,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 val host: android.content.Context = control ?: this
                 val type = if (control != null) WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                 else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                val bar = TypeBar(host, type) { text -> typedOrder(text) }
+                val bar = TypeBar(host, type, onTalk = { toggleTalk() }) { text -> typedOrder(text) }
                 typeBar = bar
                 val talkDot = TalkDot(
                     host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type,
@@ -305,6 +309,8 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Kaam chalte waqt dot dabate hi sab kuch turant band. */
     private fun stopEverything() {
         stopRequested = true
+        talkMode = false
+        mainHandler.post { typeBar?.showTalkState(false) }
         PhoneControl.instance?.abort = true
         endOrder()
         practiceName = null
@@ -329,8 +335,34 @@ class AssistService : Service(), GeminiLive.Callback {
         RunLog.add(this, "stopped_by_person")
     }
 
+    /** Talk mode: bina dot dabaye lagatar live baat-cheet. */
+    private fun toggleTalk() {
+        workerHandler.post {
+            if (live?.isReady != true) {
+                showBrief("No connection. Please try again.")
+                return@post
+            }
+            val on = !talkMode
+            talkMode = on
+            stopRequested = false
+            silentTurn = false
+            orderUntil = if (on) Long.MAX_VALUE else 0L
+            currentOrder = null
+            voice?.setMic(on)
+            live?.sendText(if (on) Prompts.TALK_ON else Prompts.TALK_OFF)
+            mainHandler.post { typeBar?.showTalkState(on) }
+            AssistState.set(true, if (on) "Talk mode is on. Just speak." else "Talk mode is off.")
+            RunLog.add(this, if (on) "talk_on" else "talk_off")
+        }
+    }
+
     private fun pressDot() {
         if (live?.isReady != true) return
+        if (talkMode) {
+            swallowRelease = true
+            toggleTalk()
+            return
+        }
         if (busyNow) {
             swallowRelease = true
             stopEverything()
@@ -396,6 +428,7 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     private fun finishTalk() {
+        if (talkMode) return
         endPending = false
         releasedAt = System.currentTimeMillis()
         if (whisper != null) {
@@ -638,7 +671,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (stopRequested) return
         if (stepLog.isEmpty()) {
             // AI ne sirf jawab diya: thodi der baad phone control apne aap band
-            orderUntil = minOf(orderUntil, System.currentTimeMillis() + AFTER_ANSWER_MS)
+            if (!talkMode) orderUntil = minOf(orderUntil, System.currentTimeMillis() + AFTER_ANSWER_MS)
             return
         }
         if (reviews >= MAX_REVIEWS) {
@@ -680,7 +713,7 @@ class AssistService : Service(), GeminiLive.Callback {
 
     private fun endOrder() {
         currentOrder = null
-        orderUntil = 0L // naye order tak phone control band
+        if (!talkMode) orderUntil = 0L // naye order tak phone control band
     }
 
     /** Practice ka result likho, aur safal kaam se steps sudharo. */

@@ -117,5 +117,9 @@ How to guide:
 
     const val STOP = "[STOP] The person pressed stop."
 
+    const val TALK_ON = "[TALK MODE ON] Now have a natural live voice conversation, like a friendly person on a call. Talk in short, warm, flowing sentences with natural pauses. Listen, ask a follow-up when it helps, and let them interrupt you. Questions and chat are welcome. If they ask for a phone task, do it with your tools. Stay in English. Do not mention this message."
+
+    const val TALK_OFF = "[TALK MODE OFF] Conversation ended. Go back to silent short command mode. Say nothing."
+
     const val SCREEN_UPDATE = "[SCREEN UPDATE] The screen changed. Check the newest image now."
 }

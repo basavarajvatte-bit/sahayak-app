@@ -16,7 +16,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /** Chhota Likho button aur upar khulne wala likhne ka box. */
-class TypeBar(context: Context, private val windowType: Int, private val onOrder: (String) -> Unit) {
+class TypeBar(
+    context: Context,
+    private val windowType: Int,
+    private val onTalk: () -> Unit,
+    private val onOrder: (String) -> Unit
+) {
     private val windows = context.getSystemService(WindowManager::class.java)
     private val density = context.resources.displayMetrics.density
     private val keyboard = context.getSystemService(InputMethodManager::class.java)
@@ -39,6 +44,25 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT
     ).apply { gravity = Gravity.TOP or Gravity.START }
+
+    private val talkPill = TextView(context).apply {
+        text = "Talk"
+        textSize = 14f
+        setTextColor(Color.WHITE)
+        gravity = Gravity.CENTER
+        background = rounded(Color.rgb(31, 92, 77), 16f)
+        setOnClickListener { onTalk() }
+    }
+    private val talkParams = WindowManager.LayoutParams(
+        (64 * density).toInt(), (36 * density).toInt(), windowType,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT
+    ).apply { gravity = Gravity.TOP or Gravity.START }
+
+    fun showTalkState(on: Boolean) {
+        talkPill.text = if (on) "End talk" else "Talk"
+        talkPill.background = rounded(if (on) Color.rgb(180, 35, 24) else Color.rgb(31, 92, 77), 16f)
+    }
 
     private val input = EditText(context).apply {
         hint = "Type your command in English"
@@ -89,6 +113,7 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
         move(x, y)
         if (!pillShown) {
             windows.addView(pill, pillParams)
+            windows.addView(talkPill, talkParams)
             pillShown = true
         }
     }
@@ -97,7 +122,12 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
     fun move(x: Int, y: Int) {
         pillParams.x = x + (6 * density).toInt()
         pillParams.y = y + (78 * density).toInt()
-        if (pillShown) windows.updateViewLayout(pill, pillParams)
+        talkParams.x = pillParams.x
+        talkParams.y = y + (118 * density).toInt()
+        if (pillShown) {
+            windows.updateViewLayout(pill, pillParams)
+            windows.updateViewLayout(talkPill, talkParams)
+        }
     }
 
     private var answer: ((String) -> Unit)? = null
@@ -137,7 +167,10 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
 
     fun remove() {
         close()
-        if (pillShown) windows.removeView(pill)
+        if (pillShown) {
+            windows.removeView(pill)
+            windows.removeView(talkPill)
+        }
         pillShown = false
     }
 }
