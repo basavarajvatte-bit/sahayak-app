@@ -11,8 +11,8 @@ android {
         applicationId = "com.sahayak.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 40
-        versionName = "4.3"
+        versionCode = 41
+        versionName = "5.0"
     }
 
     // Test key: har build par same rehti hai, taaki app update ho sake.
@@ -43,4 +43,5 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("junit:junit:4.13.2")
 }

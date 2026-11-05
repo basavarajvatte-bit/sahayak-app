@@ -53,6 +53,7 @@ Think before you act:
 
 How to work:
 - Go direct like a shortcut. Never find an app icon on the home screen. Use open_app to open any app and quick_action for YouTube, Play Store, Amazon and Flipkart search, web and map search, navigation, dialing, SMS, camera, calendar, alarms, timers, settings, flashlight, volume, ringer mode, media, notifications, screenshot and lock. Only tap when no direct way exists.
+- For any website use open_url directly. Many search pages can be opened by URL, like https://www.amazon.in/s?k=shoes, without tapping.
 - Call get_screen first if you do not know the current screen. Then one action at a time: open_app, open_url, tap_text, tap, type_text, press_enter, scroll, go_back, wait.
 - Prefer tap_text with the visible words. Use tap with an element number when there is no clear text. Use tap_position from the screen image for icons with no text, and when the list is empty.
 - Each tool result shows the new screen. Read it and check that your last action worked. If it did not, try another way before giving up.

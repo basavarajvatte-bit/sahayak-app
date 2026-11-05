@@ -18,6 +18,8 @@ import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.BatteryManager
+import android.os.Environment
+import android.os.StatFs
 import android.os.Bundle
 import android.provider.AlarmClock
 import android.provider.CalendarContract
@@ -219,7 +221,7 @@ class PhoneControl : AccessibilityService() {
         if (isFinance(current)) return false
         return when (command) {
             is LocalCommands.Command.Open -> !financeMatch(command.app) && openApp(command.app)
-            is LocalCommands.Command.Quick -> quickAction(command.action, command.value)
+            is LocalCommands.Command.Quick -> quickAction(command.action, command.value, command.extra)
             is LocalCommands.Command.WhatsApp -> {
                 val args = JSONObject().put("contact", command.contact).put("message", command.message)
                 val opened = openWhatsApp(args)
@@ -423,6 +425,13 @@ class PhoneControl : AccessibilityService() {
 
     /** Jawab wale shortcuts: AI ke bina turant. */
     fun quickAnswer(action: String, value: String): String? = when (action) {
+        "answer" -> value
+        "storage" -> {
+            val stat = StatFs(Environment.getDataDirectory().path)
+            (stat.availableBytes / 1_000_000_000L).toString() + " GB free"
+        }
+        "device" -> Build.MANUFACTURER + " " + Build.MODEL
+        "android" -> "Android " + Build.VERSION.RELEASE
         "time" -> SimpleDateFormat("h:mm a", Locale.ENGLISH).format(Date())
         "date" -> SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(Date())
         "battery" -> getSystemService(BatteryManager::class.java)
@@ -444,11 +453,58 @@ class PhoneControl : AccessibilityService() {
     }
 
     /** Direct system shortcuts. Tap ki zaroorat nahi. */
-    fun quickAction(action: String, value: String): Boolean = when (action) {
-        "youtube_search" -> launch(
-            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(value))),
-            "com.google.android.youtube"
-        )
+    fun quickAction(action: String, value: String, extra: String = ""): Boolean = when (action) {
+        "url" -> web(value, extra.substringBefore("|").ifEmpty { null })
+        "open_settings" -> launch(Intent(value))
+        "app_category" -> openApp(extra) || launch(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, value))
+        "open_named" -> !financeMatch(value) && (openApp(value) ||
+            (ShortcutBook.WEBSITES[value.lowercase()]?.let { web(it) } ?: false))
+        "browser" -> web("https://www.google.com")
+        "new_email" -> launch(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")), GMAIL)
+        "compose_email" -> {
+            val parts = value.split("|", limit = 2)
+            launch(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + Uri.encode(parts[0])))
+                .putExtra(Intent.EXTRA_SUBJECT, parts.getOrElse(1) { "" }), GMAIL)
+        }
+        "add_contact" -> launch(Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI))
+        "new_note" -> web("https://keep.google.com")
+        "my_location" -> web("geo:0,0?q=my+location", "com.google.android.apps.maps")
+        "show_alarms" -> launch(Intent(AlarmClock.ACTION_SHOW_ALARMS))
+        "show_timers" -> launch(Intent(AlarmClock.ACTION_SHOW_TIMERS))
+        "dismiss_alarm" -> launch(Intent(AlarmClock.ACTION_DISMISS_ALARM))
+        "snooze_alarm" -> launch(Intent(AlarmClock.ACTION_SNOOZE_ALARM))
+        "copy" -> {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Sahayak", value))
+            true
+        }
+        "note" -> Memory.add(this, value)
+        "reminder" -> {
+            WorkList.add(this, "reminder", value.toLong(), extra.take(60), "", "", extra)
+            true
+        }
+        "scroll_down" -> scroll(true)
+        "scroll_up" -> scroll(false)
+        "swipe_left", "swipe_right" -> {
+            val metrics = resources.displayMetrics
+            val y = metrics.heightPixels / 2f
+            val right = metrics.widthPixels * 0.85f
+            val left = metrics.widthPixels * 0.15f
+            if (action == "swipe_left") gesture(right, y, left, y, 250) else gesture(left, y, right, y, 250)
+        }
+        "enter" -> pressEnter()
+        "tap_words" -> sensitiveReason() == null && tapText(value)
+        "type_words" -> sensitiveReason() == null && typeFocused(value)
+        "last_app" -> {
+            performGlobalAction(GLOBAL_ACTION_RECENTS)
+            Thread.sleep(LAST_APP_MS)
+            performGlobalAction(GLOBAL_ACTION_RECENTS)
+        }
+        "split_screen" -> performGlobalAction(GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+        "dismiss_shade" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE) else false
+        "media_stop" -> mediaKey(KeyEvent.KEYCODE_MEDIA_STOP)
+        "media_forward" -> mediaKey(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD)
+        "media_rewind" -> mediaKey(KeyEvent.KEYCODE_MEDIA_REWIND)
+        "youtube_search" -> web("https://www.youtube.com/results?search_query=" + Uri.encode(value), "com.google.android.youtube")
         "camera" -> launch(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
         "video" -> launch(Intent(MediaStore.INTENT_ACTION_VIDEO_CAMERA))
         "sms" -> smsTo(value)
@@ -783,6 +839,7 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
+        private const val LAST_APP_MS = 200L
         private const val REPLAY_TRIES = 10
         private const val REPLAY_RETRY_MS = 300L
         private const val REPLAY_WAIT_MS = 2_000L

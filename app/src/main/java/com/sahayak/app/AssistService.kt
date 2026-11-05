@@ -468,13 +468,16 @@ class AssistService : Service(), GeminiLive.Callback {
         actionHandler.post {
             val began = System.currentTimeMillis()
             val answer = (command as? LocalCommands.Command.Quick)?.let { control.quickAnswer(it.action, it.value) }
+                ?: (command as? LocalCommands.Command.Quick)?.takeIf { it.action == "reminder" }
+                    ?.let { "Reminder saved" }
             val done = try {
-                answer != null || control.fast(command)
+                val quick = command as? LocalCommands.Command.Quick
+                if (quick?.action == "reminder") control.fast(command) else answer != null || control.fast(command)
             } catch (e: RuntimeException) {
                 false
             }
             RunLog.add(this, "fast " + (if (done) "ok " else "failed ") + (System.currentTimeMillis() - began) + "ms")
-            val keepGoing = done && command is LocalCommands.Command.Quick && command.thenPlay
+            val keepGoing = done && command is LocalCommands.Command.Quick && command.extra.endsWith("|play")
             if (keepGoing) {
                 live?.sendText("YouTube results are open for this order: $text. Tap the first video now, then stop.")
             } else if (done) {
