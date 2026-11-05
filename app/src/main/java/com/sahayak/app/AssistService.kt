@@ -566,8 +566,16 @@ class AssistService : Service(), GeminiLive.Callback {
                     currentOrder = name
                     quietOrder = silentTurn
                     extendOrder()
-                    live?.sendText("The taught task \"$name\" stopped at this step: $step. Look at the screen, finish this step another way, then do these remaining steps: " +
-                        steps.drop(result.failedAt + 1).joinToString(" | "))
+                    val remaining = steps.drop(result.failedAt + 1).joinToString(" | ")
+                    plannerHandler.post {
+                        val help = planner?.recover(name, step, remaining, screen?.latest())
+                        RunLog.add(this, "recover " + (if (help != null) "ok" else "none"))
+                        if (help != null) Skills.lesson(this, name, "Stuck at: " + step.take(60) + ". Fix: " + help.take(120))
+                        if (!stopRequested) {
+                            live?.sendText("The taught task \"$name\" got stuck at: $step.\nExpert advice from the planner:\n" +
+                                help.orEmpty() + "\nGet past this now, then do these remaining steps without asking: $remaining")
+                        }
+                    }
                 }
                 else -> {
                     setBusy(false)

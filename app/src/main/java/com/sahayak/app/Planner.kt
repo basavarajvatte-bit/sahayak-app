@@ -57,6 +57,17 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
         }
     }
 
+    /** Kaam atak jaye to doosra model screen dekhkar nikalne ka rasta batata hai. */
+    fun recover(task: String, step: String, remaining: String, screen: ByteArray?): String? {
+        val parts = JSONArray().put(JSONObject().put("text",
+            "Task: $task\nStuck on: $step\nRemaining steps: $remaining\nGive the fix."))
+        if (screen != null) {
+            parts.put(JSONObject().put("inlineData", JSONObject().put("mimeType", "image/jpeg")
+                .put("data", Base64.encodeToString(screen, Base64.NO_WRAP))))
+        }
+        return ask(RECOVER_RULES, parts, 0.2, 400)
+    }
+
     /** Practice ke baad steps ko chhota aur pakka banata hai. */
     fun improve(name: String, steps: List<String>, used: String): List<String>? {
         val text = "Task: $name\nCurrent steps:\n" + steps.joinToString("\n") + "\nSteps that just worked:\n$used"
@@ -95,6 +106,12 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
     companion object {
         private const val TIMEOUT_SECONDS = 6L
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
+        private const val RECOVER_RULES = """An AI agent operating an Android phone got stuck on one step of a known task. Look at the screen and reply in at most 6 short lines:
+WHY: what is blocking it.
+DO: the exact actions to get past this and rejoin the remaining steps. Use visible words and positions.
+
+Common fixes: close a popup, wait for loading, scroll, go back once, or pick the matching item when a name differs. Never suggest paying, entering a password, PIN or OTP, or changing the goal."""
+
         private const val LEARN_RULES = """You maintain the memory of a personal phone assistant. Read today's activity and the current memory. Reply with JSON only:
 {"add":["short fact"],"remove":["exact old fact"],"summary":"one simple English sentence on what was learned today"}
 

@@ -373,7 +373,14 @@ class PhoneControl : AccessibilityService() {
             if (isFinance(current)) return Replay(false, index, "finance_app")
             val reason = sensitiveReason()
             if (reason != null) return Replay(false, index, reason)
-            if (!replayStep(step)) return Replay(false, index, "step_failed")
+            if (!replayStep(step)) {
+                // Agla step pehle se dikh raha ho to yeh chhota step chhod do
+                if (nextStepReady(steps.getOrNull(index + 1))) {
+                    RunLog.add(this, "replay skipped step $index")
+                } else {
+                    return Replay(false, index, "step_failed")
+                }
+            }
         }
         return Replay(true, -1, "")
     }
@@ -381,7 +388,7 @@ class PhoneControl : AccessibilityService() {
     private fun replayStep(step: String): Boolean {
         val before = screenText()
         val done = OPEN_STEP.find(step)?.let { openApp(it.groupValues[1]) }
-            ?: QUOTED_TAP.find(step)?.let { match -> retry { tapText(match.groupValues[1]) } }
+            ?: QUOTED_TAP.find(step)?.let { match -> findAndTap(match.groupValues[1]) }
             ?: POINT_TAP.find(step)?.let { tapPosition(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
             ?: QUOTED_TYPE.find(step)?.let { match -> retry { typeFocused(match.groupValues[1]) } }
             ?: when {
@@ -395,6 +402,34 @@ class PhoneControl : AccessibilityService() {
             }
         if (done) waitUntilSettled(before)
         return done
+    }
+
+    private fun nextStepReady(step: String?): Boolean {
+        if (step == null) return false
+        QUOTED_TAP.find(step)?.let { return screenHas(it.groupValues[1]) }
+        if (QUOTED_TYPE.containsMatchIn(step)) return visibleNodes().any { it.isEditable }
+        return false
+    }
+
+    /** Beech mein aaye popup band karo. */
+    private fun clearPopup(): Boolean = POPUP_WORDS.any { word ->
+        visibleNodes().any { label(it).equals(word, ignoreCase = true) } && tapText(word)
+    }
+
+    /** Wait karo, popup hatao, scroll karke dhoondho. */
+    private fun findAndTap(text: String): Boolean {
+        if (retry { tapText(text) }) return true
+        if (clearPopup()) {
+            Thread.sleep(REPLAY_WAIT_MS / 2)
+            if (retry { tapText(text) }) return true
+        }
+        for (down in listOf(true, true, false, false, false)) {
+            if (abort) return false
+            scroll(down)
+            Thread.sleep(REPLAY_RETRY_MS * 2)
+            if (tapText(text)) return true
+        }
+        return false
     }
 
     private fun retry(action: () -> Boolean): Boolean {
@@ -907,8 +942,9 @@ class PhoneControl : AccessibilityService() {
         private const val UPLOAD_ROUNDS = 30
         private const val UPLOAD_WAIT_MS = 2_000L
         private const val LAST_APP_MS = 200L
-        private const val REPLAY_TRIES = 10
-        private const val REPLAY_RETRY_MS = 300L
+        private const val REPLAY_TRIES = 20
+        private val POPUP_WORDS = listOf("Not now", "No thanks", "Skip", "Later", "Got it", "OK", "Close", "Dismiss", "Allow", "While using the app", "Continue")
+        private const val REPLAY_RETRY_MS = 500L
         private const val REPLAY_WAIT_MS = 2_000L
         private val OPEN_STEP = Regex("^open app (.+)$")
         private val QUOTED_TAP = Regex("^tap \"(.+)\"$")
