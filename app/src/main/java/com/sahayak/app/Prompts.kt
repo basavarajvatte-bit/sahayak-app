@@ -52,6 +52,7 @@ Think before you act:
 - If a tool result has a warning, stop what you were repeating, think, and take a different approach, or tell the person what is blocking you.
 
 How to work:
+- Go direct like a shortcut. Never find an app icon on the home screen. Use open_app to open any app and quick_action for YouTube search, web search, navigation, dialing, alarms, timers, settings, flashlight, volume, media, screenshot and lock. Only tap when no direct way exists.
 - Call get_screen first if you do not know the current screen. Then one action at a time: open_app, open_url, tap_text, tap, type_text, press_enter, scroll, go_back, wait.
 - Prefer tap_text with the visible words. Use tap with an element number when there is no clear text. Use tap_position from the screen image for icons with no text, and when the list is empty.
 - Each tool result shows the new screen. Read it and check that your last action worked. If it did not, try another way before giving up.

@@ -5,6 +5,7 @@ object LocalCommands {
     sealed class Command {
         data class Open(val app: String) : Command()
         data class WhatsApp(val contact: String, val message: String) : Command()
+        data class Quick(val action: String, val value: String = "", val thenPlay: Boolean = false) : Command()
     }
 
     private val END = "[.!?।]*$"
@@ -33,9 +34,58 @@ object LocalCommands {
     fun repeatTarget(raw: String): String? =
         REPEAT.find(raw.trim().trim('"'))?.groupValues?.get(1)?.trim()?.removeSuffix("ko")?.trim()
 
+    private val IC = RegexOption.IGNORE_CASE
+    private val YOUTUBE = Regex("^(play|search for|search|find) (.+?) on youtube$", IC)
+    private val WEB = Regex("^(?:google|search for|search the web for|search) (.+)$", IC)
+    private val NAVIGATE = Regex("^(?:navigate to|directions to|take me to) (.+)$", IC)
+    private val CALL = Regex("^(?:call|dial) (.+)$", IC)
+    private val ALARM = Regex("^set (?:an )?alarm (?:for|at) (\\d{1,2})(?:[:.](\\d{2}))? ?(a\\.?m\\.?|p\\.?m\\.?)$", IC)
+    private val TIMER = Regex("^set (?:a )?timer (?:for )?(\\d+) ?(second|seconds|minute|minutes|hour|hours)$", IC)
+    private val SETTINGS = Regex("^open (wifi|wi-fi|bluetooth|battery|location|display|sound|mobile data|apps|app) settings$", IC)
+    private val TORCH = Regex("^(?:turn )?(?:the )?(?:flashlight|torch) (on|off)$|^turn (on|off) (?:the )?(?:flashlight|torch)$", IC)
+    private val VOLUME = Regex("^(?:turn )?(?:the )?volume (up|down)$", IC)
+    private val MEDIA = Regex("^(pause|resume|next|previous)(?: music| song| video)?$", IC)
+
+    /** Android ke direct kaam: screen par tap ki zaroorat nahi. */
+    private fun quick(text: String): Command.Quick? {
+        val lower = text.lowercase()
+        when (lower) {
+            "take a screenshot", "take screenshot", "screenshot" -> return Command.Quick("screenshot")
+            "lock the phone", "lock phone", "lock the screen", "lock screen" -> return Command.Quick("lock")
+            "go home", "home screen" -> return Command.Quick("home")
+            "go back" -> return Command.Quick("back")
+        }
+        YOUTUBE.find(text)?.let {
+            return Command.Quick("youtube_search", it.groupValues[2], it.groupValues[1].equals("play", true))
+        }
+        NAVIGATE.find(text)?.let { return Command.Quick("navigate", it.groupValues[1]) }
+        CALL.find(text)?.let { return Command.Quick("dial", it.groupValues[1]) }
+        ALARM.find(text)?.let {
+            var hour = it.groupValues[1].toInt()
+            if (hour !in 1..12) return null
+            val pm = it.groupValues[3].lowercase().startsWith("p")
+            hour = hour % 12 + if (pm) 12 else 0
+            return Command.Quick("alarm", hour.toString() + ":" + it.groupValues[2].ifEmpty { "00" })
+        }
+        TIMER.find(text)?.let {
+            val unit = it.groupValues[2].lowercase()
+            val scale = if (unit.startsWith("hour")) 3600 else if (unit.startsWith("min")) 60 else 1
+            return Command.Quick("timer", (it.groupValues[1].toInt() * scale).toString())
+        }
+        SETTINGS.find(text)?.let { return Command.Quick("settings", it.groupValues[1].lowercase()) }
+        TORCH.find(text)?.let {
+            return Command.Quick("torch_" + (it.groupValues[1] + it.groupValues[2]).lowercase())
+        }
+        VOLUME.find(text)?.let { return Command.Quick("volume_" + it.groupValues[1].lowercase()) }
+        MEDIA.find(text)?.let { return Command.Quick("media_" + it.groupValues[1].lowercase()) }
+        WEB.find(text)?.let { return Command.Quick("web_search", it.groupValues[1]) }
+        return null
+    }
+
     fun parse(raw: String): Command? {
-        val text = raw.trim().trim('"')
+        val text = raw.trim().trim('"').trimEnd('.', '!', '?', '।').trim()
         if (text.isEmpty() || text.length > 120) return null
+        if (!COMPOUND.containsMatchIn(text)) quick(text)?.let { return it }
         WHATSAPP.find(text)?.let {
             val message = it.groupValues[2].trim().trim('"')
             if (COMPOUND.containsMatchIn(it.groupValues[1])) return null

@@ -473,7 +473,10 @@ class AssistService : Service(), GeminiLive.Callback {
                 false
             }
             RunLog.add(this, "fast " + (if (done) "ok " else "failed ") + (System.currentTimeMillis() - began) + "ms")
-            if (done) {
+            val keepGoing = done && command is LocalCommands.Command.Quick && command.thenPlay
+            if (keepGoing) {
+                live?.sendText("YouTube results are open for this order: $text. Tap the first video now, then stop.")
+            } else if (done) {
                 setBusy(false)
                 silentTurn = false
                 endOrder()

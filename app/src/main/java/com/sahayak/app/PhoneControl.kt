@@ -9,13 +9,20 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Path
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.AlarmClock
+import android.provider.Settings
 import android.provider.ContactsContract
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -184,6 +191,7 @@ class PhoneControl : AccessibilityService() {
                 target != null && typeInto(target, args.optString("text"))
             }
             "press_enter" -> pressEnter()
+            "quick_action" -> quickAction(args.optString("action"), args.optString("value"))
             "scroll" -> scroll(args.optString("direction") != "up")
             "go_back" -> performGlobalAction(GLOBAL_ACTION_BACK)
             else -> false
@@ -205,6 +213,7 @@ class PhoneControl : AccessibilityService() {
         if (isFinance(current)) return false
         return when (command) {
             is LocalCommands.Command.Open -> !financeMatch(command.app) && openApp(command.app)
+            is LocalCommands.Command.Quick -> quickAction(command.action, command.value)
             is LocalCommands.Command.WhatsApp -> {
                 val args = JSONObject().put("contact", command.contact).put("message", command.message)
                 val opened = openWhatsApp(args)
@@ -332,6 +341,104 @@ class PhoneControl : AccessibilityService() {
         val node = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             ?: visibleNodes().firstOrNull { it.isEditable } ?: return false
         return !node.isPassword && typeInto(node, text)
+    }
+
+    private fun launch(intent: Intent, pkg: String? = null): Boolean {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (pkg != null) {
+            try {
+                startActivity(Intent(intent).setPackage(pkg))
+                return true
+            } catch (e: ActivityNotFoundException) {
+                // app nahi hai to system apna rasta chune
+            }
+        }
+        return try {
+            startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    private fun torch(on: Boolean): Boolean {
+        val camera = getSystemService(CameraManager::class.java)
+        val id = camera.cameraIdList.firstOrNull {
+            camera.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        } ?: return false
+        return try {
+            camera.setTorchMode(id, on)
+            true
+        } catch (e: CameraAccessException) {
+            false
+        }
+    }
+
+    private fun mediaKey(code: Int): Boolean {
+        val audio = getSystemService(AudioManager::class.java)
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+        return true
+    }
+
+    private fun dialNumber(value: String): Boolean {
+        val typed = value.filter { it.isDigit() || it == '+' }
+        var number = if (typed.length >= 3 && value.none { it.isLetter() }) typed else ""
+        if (number.isEmpty() && checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+            val uri = Uri.withAppendedPath(ContactsContract.CommonDataKinds.Phone.CONTENT_FILTER_URI, Uri.encode(value))
+            contentResolver.query(uri, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { row ->
+                if (row.count == 1 && row.moveToFirst()) number = row.getString(0).orEmpty()
+            }
+        }
+        return number.isNotEmpty() && launch(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number))))
+    }
+
+    /** Direct system shortcuts. Tap ki zaroorat nahi. */
+    fun quickAction(action: String, value: String): Boolean = when (action) {
+        "youtube_search" -> launch(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(value))),
+            "com.google.android.youtube"
+        )
+        "web_search" -> launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(value))))
+        "navigate" -> launch(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(value))), "com.google.android.apps.maps")
+        "dial" -> dialNumber(value)
+        "alarm" -> {
+            val parts = value.split(":")
+            launch(Intent(AlarmClock.ACTION_SET_ALARM)
+                .putExtra(AlarmClock.EXTRA_HOUR, parts.getOrNull(0)?.toIntOrNull() ?: 0)
+                .putExtra(AlarmClock.EXTRA_MINUTES, parts.getOrNull(1)?.toIntOrNull() ?: 0)
+                .putExtra(AlarmClock.EXTRA_SKIP_UI, true))
+        }
+        "timer" -> launch(Intent(AlarmClock.ACTION_SET_TIMER)
+            .putExtra(AlarmClock.EXTRA_LENGTH, value.toIntOrNull() ?: 0)
+            .putExtra(AlarmClock.EXTRA_SKIP_UI, true))
+        "settings" -> launch(Intent(when (value) {
+            "wifi", "wi-fi" -> Settings.ACTION_WIFI_SETTINGS
+            "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS
+            "battery" -> Intent.ACTION_POWER_USAGE_SUMMARY
+            "location" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
+            "display" -> Settings.ACTION_DISPLAY_SETTINGS
+            "sound" -> Settings.ACTION_SOUND_SETTINGS
+            "mobile data" -> Settings.ACTION_DATA_ROAMING_SETTINGS
+            else -> Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS
+        }))
+        "torch_on" -> torch(true)
+        "torch_off" -> torch(false)
+        "volume_up", "volume_down" -> {
+            val direction = if (action == "volume_up") AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+            getSystemService(AudioManager::class.java)
+                .adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
+            true
+        }
+        "media_pause" -> mediaKey(KeyEvent.KEYCODE_MEDIA_PAUSE)
+        "media_resume" -> mediaKey(KeyEvent.KEYCODE_MEDIA_PLAY)
+        "media_next" -> mediaKey(KeyEvent.KEYCODE_MEDIA_NEXT)
+        "media_previous" -> mediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+        "screenshot" -> performGlobalAction(GLOBAL_ACTION_TAKE_SCREENSHOT)
+        "lock" -> performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+        "home" -> performGlobalAction(GLOBAL_ACTION_HOME)
+        "back" -> performGlobalAction(GLOBAL_ACTION_BACK)
+        else -> false
     }
 
     private fun screenText(): String = visibleNodes().joinToString("|") { label(it) }

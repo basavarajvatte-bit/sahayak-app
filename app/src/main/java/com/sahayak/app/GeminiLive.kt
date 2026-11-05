@@ -187,6 +187,8 @@ class GeminiLive(private val client: OkHttpClient, private val callback: Callbac
                     JSONObject().put("fact", prop("STRING", "Exact saved fact")), listOf("fact")))
                 .put(tool("get_taught_task", "Get the exact steps and lessons of a taught task.",
                     JSONObject().put("name", prop("STRING", "Task name")), listOf("name")))
+                .put(tool("quick_action", "Do a phone action directly through the system without tapping. Always use this first when it fits. action is one of: youtube_search, web_search, navigate, dial, alarm (value HH:MM 24 hour), timer (value seconds), settings (value wifi, bluetooth, battery, location, display, sound, mobile data or apps), torch_on, torch_off, volume_up, volume_down, media_pause, media_resume, media_next, media_previous, screenshot, lock, home, back.",
+                    JSONObject().put("action", prop("STRING", "Action name")).put("value", prop("STRING", "Search words, place, number, time or setting")), listOf("action")))
                 .put(tool("open_url", "Open a website address in the browser.",
                     JSONObject().put("url", prop("STRING", "Full https address")), listOf("url")))
                 .put(tool("tap_text", "Tap the item showing these words. Best way to tap.",
