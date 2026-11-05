@@ -152,6 +152,14 @@
                 android:textSize="16sp" />
 
             <Button
+                android:id="@+id/testUploadButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="Test upload now"
+                android:textAllCaps="false"
+                android:textSize="17sp" />
+
+            <Button
                 android:id="@+id/addVideosButton"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
