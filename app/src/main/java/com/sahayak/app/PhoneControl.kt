@@ -231,7 +231,29 @@ class PhoneControl : AccessibilityService() {
     }
 
     /** Queue ki video ko YouTube app se upload karta hai. */
-    private fun uploadToYouTube(uriText: String, title: String): Boolean {
+    private fun screenHas(words: String): Boolean =
+        visibleNodes().any { label(it).contains(words, ignoreCase = true) }
+
+    /** Sahi channel pakka karo. Na mile to upload nahi hoga. */
+    private fun ensureChannel(channel: String): Boolean {
+        val open = packageManager.getLaunchIntentForPackage("com.google.android.youtube") ?: return false
+        startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        Thread.sleep(UPLOAD_WAIT_MS)
+        if (!retry { tapText("You") }) return false
+        Thread.sleep(UPLOAD_WAIT_MS)
+        if (screenHas(channel)) return true
+        val switched = retry { tapText("Switch account") || tapText("Switch channel") || tapText("Accounts") }
+        if (!switched) return false
+        Thread.sleep(UPLOAD_WAIT_MS)
+        if (!retry { tapText(channel) }) return false
+        Thread.sleep(UPLOAD_WAIT_MS * 2)
+        if (!retry { tapText("You") }) return false
+        Thread.sleep(UPLOAD_WAIT_MS)
+        return screenHas(channel)
+    }
+
+    private fun uploadToYouTube(uriText: String, title: String, channel: String): Boolean {
+        if (channel.isBlank() || !ensureChannel(channel)) return false
         val intent = Intent(Intent.ACTION_SEND).setType("video/*")
             .putExtra(Intent.EXTRA_STREAM, Uri.parse(uriText))
             .putExtra(Intent.EXTRA_TITLE, title)
@@ -260,7 +282,7 @@ class PhoneControl : AccessibilityService() {
     fun runWork(item: JSONObject): Boolean {
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
         return when (item.optString("kind")) {
-            "youtube" -> uploadToYouTube(item.optString("to"), item.optString("message"))
+            "youtube" -> uploadToYouTube(item.optString("to"), item.optString("message"), item.optString("subject"))
             "whatsapp" -> {
                 val opened = openWhatsApp(JSONObject().put("contact", item.optString("to")).put("message", item.optString("message")))
                 opened.optString("status") == "ok" &&

@@ -134,6 +134,15 @@
                 android:text="Video queue for YouTube" />
 
             <EditText
+                android:id="@+id/videoChannel"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:hint="Exact YouTube channel name"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:textSize="16sp" />
+
+            <EditText
                 android:id="@+id/videoGap"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"

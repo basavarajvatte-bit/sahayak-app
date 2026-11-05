@@ -67,6 +67,7 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        findViewById<EditText>(R.id.videoChannel).setText(prefs.getString(PREF_CHANNEL, ""))
         findViewById<Button>(R.id.addVideosButton).setOnClickListener {
             startActivityForResult(
                 Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*")
@@ -183,6 +184,12 @@ class MainActivity : Activity() {
     private fun queueVideos(data: Intent) {
         val clip = data.clipData
         val uris = if (clip != null) List(clip.itemCount) { clip.getItemAt(it).uri } else listOfNotNull(data.data)
+        val channel = findViewById<EditText>(R.id.videoChannel).text.toString().trim()
+        if (channel.isEmpty()) {
+            statusText.text = "Type your YouTube channel name first."
+            return
+        }
+        prefs.edit().putString(PREF_CHANNEL, channel).apply()
         val gapHours = findViewById<EditText>(R.id.videoGap).text.toString().toLongOrNull()?.coerceIn(1, 168) ?: 6L
         val latest = WorkList.all(this).filter { it.optString("kind") == "youtube" && it.optString("status") == "pending" }
             .maxOfOrNull { it.optLong("at") } ?: System.currentTimeMillis()
@@ -190,7 +197,7 @@ class MainActivity : Activity() {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val name = displayName(uri)
             val at = latest + (index + 1) * gapHours * 3_600_000L
-            WorkList.add(this, "youtube", at, "YouTube: $name", uri.toString(), "", name)
+            WorkList.add(this, "youtube", at, "$channel: $name", uri.toString(), channel, name)
         }
         statusText.text = uris.size.toString() + " videos added to the queue."
         renderWork()
@@ -528,6 +535,7 @@ class MainActivity : Activity() {
         private const val LOW_RATING = 5
         private const val REQUEST_BACKUP = 3
         private const val REQUEST_VIDEOS = 5
+        private const val PREF_CHANNEL = "youtube_channel"
         private const val REQUEST_RESTORE = 4
         private const val PREF_LANGUAGE = "language"
         private const val PREF_NAME = "name"
