@@ -388,7 +388,9 @@ class PhoneControl : AccessibilityService() {
     private fun replayStep(step: String): Boolean {
         val before = screenText()
         val done = OPEN_STEP.find(step)?.let { openApp(it.groupValues[1]) }
-            ?: QUOTED_TAP.find(step)?.let { match -> findAndTap(match.groupValues[1]) }
+            ?: QUOTED_TAP.find(step)?.let { match ->
+                if (MEDIA_LABEL.matches(match.groupValues[1])) tapFirstMedia() else findAndTap(match.groupValues[1])
+            }
             ?: POINT_TAP.find(step)?.let { tapPosition(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
             ?: QUOTED_TYPE.find(step)?.let { match -> retry { typeFocused(match.groupValues[1]) } }
             ?: when {
@@ -402,6 +404,18 @@ class PhoneControl : AccessibilityService() {
             }
         if (done) waitUntilSettled(before)
         return done
+    }
+
+    /** Video ya photo ka label har baar badalta hai: sabse nayi file chuno. */
+    private fun tapFirstMedia(): Boolean {
+        val metrics = resources.displayMetrics
+        val box = Rect()
+        val item = visibleNodes().firstOrNull { node ->
+            node.getBoundsInScreen(box)
+            node.isClickable && box.height() > metrics.heightPixels / 12 && box.width() > metrics.widthPixels / 5 &&
+                box.top > metrics.heightPixels / 8
+        } ?: return false
+        return tapNode(item)
     }
 
     private fun nextStepReady(step: String?): Boolean {
@@ -943,6 +957,7 @@ class PhoneControl : AccessibilityService() {
         private const val UPLOAD_WAIT_MS = 2_000L
         private const val LAST_APP_MS = 200L
         private const val REPLAY_TRIES = 20
+        private val MEDIA_LABEL = Regex("^[0-9][0-9 :._,-]*$")
         private val POPUP_WORDS = listOf("Not now", "No thanks", "Skip", "Later", "Got it", "OK", "Close", "Dismiss", "Allow", "While using the app", "Continue")
         private const val REPLAY_RETRY_MS = 500L
         private const val REPLAY_WAIT_MS = 2_000L

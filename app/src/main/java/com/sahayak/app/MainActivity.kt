@@ -280,6 +280,20 @@ class MainActivity : Activity() {
             .show()
     }
 
+    private fun showSteps(name: String) {
+        val demo = Skills.lastDemo(this, name)
+        val steps = demo.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Tap a wrong step to remove it")
+            .setItems(steps) { _, which ->
+                Skills.removeStep(this, name, steps[which])
+                renderSkills()
+                statusText.text = "Step removed."
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
     private fun renderSkills() {
         val box = findViewById<LinearLayout>(R.id.skillBox)
         box.removeAllViews()
@@ -312,6 +326,7 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(weight))
             val bottom = LinearLayout(this)
             bottom.addView(smallButton("Wrong") { askLesson(name) }, LinearLayout.LayoutParams(weight))
+            bottom.addView(smallButton("Steps") { showSteps(name) }, LinearLayout.LayoutParams(weight))
             bottom.addView(smallButton("Remove") {
                 AlertDialog.Builder(this)
                     .setMessage("Delete this taught task?")

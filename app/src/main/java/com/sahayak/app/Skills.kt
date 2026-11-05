@@ -110,6 +110,19 @@ object Skills {
             .put("steps", skill.optJSONArray("steps")).put("lessons", skill.optJSONArray("lessons") ?: JSONArray())
     }
 
+    /** Steps dikhane ke liye, aur galat step hatane ke liye. */
+    fun removeStep(context: Context, name: String, step: String) {
+        change(context, name) { skill ->
+            skill.put("steps", JSONArray(list(skill, "steps").filter { it != step }))
+            val demos = skill.optJSONArray("demos") ?: JSONArray()
+            if (demos.length() > 0) {
+                val last = demos.getJSONArray(demos.length() - 1)
+                val kept = List(last.length()) { last.optString(it) }.filter { it != step }
+                demos.put(demos.length() - 1, JSONArray(kept))
+            }
+        }
+    }
+
     fun lesson(context: Context, name: String, text: String) {
         change(context, name) { skill ->
             val lessons = list(skill, "lessons") + text.take(200)

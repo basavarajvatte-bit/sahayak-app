@@ -110,6 +110,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
 WHY: what is blocking it.
 DO: the exact actions to get past this and rejoin the remaining steps. Use visible words and positions.
 
+Never suggest a web search or opening a browser unless the task itself uses one. A number or time in a step is a media label: tell the agent to pick the newest item.
 Common fixes: close a popup, wait for loading, scroll, go back once, or pick the matching item when a name differs. Never suggest paying, entering a password, PIN or OTP, or changing the goal."""
 
         private const val LEARN_RULES = """You maintain the memory of a personal phone assistant. Read today's activity and the current memory. Reply with JSON only:
@@ -130,6 +131,7 @@ Rules:
 - Compare all demonstrations and keep what they share. Remove mistakes, repeated taps and wandering.
 - Replace details that change each time with placeholders such as {contact}, {message}, {date} or {search_text}. Keep fixed things like app names and button words exact.
 - Use short steps: open app X, tap "words", type "{message}", press enter, wait. Prefer visible words over screen positions.
+- A tap on a number, time or file label means picking a video or photo: replace it with: tap the newest video.
 - Keep "screen shows" notes as check steps where useful, so the agent can confirm it is on the right screen.
 - Apply the lessons.
 - At most 25 steps. Never include a password, PIN, OTP, card number or payment step."""
