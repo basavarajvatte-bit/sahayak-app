@@ -9,6 +9,8 @@ object Ratings {
     private const val PREFS = "sahayak_ratings"
     private const val KEY = "ratings"
     private const val MAX_ITEMS = 300
+    private const val PENDING = "pending"
+    private const val MAX_PENDING = 20
 
     @Synchronized
     fun all(context: Context): List<JSONObject> {
@@ -20,6 +22,29 @@ object Ratings {
     private fun save(context: Context, items: List<JSONObject>) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY, JSONArray(items.takeLast(MAX_ITEMS)).toString()).apply()
+    }
+
+    /** Poora hua kaam: baad mein app ke andar rating ke liye. */
+    @Synchronized
+    fun addPending(context: Context, order: String, steps: String, skill: String?) {
+        val item = JSONObject().put("id", System.currentTimeMillis().toString()).put("order", order.take(200))
+            .put("steps", steps.take(800)).put("skill", skill.orEmpty())
+        val next = (pending(context) + item).takeLast(MAX_PENDING)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(PENDING, JSONArray(next).toString()).apply()
+    }
+
+    @Synchronized
+    fun pending(context: Context): List<JSONObject> {
+        val array = JSONArray(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(PENDING, "[]"))
+        return List(array.length()) { array.getJSONObject(it) }
+    }
+
+    @Synchronized
+    fun dropPending(context: Context, id: String) {
+        val next = pending(context).filter { it.optString("id") != id }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(PENDING, JSONArray(next).toString()).apply()
     }
 
     @Synchronized

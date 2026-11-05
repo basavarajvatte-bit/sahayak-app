@@ -24,6 +24,7 @@ import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
 import org.json.JSONException
+import org.json.JSONObject
 import java.io.IOException
 import java.util.Locale
 
@@ -155,6 +156,7 @@ class MainActivity : Activity() {
         renderWork()
         renderMemory()
         renderSkills()
+        renderRatings()
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
     }
 
@@ -265,6 +267,65 @@ class MainActivity : Activity() {
             box.addView(top)
             box.addView(bottom)
         }
+    }
+
+    private fun renderRatings() {
+        val box = findViewById<LinearLayout>(R.id.ratingBox)
+        box.removeAllViews()
+        val items = Ratings.pending(this).reversed()
+        findViewById<View>(R.id.ratingCard).visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+        items.forEach { item ->
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(TextView(this).apply {
+                text = item.optString("order")
+                textSize = 15f
+                setTextColor(0xFF1D2433.toInt())
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(smallButton("Rate") { pickRating(item) })
+            row.addView(smallButton("Skip") {
+                Ratings.dropPending(this, item.optString("id"))
+                renderRatings()
+            })
+            box.addView(row)
+        }
+    }
+
+    private fun pickRating(item: JSONObject) {
+        val numbers = Array(10) { (it + 1).toString() }
+        AlertDialog.Builder(this)
+            .setTitle("Rate 1 to 10")
+            .setItems(numbers) { _, which -> saveRating(item, which + 1) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun saveRating(item: JSONObject, score: Int) {
+        val order = item.optString("order")
+        val skill = item.optString("skill")
+        val id = Ratings.add(this, order, score, item.optString("steps"))
+        if (skill.isNotEmpty()) Skills.recordRating(this, skill, score)
+        Ratings.dropPending(this, item.optString("id"))
+        DailyLearning.note(this, "rating $score/10 for: $order")
+        RunLog.add(this, "rating $score")
+        renderRatings()
+        renderSkills()
+        renderMemory()
+        if (score > LOW_RATING) return
+        val input = EditText(this).apply { hint = "What went wrong?" }
+        AlertDialog.Builder(this)
+            .setTitle("Tell Sahayak what to fix")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val note = input.text.toString().trim()
+                if (note.isNotEmpty()) {
+                    Ratings.addNote(this, id, note)
+                    if (skill.isNotEmpty()) Skills.markWrong(this, skill, note)
+                    DailyLearning.note(this, "correction: $note")
+                    renderSkills()
+                }
+            }
+            .setNegativeButton("Skip", null)
+            .show()
     }
 
     private fun renderMemory() {
@@ -418,6 +479,7 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_PERMISSIONS = 1
         private const val REQUEST_SCREEN = 2
+        private const val LOW_RATING = 5
         private const val REQUEST_BACKUP = 3
         private const val REQUEST_RESTORE = 4
         private const val PREF_LANGUAGE = "language"
