@@ -61,7 +61,7 @@ class PhoneControl : AccessibilityService() {
         val manager = getSystemService(WindowManager::class.java)
         val density = resources.displayMetrics.density
         val bar = Button(this).apply {
-            text = "Sikhana poora"
+            text = "Finish teaching"
             isAllCaps = false
             setOnClickListener { finishTeaching() }
         }
@@ -87,7 +87,7 @@ class PhoneControl : AccessibilityService() {
         teachSteps = null
         stopBar()
         if (steps.isNullOrEmpty()) {
-            Toast.makeText(this, "Koi step record nahi hua", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "No steps were recorded", Toast.LENGTH_LONG).show()
             return
         }
         Skills.addDemo(this, teachName, steps)

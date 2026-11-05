@@ -25,6 +25,7 @@ class Whisper(http: OkHttpClient, private val apiKey: String) {
             .addFormDataPart("model", MODEL)
             .addFormDataPart("response_format", "json")
             .addFormDataPart("temperature", "0")
+            .addFormDataPart("language", "en")
             .addFormDataPart("prompt", HINT)
             .addFormDataPart("file", "order.wav", wav(pcm).toRequestBody("audio/wav".toMediaType()))
             .build()
@@ -51,6 +52,6 @@ class Whisper(http: OkHttpClient, private val apiKey: String) {
         private const val URL = "https://api.groq.com/openai/v1/audio/transcriptions"
         private const val MODEL = "whisper-large-v3-turbo"
         private const val RATE = 16_000
-        private const val HINT = "Phone orders in Hindi, Marathi or English: WhatsApp, Gmail, Chrome, IRCTC, Aai, Baba."
+        private const val HINT = "Phone commands in English: WhatsApp, Gmail, Chrome, YouTube, IRCTC, open, send, search."
     }
 }

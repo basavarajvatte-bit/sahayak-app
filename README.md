@@ -1,7 +1,5 @@
 # Sahayak
 
-Elderly logon ke liye Android assistant ka test version. Assist dabane par yeh screen dekhta hai, sunta hai, aur Gemini Live se Hindi ya Marathi mein ek-ek step bolkar batata hai. Yeh khud click nahi karta.
+Android test app. Hold the dot, give a command in English, and Sahayak operates the phone with Gemini Live. It stops at payment, password, PIN and OTP screens.
 
-- APK: `Actions` har push par banata hai, aur Releases mein `latest` par milta hai.
-- Gemini key sirf phone par app ke andar rehti hai. Repository mein key kabhi mat daliye.
-- Free Gemini plan par asli personal details mat daliye.
+The APK is built by Actions and published under Releases as `latest`. Never put API keys in this repository.

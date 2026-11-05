@@ -73,7 +73,7 @@ class MainActivity : Activity() {
             DailyLearning.clear(this)
             Memory.all(this).forEach { Memory.remove(this, it) }
             renderMemory()
-            statusText.text = "Seekha hua sab mita diya."
+            statusText.text = "All learned data deleted."
         }
         DailyLearning.runIfDue(this)
         findViewById<Button>(R.id.backupButton).setOnClickListener {
@@ -90,11 +90,11 @@ class MainActivity : Activity() {
             )
         }
         findViewById<Button>(R.id.reportButton).setOnClickListener {
-            val report = RunLog.read(this).ifEmpty { "Abhi koi record nahi hai" }
+            val report = RunLog.read(this).ifEmpty { "No records yet" }
             getSystemService(ClipboardManager::class.java)
                 .setPrimaryClip(ClipData.newPlainText("Sahayak report", report))
             findViewById<TextView>(R.id.reportText).text = report.takeLast(1_500)
-            statusText.text = "Report copy ho gaya."
+            statusText.text = "Report copied."
         }
         val volumeBar = findViewById<SeekBar>(R.id.volumeBar)
         volumeBar.progress = prefs.getInt(PREF_VOLUME, DEFAULT_VOLUME)
@@ -151,52 +151,52 @@ class MainActivity : Activity() {
         assistButton.visibility = if (running) View.GONE else View.VISIBLE
         stopButton.visibility = if (running) View.VISIBLE else View.GONE
         statusText.text = AssistState.status
-        controlButton.text = if (PhoneControl.instance != null) "✓ Phone control chalu hai" else "Phone control chalu karo"
+        controlButton.text = if (PhoneControl.instance != null) "✓ Phone control is on" else "Turn on phone control"
         renderWork()
         renderMemory()
         renderSkills()
-        batteryButton.text = if (batteryFree()) "✓ Background mein chalne ki ijazat hai" else "Background ki ijazat do"
+        batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
     }
 
     private fun handleBackup(request: Int, uri: Uri) {
         statusText.text = try {
             if (request == REQUEST_BACKUP) {
                 contentResolver.openOutputStream(uri, "wt")?.use { it.write(Skills.exportJson(this).toByteArray()) }
-                "Backup ban gaya. File ko Google Drive mein bhi rakhiye."
+                "Backup saved. Keep the file in Google Drive too."
             } else {
                 val text = contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }.orEmpty()
                 val added = Skills.importJson(this, text)
                 renderSkills()
                 renderMemory()
-                "Backup wapas aa gaya: $added naye kaam."
+                "Backup restored: $added new tasks."
             }
         } catch (e: IOException) {
-            "Backup nahi hua. Dobara try kijiye."
+            "Backup failed. Please try again."
         } catch (e: JSONException) {
-            "Yeh Sahayak ki sahi backup file nahi hai."
+            "This is not a valid Sahayak backup file."
         } catch (e: IllegalArgumentException) {
-            "Yeh Sahayak ki sahi backup file nahi hai."
+            "This is not a valid Sahayak backup file."
         }
     }
 
     private fun askTeachName() {
         val control = PhoneControl.instance
         if (control == null) {
-            statusText.text = "Pehle Phone control chalu kijiye."
+            statusText.text = "Turn on phone control first."
             return
         }
-        val input = EditText(this).apply { hint = "Jaise: Aai ko photo bhejna" }
+        val input = EditText(this).apply { hint = "For example: Send photo to Mom" }
         AlertDialog.Builder(this)
-            .setTitle("Kaam ka naam")
+            .setTitle("Task name")
             .setView(input)
-            .setPositiveButton("Shuru karo") { _, _ ->
+            .setPositiveButton("Start") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
                     control.startTeaching(name)
                     moveTaskToBack(true)
                 }
             }
-            .setNegativeButton("Rehne do", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -208,15 +208,15 @@ class MainActivity : Activity() {
     }
 
     private fun askLesson(name: String) {
-        val input = EditText(this).apply { hint = "Kya galat hua, ya kaise karna tha" }
+        val input = EditText(this).apply { hint = "What went wrong, or how should it be done" }
         AlertDialog.Builder(this)
-            .setTitle("Sudhar likhiye")
+            .setTitle("Write a correction")
             .setView(input)
-            .setPositiveButton("Yaad rakho") { _, _ ->
+            .setPositiveButton("Save") { _, _ ->
                 Skills.markWrong(this, name, input.text.toString().trim())
                 renderSkills()
             }
-            .setNegativeButton("Rehne do", null)
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
@@ -233,33 +233,33 @@ class MainActivity : Activity() {
             })
             val weight = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             val top = LinearLayout(this)
-            top.addView(smallButton("Dohrao") {
+            top.addView(smallButton("Repeat") {
                 if (AssistState.running) {
                     AssistService.practice(this, name)
                     moveTaskToBack(true)
                 } else {
-                    statusText.text = "Pehle Assist dabaiye, phir Dohrao dabaiye."
+                    statusText.text = "Press Assist first, then press Repeat."
                 }
             }, weight)
-            top.addView(smallButton("Aur sikhao") {
+            top.addView(smallButton("Teach more") {
                 val control = PhoneControl.instance
                 if (control == null) {
-                    statusText.text = "Pehle Phone control chalu kijiye."
+                    statusText.text = "Turn on phone control first."
                 } else {
                     control.startTeaching(name)
                     moveTaskToBack(true)
                 }
             }, LinearLayout.LayoutParams(weight))
             val bottom = LinearLayout(this)
-            bottom.addView(smallButton("Galat hua") { askLesson(name) }, LinearLayout.LayoutParams(weight))
-            bottom.addView(smallButton("Hatao") {
+            bottom.addView(smallButton("Wrong") { askLesson(name) }, LinearLayout.LayoutParams(weight))
+            bottom.addView(smallButton("Remove") {
                 AlertDialog.Builder(this)
-                    .setMessage("Yeh sikhaya hua kaam delete karein?")
+                    .setMessage("Delete this taught task?")
                     .setPositiveButton("Delete") { _, _ ->
                         Skills.remove(this, name)
                         renderSkills()
                     }
-                    .setNegativeButton("Rehne do", null)
+                    .setNegativeButton("Cancel", null)
                     .show()
             }, LinearLayout.LayoutParams(weight))
             box.addView(top)
@@ -272,7 +272,7 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.ratingAverage).text = if (average == null) "" else
             "Average rating: " + String.format(Locale.ENGLISH, "%.1f", average) + " / 10"
         val summary = DailyLearning.summary(this)
-        findViewById<TextView>(R.id.learnSummary).text = if (summary.isEmpty()) "" else "Aaj seekha: $summary"
+        findViewById<TextView>(R.id.learnSummary).text = if (summary.isEmpty()) "" else "Learned today: $summary"
         val box = findViewById<LinearLayout>(R.id.memoryBox)
         box.removeAllViews()
         Memory.all(this).forEach { fact ->
@@ -283,7 +283,7 @@ class MainActivity : Activity() {
                 setTextColor(0xFF1D2433.toInt())
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(Button(this).apply {
-                text = "Hatao"
+                text = "Remove"
                 isAllCaps = false
                 setOnClickListener {
                     Memory.remove(this@MainActivity, fact)
@@ -308,7 +308,7 @@ class MainActivity : Activity() {
             }
             row.addView(text, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(Button(this).apply {
-                setText("Hatao")
+                setText("Remove")
                 isAllCaps = false
                 setOnClickListener {
                     WorkList.remove(this@MainActivity, item.optString("id"))
@@ -328,7 +328,7 @@ class MainActivity : Activity() {
     }
 
     private fun language(): String =
-        if (languageGroup.checkedRadioButtonId == R.id.langMarathi) MARATHI else HINDI
+        "English"
 
     private fun voice(): String = when (voiceGroup.checkedRadioButtonId) {
         R.id.voiceMale -> VOICE_MALE
@@ -340,7 +340,7 @@ class MainActivity : Activity() {
     private fun onAssist() {
         val key = keyInput.text.toString().trim()
         if (key.isEmpty()) {
-            statusText.text = "Pehle Settings mein Gemini key daliye."
+            statusText.text = "Add your Gemini key in Settings first."
             settingsPanel.visibility = View.VISIBLE
             keyInput.requestFocus()
             return
@@ -352,7 +352,7 @@ class MainActivity : Activity() {
             .putBoolean(PREF_AUTO, autoStep.isChecked).apply()
 
         if (PhoneControl.instance == null && !Settings.canDrawOverlays(this)) {
-            statusText.text = "Sahayak ke saamne Allow chalu kijiye, phir wapas aakar Assist dabaiye."
+            statusText.text = "Allow Sahayak here, then come back and press Assist."
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
             return
         }
@@ -380,7 +380,7 @@ class MainActivity : Activity() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             askScreen()
         } else {
-            statusText.text = "Mic ki ijazat ke bina Sahayak nahi sun sakta."
+            statusText.text = "Sahayak needs microphone permission to hear you."
         }
     }
 
@@ -411,7 +411,7 @@ class MainActivity : Activity() {
             )
             moveTaskToBack(true) // app peeche chala jaye, phone ka home dikhe
         } else {
-            statusText.text = "Screen share ki ijazat nahi mili."
+            statusText.text = "Screen sharing was not allowed."
         }
     }
 
@@ -431,7 +431,7 @@ class MainActivity : Activity() {
         private const val VOICE_MALE = "Puck"
         private const val VOICE_SOFT = "Kore"
         private const val VOICE_DEEP = "Charon"
-        private const val HINDI = "Hindi"
+        private const val HINDI = "English"
         private const val MARATHI = "Marathi"
     }
 }

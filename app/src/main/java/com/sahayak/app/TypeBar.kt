@@ -27,7 +27,7 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
     }
 
     private val pill = TextView(context).apply {
-        text = "Likho"
+        text = "Type"
         textSize = 14f
         setTextColor(Color.WHITE)
         gravity = Gravity.CENTER
@@ -41,7 +41,7 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
     private val input = EditText(context).apply {
-        hint = "Hindi ya English mein likhiye"
+        hint = "Type your command in English"
         textSize = 18f
         setTextColor(Color.rgb(29, 36, 51))
         setHintTextColor(Color.rgb(102, 112, 133))
@@ -64,13 +64,13 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
         background = rounded(Color.WHITE, 16f)
         addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         addView(Button(context).apply {
-            text = "Bhejo"
+            text = "Send"
             isAllCaps = false
             setOnClickListener { submit() }
         })
         addView(Button(context).apply {
             text = "✕"
-            contentDescription = "Band karo"
+            contentDescription = "Stop"
             setOnClickListener { close() }
         }, LinearLayout.LayoutParams((52 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT))
     }
@@ -129,7 +129,7 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
     private fun close() {
         if (!barShown) return
         answer = null
-        input.hint = "Hindi ya English mein likhiye"
+        input.hint = "Type your command in English"
         keyboard.hideSoftInputFromWindow(input.windowToken, 0)
         windows.removeView(bar as View)
         barShown = false

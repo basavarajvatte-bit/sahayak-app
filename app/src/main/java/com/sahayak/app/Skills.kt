@@ -84,7 +84,7 @@ object Skills {
                 }
             }
             Handler(Looper.getMainLooper()).post {
-                Toast.makeText(app, if (digest != null) "Samajh liya: $name" else "Steps save ho gaye: $name", Toast.LENGTH_LONG).show()
+                Toast.makeText(app, if (digest != null) "Learned: $name" else "Steps saved: $name", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -173,7 +173,7 @@ object Skills {
         val name = skill.optString("name")
         val rated = skill.optInt("ratingCount")
         val rating = if (rated == 0) "" else ", rating " + String.format(java.util.Locale.ENGLISH, "%.1f", skill.optInt("ratingSum").toDouble() / rated)
-        return name + " (" + demos + " example" + (if (runs == 0) "" else ", " + runs + " baar, " + skill.optInt("good") + " sahi") + rating + ")"
+        return name + " (" + demos + " example" + (if (runs == 0) "" else ", " + runs + " runs, " + skill.optInt("good") + " correct") + rating + ")"
     }
 
     fun remove(context: Context, name: String) {

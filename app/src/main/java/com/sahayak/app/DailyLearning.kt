@@ -100,11 +100,11 @@ object DailyLearning {
 
     private fun notifyDone(context: Context, count: Int) {
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel("sahayak_learning", "Sahayak ki seekh", NotificationManager.IMPORTANCE_LOW))
+        manager.createNotificationChannel(NotificationChannel("sahayak_learning", "Sahayak learning", NotificationManager.IMPORTANCE_LOW))
         manager.notify(JOB_ID, Notification.Builder(context, "sahayak_learning")
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Sahayak")
-            .setContentText("Aaj $count nayi baatein seekhi")
+            .setContentText("Learned $count new things today")
             .setAutoCancel(true)
             .build())
     }

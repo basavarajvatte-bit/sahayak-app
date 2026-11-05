@@ -47,8 +47,8 @@ object WorkList {
         display.format(Date(item.optLong("at"))) + " - " + item.optString("title") + statusText(item)
 
     private fun statusText(item: JSONObject): String = when (item.optString("status")) {
-        "done" -> " (ho gaya)"
-        "failed" -> " (nahi hua)"
+        "done" -> " (done)"
+        "failed" -> " (failed)"
         else -> ""
     }
 
@@ -119,7 +119,7 @@ object WorkList {
         val item = find(context, id) ?: return
         if (item.optString("status") != "pending") return
         if (item.optString("kind") == "reminder") {
-            finish(context, item, "done", "Yaad dilana: " + item.optString("message"))
+            finish(context, item, "done", "Reminder: " + item.optString("message"))
             return
         }
         val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
@@ -127,14 +127,14 @@ object WorkList {
         if (locked || control == null) {
             val tries = item.optInt("tries") + 1
             if (tries > MAX_TRIES) {
-                finish(context, item, "failed", "Kaam nahi hua: " + item.optString("title"))
+                finish(context, item, "failed", "Task failed: " + item.optString("title"))
                 return
             }
             item.put("tries", tries).put("at", System.currentTimeMillis() + RETRY_MS)
             update(context, item)
             arm(context, item)
-            val why = if (locked) "Phone unlock kijiye" else "Phone control chalu kijiye"
-            notify(context, id.hashCode(), why + ", kaam baki hai: " + item.optString("title"))
+            val why = if (locked) "Unlock the phone" else "Turn on phone control"
+            notify(context, id.hashCode(), why + ", task pending: " + item.optString("title"))
             return
         }
         wake(context)
@@ -145,7 +145,7 @@ object WorkList {
         }
         RunLog.add(context, "scheduled " + item.optString("kind") + " " + (if (ok) "ok" else "failed"))
         finish(context, item, if (ok) "done" else "failed",
-            (if (ok) "Ho gaya: " else "Kaam nahi hua: ") + item.optString("title"))
+            (if (ok) "Done: " else "Task failed: ") + item.optString("title"))
     }
 
     private fun wake(context: Context) {
@@ -165,7 +165,7 @@ object WorkList {
 
     private fun notify(context: Context, id: Int, text: String) {
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Sahayak ke kaam", NotificationManager.IMPORTANCE_HIGH))
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Sahayak tasks", NotificationManager.IMPORTANCE_HIGH))
         manager.notify(id, Notification.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Sahayak")

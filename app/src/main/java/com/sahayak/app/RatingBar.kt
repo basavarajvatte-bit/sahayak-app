@@ -52,14 +52,14 @@ class RatingBar(context: Context, windowType: Int, private val onScore: (Int) ->
         }
         val top = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(context).apply {
-            text = "Kaam kaisa hua? 1 se 10"
+            text = "How did it go? Rate 1 to 10"
             textSize = 17f
             setTextColor(Color.WHITE)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         top.addView(TextView(context).apply {
             text = "✕"
             textSize = 20f
-            contentDescription = "Band karo"
+            contentDescription = "Stop"
             setTextColor(Color.WHITE)
             setPadding(pad, 4, pad, 4)
             setOnClickListener { hide() }

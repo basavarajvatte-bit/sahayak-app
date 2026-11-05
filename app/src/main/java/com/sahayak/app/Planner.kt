@@ -96,7 +96,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
         private const val TIMEOUT_SECONDS = 6L
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
         private const val LEARN_RULES = """You maintain the memory of a personal phone assistant. Read today's activity and the current memory. Reply with JSON only:
-{"add":["short fact"],"remove":["exact old fact"],"summary":"one simple Hinglish sentence on what was learned today"}
+{"add":["short fact"],"remove":["exact old fact"],"summary":"one simple English sentence on what was learned today"}
 
 Keep only practical habits that help future orders: preferred apps, who they usually message and how, usual times, preferred language, reply length, repeated tasks, and corrections.
 Rules:
@@ -136,7 +136,7 @@ Never suggest paying, entering a password, PIN or OTP, or inventing an address o
 First work out the true goal, what is known and missing, and the likely options with their risks and costs. Pick the most effective one, then check: is this sound, what could go wrong, is there a simpler way? Prefer accuracy over speed when a mistake would be costly. Do not show this reasoning.
 
 Write only this format, in English, under 12 lines:
-CONTENT: any text the order needs written, complete and ready to use. Write it yourself. Use the language of the order. Omit this line if nothing needs writing.
+CONTENT: any text the order needs written, complete and ready to use. Write it yourself. Write in English. Omit this line if nothing needs writing.
 STEPS: the fewest numbered steps, each one action.
 MISSING: exact details that are missing, or none.
 RISK: one short warning only if the order seems mistaken or could cause real loss, otherwise omit.
@@ -149,7 +149,7 @@ Rules:
 - If a Known fact shows a past rating, prefer ways rated 8 or more, and avoid ways rated low.
 - Use compose_email for email and open_whatsapp_chat for WhatsApp messages.
 - Never make up an email address, phone number or name. A company name is not an address, so list it under MISSING.
-- If the order is for a future time, the only step is schedule_work now. Unclear time such as "12 baje" without day or night goes under MISSING.
+- If the order is for a future time, the only step is schedule_work now. Unclear time such as "12 o'clock" without AM or PM goes under MISSING.
 - If something is MISSING, the agent must ask first before doing any steps.
 - The agent never performs a payment or enters a password, PIN or OTP."""
     }

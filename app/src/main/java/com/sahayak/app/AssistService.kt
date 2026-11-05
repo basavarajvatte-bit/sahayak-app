@@ -122,7 +122,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (tools != null && PhoneControl.instance == null && !controlLostShown) {
                 controlLostShown = true
                 RunLog.add(this@AssistService, "control_lost")
-                AssistState.set(true, "Phone control band ho gaya. Sahayak app kholkar dobara chalu kijiye.")
+                AssistState.set(true, "Phone control turned off. Open Sahayak and turn it on again.")
             }
             workerHandler.postDelayed(this, NUDGE_TICK_MS)
         }
@@ -132,7 +132,7 @@ class AssistService : Service(), GeminiLive.Callback {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null || intent.action == ACTION_STOP) {
-            finish("Band ho gaya")
+            finish("Stopped")
             return START_NOT_STICKY
         }
         if (intent.action == ACTION_TYPE) {
@@ -186,22 +186,22 @@ class AssistService : Service(), GeminiLive.Callback {
             @Suppress("DEPRECATION") intent.getParcelableExtra(EXTRA_DATA)
         }
         if (resultData == null) {
-            finish("Screen share ki ijazat nahi mili")
+            finish("Screen sharing was not allowed")
             return START_NOT_STICKY
         }
         val mediaProjection = manager.getMediaProjection(intent.getIntExtra(EXTRA_RESULT, 0), resultData)
         if (mediaProjection == null) {
-            finish("Screen share shuru nahi hua")
+            finish("Screen sharing did not start")
             return START_NOT_STICKY
         }
         projection = mediaProjection
         mediaProjection.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() {
-                finish("Screen share band ho gaya. Dobara Assist dabaiye.")
+                finish("Screen sharing stopped. Press Assist again.")
             }
         }, workerHandler)
 
-        AssistState.set(true, "Shuru ho raha hai...")
+        AssistState.set(true, "Starting...")
         workerHandler.post { begin(mediaProjection) }
         return START_NOT_STICKY
     }
@@ -210,8 +210,8 @@ class AssistService : Service(), GeminiLive.Callback {
         try {
             models = GeminiLive.liveModels(http, apiKey)
         } catch (e: IOException) {
-            val text = if (e.message == "bad key") "Gemini key sahi nahi lagi. Key dobara daliye."
-            else "Internet check kijiye aur dobara Assist dabaiye."
+            val text = if (e.message == "bad key") "The Gemini key looks wrong. Please enter it again."
+            else "Check your internet and press Assist again."
             finish(text)
             return
         }
@@ -233,7 +233,7 @@ class AssistService : Service(), GeminiLive.Callback {
             feed.start()
             screen = feed
         } catch (e: RuntimeException) {
-            finish("Mic ya screen shuru nahi hua. Phone restart karke dekhiye.")
+            finish("Mic or screen did not start. Try restarting the phone.")
             return
         }
         live = GeminiLive(http, this)
@@ -256,7 +256,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 bar.show(talkDot.windowX, talkDot.windowY)
                 caption = Caption(host, type)
                 if (whisper == null && SpeechRecognizer.isRecognitionAvailable(this)) {
-                    val primary = if (language == "Marathi") "mr-IN" else "hi-IN"
+                    val primary = "en-IN"
                     listener = LiveListener(this, primary,
                         onWords = { words -> if (talking) caption?.show(words) },
                         onBroken = { useAudioFallback() })
@@ -282,9 +282,9 @@ class AssistService : Service(), GeminiLive.Callback {
         workerHandler.post {
             if (live?.isReady != true) {
                 practiceName = null
-                mainHandler.post { caption?.show("Connection nahi hai. Dobara try kijiye.") }
+                mainHandler.post { caption?.show("No connection. Please try again.") }
                 mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
-                AssistState.set(true, "Abhi connection nahi hai. Thodi der mein dobara likhiye.")
+                AssistState.set(true, "No connection right now. Try again shortly.")
                 return@post
             }
             stopRequested = false
@@ -328,7 +328,7 @@ class AssistService : Service(), GeminiLive.Callback {
             caption?.hide()
         }
         updateNotification()
-        AssistState.set(true, "Kaam band kar diya.")
+        AssistState.set(true, "Task stopped.")
         RunLog.add(this, "stopped_by_person")
     }
 
@@ -351,7 +351,7 @@ class AssistService : Service(), GeminiLive.Callback {
             pressedAt = System.currentTimeMillis()
             mainHandler.post {
                 heard.setLength(0)
-                caption?.show("Boliye...")
+                caption?.show("Speak...")
             }
             setBusy(false)
             speakingUntil = 0L
@@ -369,7 +369,7 @@ class AssistService : Service(), GeminiLive.Callback {
             }
             dotState(TalkDot.State.TALKING)
             updateNotification()
-            AssistState.set(true, "Sun raha hai...")
+            AssistState.set(true, "Listening...")
         }
     }
 
@@ -391,7 +391,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 whisperHandler.removeCallbacks(partialTick)
                 voice?.setMic(false)
                 endPending = false
-                AssistState.set(true, "Dot dabakar rakhiye, tabhi order jayega.")
+                AssistState.set(true, "Hold the dot to give a command.")
                 return@post
             }
             stopRequested = false
@@ -425,7 +425,7 @@ class AssistService : Service(), GeminiLive.Callback {
             active.finish { words ->
                 if (words.isBlank()) {
                     setBusy(false)
-                    AssistState.set(true, "Awaaz samajh nahi aayi. Dot dabakar dobara boliye.")
+                    AssistState.set(true, "Could not understand. Hold the dot and try again.")
                 } else {
                     releasedAt = System.currentTimeMillis()
                     RunLog.add(this, "order listener")
@@ -448,7 +448,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 else -> {
                     setBusy(false)
                     mainHandler.post {
-                        caption?.show("Kaunsa kaam dohrana hai? Uska naam boliye.")
+                        caption?.show("Which task should I repeat? Say its name.")
                         mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
                     }
                 }
@@ -507,7 +507,7 @@ class AssistService : Service(), GeminiLive.Callback {
         DailyLearning.note(this, "rating $score/10 for: $order")
         RunLog.add(this, "rating $score")
         if (score <= LOW_RATING) {
-            typeBar?.ask("Kya galat hua? Likhiye") { note ->
+            typeBar?.ask("What went wrong? Type it here") { note ->
                 Ratings.addNote(this, id, note)
                 if (skill != null) Skills.markWrong(this, skill, note)
                 DailyLearning.note(this, "correction: $note")
@@ -526,7 +526,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (practice) practiceName = name
         lastOrder = name
         setBusy(true)
-        mainHandler.post { caption?.show("Kaam chal raha hai: $name") }
+        mainHandler.post { caption?.show("Working on: $name") }
         actionHandler.post {
             val began = System.currentTimeMillis()
             val result = control.replay(steps)
@@ -555,7 +555,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 else -> {
                     setBusy(false)
                     silentTurn = false
-                    showBrief(if (result.reason == "finance_app") "Bank ya UPI app, ise aap khud chalaiye" else "Payment ya code screen aa gayi, ab aap kijiye")
+                    showBrief(if (result.reason == "finance_app") "This is a bank or UPI app. Please use it yourself" else "Payment or code screen reached. Please continue yourself")
                     finishPractice(true)
                 }
             }
@@ -674,7 +674,7 @@ class AssistService : Service(), GeminiLive.Callback {
             val better = if (ok) planner?.improve(name, Skills.steps(this, name), used) else null
             Skills.recordRun(this, name, ok, better, used.lines().lastOrNull().orEmpty())
             RunLog.add(this, "practice " + (if (ok) "ok" else "failed") + (if (better != null) " improved" else ""))
-            AssistState.set(true, if (ok) "Practice poori: $name" else "Practice mein dikkat aayi: $name")
+            AssistState.set(true, if (ok) "Practice finished: $name" else "Practice had a problem: $name")
         }
     }
 
@@ -721,7 +721,7 @@ class AssistService : Service(), GeminiLive.Callback {
         val audio = snapshot()
         if (audio.size < MIN_AUDIO_BYTES || !hasVoice(audio)) {
             setBusy(false)
-            AssistState.set(true, "Awaaz nahi aayi. Dot dabakar dobara boliye.")
+            AssistState.set(true, "No voice heard. Hold the dot and try again.")
             return
         }
         try {
@@ -751,7 +751,7 @@ class AssistService : Service(), GeminiLive.Callback {
     private fun useAudioFallback() {
         listener?.destroy()
         listener = null
-        caption?.show("Dobara boliye")
+        caption?.show("Please say it again")
         workerHandler.post { if (talking) voice?.setMic(true) }
     }
 
@@ -779,8 +779,8 @@ class AssistService : Service(), GeminiLive.Callback {
         dotState(TalkDot.State.READY)
         AssistState.set(
             true,
-            if (tools != null) "Taiyar. Dot dabakar order dijiye."
-            else "Phone control band hai, Sahayak sirf bolkar batayega. Khud kaam karwane ke liye control chalu kijiye."
+            if (tools != null) "Ready. Hold the dot and give a command."
+            else "Phone control is off, so Sahayak can only guide you. Turn it on to let Sahayak do tasks."
         )
     }
 
@@ -800,7 +800,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (now >= speakingUntil && now - releasedAt < LATENCY_WINDOW_MS) {
             val seconds = (now - releasedAt) / 100 / 10.0
             RunLog.add(this, "reply ${seconds}s")
-            AssistState.set(true, "Pichhla jawab: $seconds second")
+            AssistState.set(true, "Last reply: $seconds seconds")
             releasedAt = 0L
         }
         speakingUntil = maxOf(now, speakingUntil) + pcm.size / BYTES_PER_MS
@@ -859,7 +859,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 name == "cancel_work" -> JSONObject().put("status",
                     if (WorkList.remove(this, args.optString("id"))) "ok" else "failed")
                 else -> try {
-                    AssistState.set(true, "Kaam chal raha hai. Rokne ke liye dot dabaiye.")
+                    AssistState.set(true, "Working. Press the dot to stop.")
                     control.run(name, args)
                 } catch (e: RuntimeException) {
                     JSONObject().put("status", "failed")
@@ -902,20 +902,20 @@ class AssistService : Service(), GeminiLive.Callback {
             when {
                 stopping -> Unit
                 code == 429 || "quota" in text || "resource_exhausted" in text ->
-                    finish("Gemini ki free limit khatam ho gayi. Thodi der baad try kijiye.")
+                    finish("Gemini's free limit is used up. Try again later.")
                 !wasReady && modelIndex + 1 < models.size -> {
                     modelIndex++
                     connect()
                 }
-                !wasReady -> finish("Gemini se connection nahi hua ($lastClose).")
+                !wasReady -> finish("Could not connect to Gemini ($lastClose).")
                 retries < MAX_RETRIES -> {
                     retries++
-                    AssistState.set(true, "Connection dobara jod raha hai...")
+                    AssistState.set(true, "Reconnecting...")
                     dotState(TalkDot.State.CONNECTING)
                     setBusy(false)
                     workerHandler.postDelayed({ if (!stopping) connect() }, RETRY_DELAY_MS)
                 }
-                else -> finish("Connection toot gaya ($lastClose). Dobara Assist dabaiye.")
+                else -> finish("Connection lost ($lastClose). Press Assist again.")
             }
         }
     }
@@ -949,7 +949,7 @@ class AssistService : Service(), GeminiLive.Callback {
     }
 
     override fun onDestroy() {
-        finish("Band ho gaya")
+        finish("Stopped")
         worker.quitSafely()
         actions.quitSafely()
         whisperThread.quitSafely()
@@ -982,20 +982,20 @@ class AssistService : Service(), GeminiLive.Callback {
             this, 3, Intent(this, AssistService::class.java).setAction(ACTION_TYPE),
             PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val typeAction = Notification.Action.Builder(null, "Likho", typeIntent)
-            .addRemoteInput(RemoteInput.Builder(REPLY_KEY).setLabel("Hindi ya English mein likhiye").build())
+        val typeAction = Notification.Action.Builder(null, "Type", typeIntent)
+            .addRemoteInput(RemoteInput.Builder(REPLY_KEY).setLabel("Type your command in English").build())
             .build()
-        val talkLabel = if (talking) "Bas, jawab do" else "Bolo"
-        val text = if (talking) "Sun raha hai. Boliye, phir Bas, jawab do dabaiye."
-        else "Dot na dikhe to Bolo dabaiye"
+        val talkLabel = if (talking) "Done, reply" else "Talk"
+        val text = if (talking) "Listening. Speak, then press Done, reply."
+        else "If you cannot see the dot, press Talk"
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Sahayak chalu hai")
+            .setContentTitle("Sahayak is on")
             .setContentText(text)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, talkLabel, talk).build())
             .addAction(typeAction)
-            .addAction(Notification.Action.Builder(null, "Band karo", stop).build())
+            .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .build()
