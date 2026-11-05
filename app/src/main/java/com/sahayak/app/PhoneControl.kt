@@ -235,31 +235,41 @@ class PhoneControl : AccessibilityService() {
         visibleNodes().any { label(it).contains(words, ignoreCase = true) }
 
     /** Sahi channel pakka karo. Na mile to upload nahi hoga. */
+    private fun failed(reason: String): Boolean {
+        lastWorkError = reason
+        return false
+    }
+
     private fun ensureChannel(channel: String): Boolean {
-        val open = packageManager.getLaunchIntentForPackage("com.google.android.youtube") ?: return false
+        val open = packageManager.getLaunchIntentForPackage("com.google.android.youtube")
+            ?: return failed("YouTube app not found")
         startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         Thread.sleep(UPLOAD_WAIT_MS)
-        if (!retry { tapText("You") }) return false
+        if (!retry { tapText("You") }) return failed("You tab not found in YouTube")
         Thread.sleep(UPLOAD_WAIT_MS)
         if (screenHas(channel)) return true
         val switched = retry { tapText("Switch account") || tapText("Switch channel") || tapText("Accounts") }
-        if (!switched) return false
+        if (!switched) return failed("Channel $channel not shown, and Switch account not found")
         Thread.sleep(UPLOAD_WAIT_MS)
-        if (!retry { tapText(channel) }) return false
+        if (!retry { tapText(channel) }) return failed("Channel $channel not found in the account list")
         Thread.sleep(UPLOAD_WAIT_MS * 2)
-        if (!retry { tapText("You") }) return false
+        if (!retry { tapText("You") }) return failed("You tab not found after switching")
         Thread.sleep(UPLOAD_WAIT_MS)
-        return screenHas(channel)
+        return screenHas(channel) || failed("Could not confirm channel $channel")
     }
 
-    private fun uploadToYouTube(uriText: String, title: String, channel: String): Boolean {
-        if (channel.isBlank() || !ensureChannel(channel)) return false
+    private fun uploadToYouTube(uriText: String, title: String, savedChannel: String): Boolean {
+        val channel = savedChannel.ifBlank {
+            getSharedPreferences("sahayak", MODE_PRIVATE).getString("youtube_channel", "").orEmpty()
+        }
+        if (channel.isBlank()) return failed("Type your channel name in the Video queue first")
+        if (!ensureChannel(channel)) return false
         val intent = Intent(Intent.ACTION_SEND).setType("video/*")
             .putExtra(Intent.EXTRA_STREAM, Uri.parse(uriText))
             .putExtra(Intent.EXTRA_TITLE, title)
             .putExtra(Intent.EXTRA_SUBJECT, title)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (!launch(intent, "com.google.android.youtube")) return false
+        if (!launch(intent, "com.google.android.youtube")) return failed("YouTube did not open the video")
         var titled = false
         repeat(UPLOAD_ROUNDS) {
             Thread.sleep(UPLOAD_WAIT_MS)
@@ -275,11 +285,12 @@ class PhoneControl : AccessibilityService() {
             }
             listOf("next", "continue").firstOrNull { it in words }?.let { tapText(it) }
         }
-        return false
+        return failed(if (screenHas("made for kids")) "Choose Made for kids in YouTube first" else "Upload button not found")
     }
 
     /** Tay samay wala kaam, bina AI ke. */
     fun runWork(item: JSONObject): Boolean {
+        lastWorkError = ""
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
         return when (item.optString("kind")) {
             "youtube" -> uploadToYouTube(item.optString("to"), item.optString("message"), item.optString("subject"))
@@ -349,6 +360,7 @@ class PhoneControl : AccessibilityService() {
     }
 
     @Volatile var abort = false
+    @Volatile var lastWorkError = ""
 
     data class Replay(val done: Boolean, val failedAt: Int, val reason: String)
 

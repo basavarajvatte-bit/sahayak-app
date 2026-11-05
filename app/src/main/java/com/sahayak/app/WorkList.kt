@@ -143,9 +143,10 @@ object WorkList {
         } catch (e: RuntimeException) {
             false
         }
-        RunLog.add(context, "scheduled " + item.optString("kind") + " " + (if (ok) "ok" else "failed"))
+        val why = control.lastWorkError
+        RunLog.add(context, "scheduled " + item.optString("kind") + " " + (if (ok) "ok" else "failed " + why))
         finish(context, item, if (ok) "done" else "failed",
-            (if (ok) "Done: " else "Task failed: ") + item.optString("title"))
+            (if (ok) "Done: " else "Task failed: ") + item.optString("title") + (if (why.isEmpty()) "" else " - $why"))
     }
 
     private fun wake(context: Context) {
