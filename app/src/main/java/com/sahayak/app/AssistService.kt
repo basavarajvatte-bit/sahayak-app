@@ -443,7 +443,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (active == null) {
             currentOrder = "voice order"
             quietOrder = false
-            orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+            extendOrder()
             voice?.setMic(false)
             live?.audioEnd()
             setBusy(true)
@@ -492,7 +492,7 @@ class AssistService : Service(), GeminiLive.Callback {
         }
         currentOrder = text
         quietOrder = silentTurn
-        orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+        extendOrder()
         DailyLearning.note(this, "order: $text")
         val command = LocalCommands.parse(text)
         val control = PhoneControl.instance
@@ -565,7 +565,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     val step = steps.getOrNull(result.failedAt).orEmpty()
                     currentOrder = name
                     quietOrder = silentTurn
-                    orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+                    extendOrder()
                     live?.sendText("The taught task \"$name\" stopped at this step: $step. Look at the screen, finish this step another way, then do these remaining steps: " +
                         steps.drop(result.failedAt + 1).joinToString(" | "))
                 }
@@ -704,11 +704,15 @@ class AssistService : Service(), GeminiLive.Callback {
                 }
                 else -> {
                     silentTurn = quietOrder
-                    orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+                    extendOrder()
                     live?.sendText("[REVIEW] $fix")
                 }
             }
         }, REVIEW_DELAY_MS)
+    }
+
+    private fun extendOrder() {
+        if (!talkMode) orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
     }
 
     private fun endOrder() {
@@ -786,7 +790,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (stopRequested) return
             currentOrder = "voice order"
             quietOrder = false
-            orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS
+            extendOrder()
             RunLog.add(this, "order whisper_failed_audio_used")
             var start = 0
             while (start < audio.size) {
@@ -923,7 +927,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 screen?.latest()?.let { live?.sendJpeg(it) }
             }
             if (result.optString("status") != "cancelled_by_person") {
-                orderUntil = System.currentTimeMillis() + ORDER_WINDOW_MS // kaam chal raha hai
+                extendOrder() // kaam chal raha hai
             }
             RunLog.add(this, name + " " + result.optString("status") + " " +
                 (System.currentTimeMillis() - began) + "ms " + result.optString("app"))
