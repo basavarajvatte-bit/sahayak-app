@@ -25,6 +25,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import org.json.JSONException
 import java.io.IOException
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var assistButton: Button
@@ -267,6 +268,9 @@ class MainActivity : Activity() {
     }
 
     private fun renderMemory() {
+        val average = Ratings.average(this)
+        findViewById<TextView>(R.id.ratingAverage).text = if (average == null) "" else
+            "Average rating: " + String.format(Locale.ENGLISH, "%.1f", average) + " / 10"
         val summary = DailyLearning.summary(this)
         findViewById<TextView>(R.id.learnSummary).text = if (summary.isEmpty()) "" else "Aaj seekha: $summary"
         val box = findViewById<LinearLayout>(R.id.memoryBox)

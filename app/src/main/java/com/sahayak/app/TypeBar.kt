@@ -100,6 +100,15 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
         if (pillShown) windows.updateViewLayout(pill, pillParams)
     }
 
+    private var answer: ((String) -> Unit)? = null
+
+    /** Ek chhota sawal: jawab order nahi banta. */
+    fun ask(hintText: String, done: (String) -> Unit) {
+        answer = done
+        input.hint = hintText
+        open()
+    }
+
     private fun open() {
         if (barShown) return
         windows.addView(bar, barParams)
@@ -113,11 +122,14 @@ class TypeBar(context: Context, private val windowType: Int, private val onOrder
         if (text.isEmpty()) return
         input.setText("")
         close()
-        onOrder(text)
+        val reply = answer
+        if (reply != null) reply(text) else onOrder(text)
     }
 
     private fun close() {
         if (!barShown) return
+        answer = null
+        input.hint = "Hindi ya English mein likhiye"
         keyboard.hideSoftInputFromWindow(input.windowToken, 0)
         windows.removeView(bar as View)
         barShown = false

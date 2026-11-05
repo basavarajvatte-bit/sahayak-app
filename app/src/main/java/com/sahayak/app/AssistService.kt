@@ -81,6 +81,10 @@ class AssistService : Service(), GeminiLive.Callback {
     private val heard = StringBuilder()
     private var listener: LiveListener? = null
     private var typeBar: TypeBar? = null
+    private var ratingBar: RatingBar? = null
+    private var ratedOrder = ""
+    private var ratedSteps = ""
+    private var ratedSkill: String? = null
     @Volatile private var silentTurn = false
     @Volatile private var framesPaused = false
     private val replyText = StringBuilder()
@@ -242,6 +246,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 else WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 val bar = TypeBar(host, type) { text -> typedOrder(text) }
                 typeBar = bar
+                ratingBar = RatingBar(host, type) { score -> saveRating(score) }
                 val talkDot = TalkDot(
                     host, onPress = { pressDot() }, onRelease = { releaseDot() }, windowType = type,
                     onMoved = { x, y -> bar.move(x, y) }
@@ -340,6 +345,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 finishTalk()
             }
             talking = true
+            mainHandler.post { ratingBar?.hide() }
             silentTurn = false
             mainHandler.removeCallbacks(hideReply)
             pressedAt = System.currentTimeMillis()
@@ -478,8 +484,33 @@ class AssistService : Service(), GeminiLive.Callback {
                 silentTurn = false
                 endOrder()
                 mainHandler.post { caption?.hide() }
+                askRating(text, "direct command", null)
             } else {
                 sendPlanned(text)
+            }
+        }
+    }
+
+    /** Poore hue kaam ke baad rating ka box. */
+    private fun askRating(order: String, steps: String, skill: String?) {
+        ratedOrder = order
+        ratedSteps = steps
+        ratedSkill = skill
+        mainHandler.post { ratingBar?.show() }
+    }
+
+    private fun saveRating(score: Int) {
+        val order = ratedOrder
+        val skill = ratedSkill
+        val id = Ratings.add(this, order, score, ratedSteps)
+        if (skill != null) Skills.recordRating(this, skill, score)
+        DailyLearning.note(this, "rating $score/10 for: $order")
+        RunLog.add(this, "rating $score")
+        if (score <= LOW_RATING) {
+            typeBar?.ask("Kya galat hua? Likhiye") { note ->
+                Ratings.addNote(this, id, note)
+                if (skill != null) Skills.markWrong(this, skill, note)
+                DailyLearning.note(this, "correction: $note")
             }
         }
     }
@@ -511,6 +542,7 @@ class AssistService : Service(), GeminiLive.Callback {
                     silentTurn = false
                     endOrder()
                     finishPractice(true)
+                    askRating(name, steps.joinToString(" | ").take(600), name)
                 }
                 result.reason == "step_failed" -> {
                     val step = steps.getOrNull(result.failedAt).orEmpty()
@@ -549,7 +581,7 @@ class AssistService : Service(), GeminiLive.Callback {
         plannerHandler.post {
             val began = System.currentTimeMillis()
             val app = PhoneControl.instance?.rootInActiveWindow?.packageName?.toString().orEmpty()
-            val plan = think.plan(text, app, Memory.all(this) + Skills.matches(this, text))
+            val plan = think.plan(text, app, Memory.all(this) + Skills.matches(this, text) + Ratings.lessonsFor(this, text))
             RunLog.add(this, "plan " + (if (plan != null) "ok " else "skipped ") + (System.currentTimeMillis() - began) + "ms")
             if (stopRequested) return@post
             workerHandler.post {
@@ -613,8 +645,10 @@ class AssistService : Service(), GeminiLive.Callback {
                     setBusy(false)
                     if (!stuck) {
                         DailyLearning.note(this, "result: " + if (answer.startsWith("DONE")) "finished" else "unclear")
+                        val skill = practiceName
                         endOrder()
                         finishPractice(answer.startsWith("DONE"))
+                        askRating(order, steps.take(600), skill)
                     }
                 }
                 else -> {
@@ -895,6 +929,8 @@ class AssistService : Service(), GeminiLive.Callback {
             dot = null
             typeBar?.remove()
             typeBar = null
+            ratingBar?.hide()
+            ratingBar = null
             mainHandler.removeCallbacks(hideReply)
             caption?.hide()
             caption = null
@@ -991,6 +1027,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 80L
+        private const val LOW_RATING = 5
         private const val ORDER_WINDOW_MS = 120_000L
         private const val HISTORY_SIZE = 8
         private const val MAX_REVIEWS = 1

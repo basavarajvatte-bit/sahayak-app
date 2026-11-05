@@ -16,6 +16,7 @@ object Skills {
     private const val PREFS = "sahayak_skills"
     private const val KEY = "skills"
     private const val MAX_DEMOS = 8
+    private const val LOW_SCORE = 5
     private const val MAX_LESSONS = 12
     private const val PROMPT_LIMIT = 6_000
     private val work = Executors.newSingleThreadExecutor()
@@ -157,11 +158,22 @@ object Skills {
         }
     }
 
+    /** Aapki rating: achhi ho to kaam pakka, kam ho to pichhla version wapas. */
+    fun recordRating(context: Context, name: String, score: Int) {
+        change(context, name) { skill ->
+            skill.put("ratingSum", skill.optInt("ratingSum") + score)
+            skill.put("ratingCount", skill.optInt("ratingCount") + 1)
+            if (score <= LOW_SCORE) restoreIfImproved(skill)
+        }
+    }
+
     fun label(skill: JSONObject): String {
         val runs = skill.optInt("runs")
         val demos = maxOf(1, skill.optJSONArray("demos")?.length() ?: 1)
         val name = skill.optString("name")
-        return name + " (" + demos + " example" + (if (runs == 0) "" else ", " + runs + " baar, " + skill.optInt("good") + " sahi") + ")"
+        val rated = skill.optInt("ratingCount")
+        val rating = if (rated == 0) "" else ", rating " + String.format(java.util.Locale.ENGLISH, "%.1f", skill.optInt("ratingSum").toDouble() / rated)
+        return name + " (" + demos + " example" + (if (runs == 0) "" else ", " + runs + " baar, " + skill.optInt("good") + " sahi") + rating + ")"
     }
 
     fun remove(context: Context, name: String) {

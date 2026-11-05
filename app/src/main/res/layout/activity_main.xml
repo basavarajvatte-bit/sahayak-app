@@ -326,6 +326,15 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/ratingAverage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="#1F5C4D"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
                 android:id="@+id/learnSummary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
