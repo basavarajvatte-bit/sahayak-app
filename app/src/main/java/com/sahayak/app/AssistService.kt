@@ -467,8 +467,9 @@ class AssistService : Service(), GeminiLive.Callback {
         }
         actionHandler.post {
             val began = System.currentTimeMillis()
+            val answer = (command as? LocalCommands.Command.Quick)?.let { control.quickAnswer(it.action, it.value) }
             val done = try {
-                control.fast(command)
+                answer != null || control.fast(command)
             } catch (e: RuntimeException) {
                 false
             }
@@ -480,7 +481,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 setBusy(false)
                 silentTurn = false
                 endOrder()
-                mainHandler.post { caption?.hide() }
+                if (answer != null) showBrief(answer) else mainHandler.post { caption?.hide() }
                 askRating(text, "direct command", null)
             } else {
                 sendPlanned(text)

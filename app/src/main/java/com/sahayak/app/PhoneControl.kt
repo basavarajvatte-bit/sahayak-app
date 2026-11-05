@@ -17,8 +17,11 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
+import android.os.BatteryManager
 import android.os.Bundle
 import android.provider.AlarmClock
+import android.provider.CalendarContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.provider.ContactsContract
 import android.view.Gravity
@@ -30,6 +33,9 @@ import android.widget.Button
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -381,7 +387,7 @@ class PhoneControl : AccessibilityService() {
         return true
     }
 
-    private fun dialNumber(value: String): Boolean {
+    private fun numberFor(value: String): String {
         val typed = value.filter { it.isDigit() || it == '+' }
         var number = if (typed.length >= 3 && value.none { it.isLetter() }) typed else ""
         if (number.isEmpty() && checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
@@ -390,7 +396,51 @@ class PhoneControl : AccessibilityService() {
                 if (row.count == 1 && row.moveToFirst()) number = row.getString(0).orEmpty()
             }
         }
+        return number
+    }
+
+    private fun dialNumber(value: String): Boolean {
+        val number = numberFor(value)
         return number.isNotEmpty() && launch(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number))))
+    }
+
+    private fun smsTo(value: String): Boolean {
+        val parts = value.split("|", limit = 2)
+        val number = numberFor(parts.getOrElse(0) { "" })
+        if (number.isEmpty()) return false
+        return launch(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(number)))
+            .putExtra("sms_body", parts.getOrElse(1) { "" }))
+    }
+
+    private fun ringer(mode: Int): Boolean = try {
+        getSystemService(AudioManager::class.java).ringerMode = mode
+        true
+    } catch (e: SecurityException) {
+        false
+    }
+
+    private fun web(url: String, pkg: String? = null) = launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)), pkg)
+
+    /** Jawab wale shortcuts: AI ke bina turant. */
+    fun quickAnswer(action: String, value: String): String? = when (action) {
+        "time" -> SimpleDateFormat("h:mm a", Locale.ENGLISH).format(Date())
+        "date" -> SimpleDateFormat("EEEE, d MMMM yyyy", Locale.ENGLISH).format(Date())
+        "battery" -> getSystemService(BatteryManager::class.java)
+            .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).toString() + "% battery"
+        "calculate" -> {
+            val parts = value.split("|")
+            val a = parts[0].toDouble()
+            val b = parts[2].toDouble()
+            val result = when (parts[1]) {
+                "plus", "+" -> a + b
+                "minus", "-" -> a - b
+                "divided by", "/" -> if (b == 0.0) null else a / b
+                else -> a * b
+            }
+            result?.let { if (it == Math.rint(it)) it.toLong().toString() else String.format(Locale.ENGLISH, "%.2f", it) }
+                ?: "Cannot divide by zero"
+        }
+        else -> null
     }
 
     /** Direct system shortcuts. Tap ki zaroorat nahi. */
@@ -399,6 +449,29 @@ class PhoneControl : AccessibilityService() {
             Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(value))),
             "com.google.android.youtube"
         )
+        "camera" -> launch(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+        "video" -> launch(Intent(MediaStore.INTENT_ACTION_VIDEO_CAMERA))
+        "sms" -> smsTo(value)
+        "calendar" -> launch(Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
+            .putExtra(CalendarContract.Events.TITLE, value))
+        "maps_search", "search_maps" -> web("geo:0,0?q=" + Uri.encode(value), "com.google.android.apps.maps")
+        "search_play_store" -> web("market://search?q=" + Uri.encode(value), "com.android.vending")
+        "search_amazon" -> web("https://www.amazon.in/s?k=" + Uri.encode(value), "in.amazon.mShop.android.shopping")
+        "search_flipkart" -> web("https://www.flipkart.com/search?q=" + Uri.encode(value), "com.flipkart.android")
+        "search_youtube_music" -> web("https://music.youtube.com/search?q=" + Uri.encode(value), "com.google.android.apps.youtube.music")
+        "search_spotify" -> web("spotify:search:" + Uri.encode(value), "com.spotify.music")
+        "notifications" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+        "quick_settings" -> performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+        "recents" -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+        "power_menu" -> performGlobalAction(GLOBAL_ACTION_POWER_DIALOG)
+        "ringer_silent" -> ringer(AudioManager.RINGER_MODE_SILENT)
+        "ringer_vibrate" -> ringer(AudioManager.RINGER_MODE_VIBRATE)
+        "ringer_normal" -> ringer(AudioManager.RINGER_MODE_NORMAL)
+        "volume_mute", "volume_unmute" -> {
+            val direction = if (action == "volume_mute") AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
+            getSystemService(AudioManager::class.java).adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI)
+            true
+        }
         "web_search" -> launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(value))))
         "navigate" -> launch(Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(value))), "com.google.android.apps.maps")
         "dial" -> dialNumber(value)

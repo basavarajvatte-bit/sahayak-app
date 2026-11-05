@@ -44,17 +44,48 @@ object LocalCommands {
     private val SETTINGS = Regex("^open (wifi|wi-fi|bluetooth|battery|location|display|sound|mobile data|apps|app) settings$", IC)
     private val TORCH = Regex("^(?:turn )?(?:the )?(?:flashlight|torch) (on|off)$|^turn (on|off) (?:the )?(?:flashlight|torch)$", IC)
     private val VOLUME = Regex("^(?:turn )?(?:the )?volume (up|down)$", IC)
+    private val POLITE = Regex("^(?:(?:hey |ok |okay )?sahayak[,.]? |please |can you |could you |would you )+", IC)
+    private val PLEASE_END = Regex("(?:,? please)$", IC)
+    private val STORE = Regex("^(?:search|find|search for) (.+?) on (play store|amazon|flipkart|google maps|maps|youtube music|spotify)$", IC)
+    private val NEAR = Regex("^(?:find|show|search|where is)(?: the| a| an)? (?:nearest )?(.+?) (?:near me|nearby)$", IC)
+    private val SMS = Regex("^(?:text|sms|send sms to|send a message to) (.+?) (?:saying|that|message) (.+)$", IC)
+    private val EVENT = Regex("^(?:add|create) (?:a )?(?:calendar )?(?:event|meeting|appointment)(?: called| named| for)? (.+)$", IC)
+    private val MATH = Regex("^(?:what is|what's|calculate) (\\d+(?:\\.\\d+)?) ?(plus|\\+|minus|-|times|x|\\*|into|multiplied by|divided by|/) ?(\\d+(?:\\.\\d+)?)$", IC)
     private val MEDIA = Regex("^(pause|resume|next|previous)(?: music| song| video)?$", IC)
 
     /** Android ke direct kaam: screen par tap ki zaroorat nahi. */
     private fun quick(text: String): Command.Quick? {
         val lower = text.lowercase()
         when (lower) {
+            "take a photo", "take a picture", "take a selfie", "open camera" -> return Command.Quick("camera")
+            "record a video", "record video", "take a video" -> return Command.Quick("video")
+            "what time is it", "what's the time", "what is the time", "tell me the time" -> return Command.Quick("time")
+            "what's the date", "what is the date", "what is today's date", "what day is it", "what is today" -> return Command.Quick("date")
+            "battery level", "how much battery", "how much battery is left", "what is the battery level" -> return Command.Quick("battery")
+            "show notifications", "open notifications" -> return Command.Quick("notifications")
+            "open quick settings", "show quick settings" -> return Command.Quick("quick_settings")
+            "show recent apps", "open recent apps", "recent apps" -> return Command.Quick("recents")
+            "open power menu", "show power menu" -> return Command.Quick("power_menu")
+            "silent mode", "turn on silent mode", "put phone on silent", "silent the phone" -> return Command.Quick("ringer_silent")
+            "vibrate mode", "turn on vibrate mode", "put phone on vibrate" -> return Command.Quick("ringer_vibrate")
+            "normal mode", "ring mode", "turn off silent mode", "ringer on" -> return Command.Quick("ringer_normal")
+            "mute", "mute the phone", "mute volume" -> return Command.Quick("volume_mute")
+            "unmute", "unmute the phone", "unmute volume" -> return Command.Quick("volume_unmute")
             "take a screenshot", "take screenshot", "screenshot" -> return Command.Quick("screenshot")
             "lock the phone", "lock phone", "lock the screen", "lock screen" -> return Command.Quick("lock")
             "go home", "home screen" -> return Command.Quick("home")
             "go back" -> return Command.Quick("back")
         }
+        MATH.find(text)?.let {
+            return Command.Quick("calculate", it.groupValues[1] + "|" + it.groupValues[2].lowercase() + "|" + it.groupValues[3])
+        }
+        STORE.find(text)?.let {
+            val store = it.groupValues[2].lowercase().replace(" ", "_").replace("google_maps", "maps")
+            return Command.Quick("search_$store", it.groupValues[1])
+        }
+        NEAR.find(text)?.let { return Command.Quick("maps_search", it.groupValues[1] + " near me") }
+        SMS.find(text)?.let { return Command.Quick("sms", it.groupValues[1] + "|" + it.groupValues[2]) }
+        EVENT.find(text)?.let { return Command.Quick("calendar", it.groupValues[1]) }
         YOUTUBE.find(text)?.let {
             return Command.Quick("youtube_search", it.groupValues[2], it.groupValues[1].equals("play", true))
         }
@@ -83,7 +114,8 @@ object LocalCommands {
     }
 
     fun parse(raw: String): Command? {
-        val text = raw.trim().trim('"').trimEnd('.', '!', '?', '।').trim()
+        val cleaned = raw.trim().trim('"').trimEnd('.', '!', '?', '।').trim()
+        val text = PLEASE_END.replace(POLITE.replace(cleaned, ""), "").trim()
         if (text.isEmpty() || text.length > 120) return null
         if (!COMPOUND.containsMatchIn(text)) quick(text)?.let { return it }
         WHATSAPP.find(text)?.let {
@@ -92,7 +124,8 @@ object LocalCommands {
             return Command.WhatsApp(it.groupValues[1].trim(), message)
         }
         if (COMPOUND.containsMatchIn(text)) return null
-        val app = (OPEN_AFTER.find(text) ?: OPEN_BEFORE.find(text))?.groupValues?.get(1)?.trim() ?: return null
+        val app = (OPEN_AFTER.find(text) ?: OPEN_BEFORE.find(text))?.groupValues?.get(1)?.trim()
+            ?.removePrefix("the ")?.removeSuffix(" app")?.trim() ?: return null
         if (app.split(Regex("\\s+")).size > 3) return null
         return Command.Open(APP_NAMES[app] ?: app)
     }
