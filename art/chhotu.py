@@ -12,23 +12,22 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'
 scene.cycles.device = 'CPU'
-scene.cycles.samples = 64 if MODE == 'preview' else 40
+scene.cycles.samples = 64 if MODE == 'preview' else 96
 scene.cycles.use_adaptive_sampling = True
-scene.cycles.adaptive_threshold = 0.03
+scene.cycles.adaptive_threshold = 0.02
 scene.cycles.use_denoising = True
 scene.cycles.denoiser = 'OPENIMAGEDENOISE'
 scene.cycles.max_bounces = 6
 scene.render.film_transparent = True
-SIZE = 512 if MODE == 'preview' else 384
+SIZE = 480
 scene.render.resolution_x = scene.render.resolution_y = SIZE
 scene.render.image_settings.file_format = 'PNG'
 scene.render.image_settings.color_mode = 'RGBA'
 try:
-    scene.view_settings.view_transform = 'AgX'
-    scene.view_settings.look = 'AgX - Punchy'
+    scene.view_settings.view_transform = 'Standard'
 except Exception:
     scene.view_settings.view_transform = 'Filmic'
-scene.view_settings.exposure = 0.25
+scene.view_settings.exposure = -0.75
 
 # ---------- materials ----------
 def srgb(h):
@@ -56,7 +55,7 @@ def mat(name, color, rough=0.45, sss=0.0, coat=0.0, emission=0.0):
         put(p, ["Emission Strength"], emission)
     return m
 
-def fur(name, root, tip):
+def fur(name, root, tip, lift=0.0):
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     t = m.node_tree
@@ -69,24 +68,43 @@ def fur(name, root, tip):
     ramp.color_ramp.elements[1].position = 0.75
     ramp.color_ramp.elements[1].color = (*tip, 1)
     t.links.new(info.outputs["Intercept"], ramp.inputs[0])
+    # every strand slightly different, like real fur
+    spread = t.nodes.new("ShaderNodeMath"); spread.operation = 'MULTIPLY_ADD'
+    spread.inputs[1].default_value = 0.42
+    spread.inputs[2].default_value = 0.78
+    t.links.new(info.outputs["Random"], spread.inputs[0])
+    tint = t.nodes.new("ShaderNodeVectorMath"); tint.operation = 'SCALE'
+    t.links.new(ramp.outputs[0], tint.inputs[0])
+    t.links.new(spread.outputs[0], tint.inputs["Scale"])
     soft = t.nodes.new("ShaderNodeBsdfPrincipled")
     put(soft, ["Roughness"], 0.5)
     put(soft, ["Specular IOR Level", "Specular"], 0.2)
     put(soft, ["Sheen Weight", "Sheen"], 0.6)
-    t.links.new(ramp.outputs[0], soft.inputs["Base Color"])
+    t.links.new(tint.outputs[0], soft.inputs["Base Color"])
     glow = t.nodes.new("ShaderNodeBsdfTranslucent")
-    t.links.new(ramp.outputs[0], glow.inputs["Color"])
+    t.links.new(tint.outputs[0], glow.inputs["Color"])
     mix = t.nodes.new("ShaderNodeMixShader")
     mix.inputs[0].default_value = 0.3
     t.links.new(soft.outputs[0], mix.inputs[1])
     t.links.new(glow.outputs[0], mix.inputs[2])
-    t.links.new(mix.outputs[0], out.inputs["Surface"])
+    if lift:
+        lit = t.nodes.new("ShaderNodeEmission")
+        lit.inputs[1].default_value = lift
+        t.links.new(tint.outputs[0], lit.inputs[0])
+        both = t.nodes.new("ShaderNodeAddShader")
+        t.links.new(mix.outputs[0], both.inputs[0])
+        t.links.new(lit.outputs[0], both.inputs[1])
+        t.links.new(both.outputs[0], out.inputs["Surface"])
+    else:
+        t.links.new(mix.outputs[0], out.inputs["Surface"])
     return m
 
 skin = mat("skin", srgb("7A3CE0"), 0.6, sss=0.3)
 skin_light = mat("skin_light", srgb("FFEBDC"), 0.6, sss=0.3)
-fur_main = fur("fur_main", srgb("6A22E0"), srgb("B07CFF"))
-fur_light = fur("fur_light", srgb("FFE9D8"), srgb("FFFAF4"))
+fur_main = fur("fur_main", srgb("3A0FB8"), srgb("9A5CFF"))
+fur_under = fur("fur_under", srgb("2A0A8C"), srgb("6A2EE0"))
+fur_blush = fur("fur_blush", srgb("FF7FA8"), srgb("FFB3C6"), 0.08)
+fur_light = fur("fur_light", srgb("F8DCC4"), srgb("FFF6EA"), 0.16)
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
@@ -201,7 +219,7 @@ def smooth01(x):
     x = np.clip(x, 0, 1)
     return x * x * (3 - 2 * x)
 
-def add_fur(o, name, material, parents, kids, length, group_d=None, group_l=None, seed=1, droop=0.03):
+def add_fur(o, name, material, parents, kids, length, group_d=None, group_l=None, seed=1, droop=0.03, thick=0.0105):
     o.data.materials.append(material)
     slot = len(o.data.materials)
     o.modifiers.new(name, 'PARTICLE_SYSTEM')
@@ -229,7 +247,7 @@ def add_fur(o, name, material, parents, kids, length, group_d=None, group_l=None
     s.object_align_factor = (0, 0, -droop * 0.08)
     s.root_radius = 1.0
     s.tip_radius = 0.22
-    s.radius_scale = 0.014
+    s.radius_scale = thick
     s.use_close_tip = True
     if group_d:
         ps.vertex_group_density = group_d
@@ -357,8 +375,12 @@ for s in (-1, 1):
 add_group(face, "main", keep * smooth01((0.72 - muzzle) / 0.5))
 add_group(face, "pale", keep * smooth01((muzzle - 0.28) / 0.4))
 add_group(face, "len", short)
-add_fur(face, "head_fur", fur_main, 11000, 16, 0.15, "main", "len", 2)
-add_fur(face, "muzzle_fur", fur_light, 4000, 16, 0.10, "pale", "len", 3, 0.0)
+cheek = np.maximum(gauss(unit, CHEEK[-1], 0.26), gauss(unit, CHEEK[1], 0.26))
+add_group(face, "blush", keep * smooth01((cheek - 0.45) / 0.4))
+add_fur(face, "head_under", fur_under, 9000, 22, 0.09, "main", "len", 21, 0.02, 0.015)
+add_fur(face, "head_fur", fur_main, 15000, 24, 0.15, "main", "len", 2)
+add_fur(face, "muzzle_fur", fur_light, 6000, 24, 0.10, "pale", "len", 3, 0.0)
+add_fur(face, "blush_fur", fur_blush, 1500, 24, 0.105, "blush", "len", 22, 0.0, 0.009)
 
 # ---------- eyes ----------
 eye_c = {}
@@ -484,8 +506,9 @@ body_o.data.polygons.foreach_set("material_index", [1 if np.mean(pale[list(f)]) 
 body_o.data.update()
 add_group(body_o, "main", smooth01((0.82 - pale) / 0.4))
 add_group(body_o, "pale", smooth01((pale - 0.40) / 0.3))
-add_fur(body_o, "body_fur", fur_main, 7000, 16, 0.15, "main", None, 4)
-add_fur(body_o, "belly_fur", fur_light, 3200, 16, 0.11, "pale", None, 5)
+add_fur(body_o, "body_under", fur_under, 6000, 22, 0.09, "main", None, 23, 0.02, 0.015)
+add_fur(body_o, "body_fur", fur_main, 10000, 24, 0.15, "main", None, 4)
+add_fur(body_o, "belly_fur", fur_light, 5000, 24, 0.11, "pale", None, 5)
 
 NA, NC = 34, 22
 
@@ -525,23 +548,23 @@ for s in (-1, 1):
     a = np.array([s * 0.74, -0.05, -0.42])
     h = np.array([s * 1.2, -0.25, -1.0])
     o = new_mesh("arm", tube_verts(a, (a + h) / 2, h, 0.25, 0.20), tube_faces(), root, [skin])
-    add_fur(o, "arm_fur", fur_main, 1800, 12, 0.13, seed=6 + s)
+    add_fur(o, "arm_fur", fur_main, 2600, 24, 0.13, seed=6 + s)
     arms[s] = (o, key_object(o), a)
     hand = empty("hand", root, tuple(h))
     palm = ball("palm", skin, (0, 0, 0), (0.25, 0.21, 0.25), hand)
-    add_fur(palm, "hand_fur", fur_main, 500, 12, 0.08, seed=8 + s)
+    add_fur(palm, "hand_fur", fur_main, 800, 20, 0.05, seed=8 + s)
     for ang in (-0.62, 0, 0.62):
-        ball("finger", pad_m, (0.17 * math.sin(ang) * 1.3, -0.04, -0.20 * math.cos(ang)), (0.082, 0.082, 0.10), hand, 24)
-    ball("thumb", pad_m, (-s * 0.21, -0.1, -0.02), (0.08, 0.08, 0.09), hand, 24)
+        ball("finger", pad_m, (0.17 * math.sin(ang) * 1.3, -0.04, -0.20 * math.cos(ang)), (0.105, 0.105, 0.125), hand, 24)
+    ball("thumb", pad_m, (-s * 0.21, -0.1, -0.02), (0.1, 0.1, 0.11), hand, 24)
     hands[s] = hand
 
 for s in (-1, 1):
     a = np.array([s * 0.42, -0.05, -1.5])
     h = np.array([s * 0.5, -0.1, -1.92])
     o = new_mesh("leg", tube_verts(a, (a + h) / 2, h, 0.32, 0.3), tube_faces(), root, [skin])
-    add_fur(o, "leg_fur", fur_main, 900, 12, 0.13, seed=11 + s)
+    add_fur(o, "leg_fur", fur_main, 1300, 24, 0.13, seed=11 + s)
     foot = ball("foot", skin, (s * 0.54, -0.3, -2.0), (0.40, 0.56, 0.20), root)
-    add_fur(foot, "foot_fur", fur_light, 1100, 12, 0.08, seed=13 + s)
+    add_fur(foot, "foot_fur", fur_light, 1600, 20, 0.06, seed=13 + s)
     for ang in (-0.5, 0, 0.5):
         ball("toe", pad_m, (s * 0.54 + 0.3 * math.sin(ang), -0.3 - 0.54 * math.cos(ang), -2.03), (0.11, 0.1, 0.085), root, 24)
 
@@ -623,8 +646,8 @@ def area(loc, energy, size, color):
     o.location = loc
     o.rotation_euler = (Vector((0, 0, 0)) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
 
-area((4.5, -7, 6), 620, 5, (1, 0.93, 0.84))
-area((-6, -5, 1), 170, 7, (0.78, 0.86, 1))
+area((4.5, -7, 6), 760, 5, (1, 0.93, 0.84))
+area((-6, -5, 1), 260, 7, (0.9, 0.9, 1))
 area((-4, 6, 5), 520, 3, (0.62, 0.78, 1))
 area((5, 6, 0), 280, 3, (1, 0.72, 0.55))
 area((0, -9, -3), 60, 8, (1, 0.9, 0.95))
@@ -782,7 +805,7 @@ def apply(p, name):
         ang = 0.0
         for i, pt in enumerate(sp.points):
             pt.co = (*cur, 1)
-            ang += drop * 0.72 + math.sin(2 * math.pi * (i * 0.1 + p["z"])) * 0.02
+            ang += drop * 0.72 + p.get("lag", 0.0) * (i + 1) * 0.5
             cur = cur + np.array([s * (spread + math.sin(ang) * 0.17), 0, math.cos(ang) * 0.17])
         tip.location = tuple(np.array(sp.points[-1].co[:3]))
         fall = EYE_DIR[s] + np.array([s * 0.04, -0.05, -0.42 - p["tear"] * 0.42])
@@ -842,6 +865,8 @@ def place_shades(p):
 
 def render(path, name, t):
     p = clip(name, t)
+    # antennae trail the body, so motion feels alive
+    p["lag"] = (clip(name, t - 0.03)["z"] - p["z"]) * 2.2 + (clip(name, t - 0.03)["hz"] - p["hz"]) * 0.5
     apply(p, name)
     bpy.context.view_layer.update()
     place_shades(p)
@@ -850,10 +875,10 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('swag', 0.12), ('swag', 0.45), ('swag', 0.6), ('swag', 0.84), ('swagidle', 0.1), ('swagtalk', 0.05)]
+    wanted = [('idle', 0.2), ('happy', 0.25), ('swagidle', 0.1)]
     for i, (name, t) in enumerate(wanted):
         render(f"{OUT}/{i}_{name}.png", name, t)
 else:
-    N = 36 if MODE == 'swag' else 24
+    N = 54 if MODE == 'swag' else 36
     for i in range(N):
         render(f"{OUT}/{MODE}_{i:02d}.png", MODE, i / N)
