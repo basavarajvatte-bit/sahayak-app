@@ -1,5 +1,6 @@
 .gradle/
 build/
 app/build/
+todo/build/
 local.properties
 *.apk

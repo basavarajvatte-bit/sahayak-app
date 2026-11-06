@@ -1,6 +1,5 @@
 package com.sahayak.app
 
-import android.accessibilityservice.AccessibilityService
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
@@ -123,7 +122,10 @@ private class CrackView(context: Context, private val centerY: Float) : View(con
 }
 
 /** Unlock karte hi baki kaam dikhata hai. Tap karne par kaam complete. */
-class TodoPopup(private val service: AccessibilityService) {
+class TodoPopup(
+    private val service: Context,
+    private val overlayType: Int = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+) {
     private val windows = service.getSystemService(WindowManager::class.java)
     private val density = service.resources.displayMetrics.density
     private val main = Handler(Looper.getMainLooper())
@@ -297,7 +299,7 @@ class TodoPopup(private val service: AccessibilityService) {
     private fun reveal(card: LinearLayout, words: String, waitMs: Long = 0L) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -308,7 +310,7 @@ class TodoPopup(private val service: AccessibilityService) {
         val cracks = CrackView(service, service.resources.displayMetrics.heightPixels * 0.2f)
         windows.addView(cracks, WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
