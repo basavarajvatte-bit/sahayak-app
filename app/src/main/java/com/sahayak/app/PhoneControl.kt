@@ -171,7 +171,7 @@ class PhoneControl : AccessibilityService() {
                     .take(4).joinToString(", ") { it.take(30) }
                 if (shown.isNotEmpty()) addStep("screen shows: $shown")
             }
-            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> if ("launcher" !in pkg) {
                 val text = event.text.joinToString(" ").ifBlank { event.contentDescription?.toString().orEmpty() }.trim()
                 if (text.isNotEmpty()) {
                     addStep("tap \"" + text.take(60) + "\"")
@@ -428,22 +428,61 @@ class PhoneControl : AccessibilityService() {
     /** Sikhaye steps seedhe chalata hai. Ruke to batata hai kis step par. */
     fun replay(steps: List<String>): Replay {
         abort = false
+        freshOpen = true
         steps.forEachIndexed { index, step ->
             if (abort) return Replay(false, index, "stopped")
+            val next = steps.getOrNull(index + 1)
+            if (homeScreenTap(step, next)) return@forEachIndexed
             val current = rootInActiveWindow?.packageName?.toString().orEmpty()
             if (isFinance(current)) return Replay(false, index, "finance_app")
             val reason = sensitiveReason()
             if (reason != null) return Replay(false, index, reason)
-            if (!replayStep(step)) {
+            if (!replayStep(step, next)) {
                 // Agla step pehle se dikh raha ho to yeh chhota step chhod do
-                if (nextStepReady(steps.getOrNull(index + 1))) {
+                if (nextStepReady(next)) {
                     RunLog.add(this, "replay skipped step $index")
                 } else {
                     return Replay(false, index, "step_failed")
                 }
             }
         }
+        if (!finishUpload(steps)) return Replay(false, steps.lastIndex, "step_failed")
         return Replay(true, -1, "")
+    }
+
+    /** Pehla app hamesha apni shuruaati screen se khule. */
+    private var freshOpen = false
+
+    /** Home screen ka app icon: Sahayak ke andar nahi dhoondhna, agla step app kholta hai. */
+    private fun homeScreenTap(step: String, next: String?): Boolean {
+        val words = QUOTED_TAP.find(step)?.groupValues?.get(1) ?: return false
+        val app = next?.let { OPEN_STEP.find(it) }?.groupValues?.get(1) ?: return false
+        return words.equals(app, ignoreCase = true)
+    }
+
+    /** Recording mein Upload button chhoot gaya ho to details screen par aakhir mein dabao. */
+    private fun finishUpload(steps: List<String>): Boolean {
+        if (rootInActiveWindow?.packageName?.toString() != YOUTUBE) return true
+        val pressed = steps.any { step ->
+            finalButton(step) != null || FINAL_BUTTONS.any { it.equals(QUOTED_TAP.find(step)?.groupValues?.get(1), ignoreCase = true) }
+        }
+        if (pressed) return true
+        val button = FINAL_BUTTONS.firstOrNull { screenHas(it) }
+        if (button != null) return findAndTap(button)
+        return !screenHas("Add details")
+    }
+
+    /** Recorded screen aane tak ruko, warna agla tap galat screen par padta hai. */
+    private fun waitForScreen(step: String, next: String?) {
+        val words = step.substringAfter(':').split(", ").map { it.trim() }.filter { it.isNotEmpty() }
+        val need = (words.size + 1) / 2
+        var waited = 0L
+        while (waited < SCREEN_WAIT_MS && !abort && !nextStepReady(next)) {
+            val shown = screenText()
+            if (words.count { shown.contains(it, ignoreCase = true) } >= need) return
+            Thread.sleep(REPLAY_RETRY_MS)
+            waited += REPLAY_RETRY_MS
+        }
     }
 
     private fun keyboardApp(name: String): Boolean {
@@ -463,11 +502,13 @@ class PhoneControl : AccessibilityService() {
     private fun finalButton(step: String): String? =
         if (step.startsWith("screen shows")) FINAL_BUTTONS.firstOrNull { step.contains(it, ignoreCase = true) } else null
 
-    private fun replayStep(step: String): Boolean {
+    private fun replayStep(step: String, next: String?): Boolean {
         if (skipStep(step)) return true
         finalButton(step)?.let { return findAndTap(it) }
         val before = screenText()
-        val done = OPEN_STEP.find(step)?.let { openApp(it.groupValues[1]) }
+        val done = OPEN_STEP.find(step)?.let { match ->
+            openApp(match.groupValues[1], freshOpen).also { freshOpen = false }
+        }
             ?: QUOTED_TAP.find(step)?.let { match ->
                 val words = match.groupValues[1]
                 if (MEDIA_LABEL.matches(words) || MEDIA_FILE.containsMatchIn(words)) retry { tapFirstMedia() } else findAndTap(words)
@@ -480,7 +521,10 @@ class PhoneControl : AccessibilityService() {
                     Thread.sleep(REPLAY_WAIT_MS)
                     true
                 }
-                step.startsWith("screen shows") -> true
+                step.startsWith("screen shows") -> {
+                    waitForScreen(step, next)
+                    true
+                }
                 else -> false
             }
         if (done) waitUntilSettled(before)
@@ -491,7 +535,9 @@ class PhoneControl : AccessibilityService() {
     private fun tapFirstMedia(): Boolean {
         val metrics = resources.displayMetrics
         val box = Rect()
-        val item = visibleNodes().firstOrNull { node ->
+        val nodes = visibleNodes()
+        nodes.firstOrNull { MEDIA_FILE.containsMatchIn(label(it)) }?.let { return tapNode(it) }
+        val item = nodes.firstOrNull { node ->
             node.getBoundsInScreen(box)
             node.isClickable && box.height() > metrics.heightPixels / 12 && box.width() > metrics.widthPixels / 5 &&
                 box.top > metrics.heightPixels / 8
@@ -539,7 +585,9 @@ class PhoneControl : AccessibilityService() {
     private fun typeFocused(text: String): Boolean {
         val node = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             ?: visibleNodes().firstOrNull { it.isEditable } ?: return false
-        return !node.isPassword && typeInto(node, text)
+        if (node.isPassword) return false
+        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        return typeInto(node, text)
     }
 
     private fun launch(intent: Intent, pkg: String? = null): Boolean {
@@ -878,16 +926,20 @@ class PhoneControl : AccessibilityService() {
         return tapNode(node)
     }
 
-    private fun openApp(name: String): Boolean {
+    private fun openApp(name: String, fresh: Boolean = false): Boolean {
         val wanted = name.lowercase().filter { it.isLetterOrDigit() }
         if (wanted.isEmpty()) return false
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val match = packageManager.queryIntentActivities(launcher, 0).firstOrNull {
-            val label = it.loadLabel(packageManager).toString().lowercase().filter { c -> c.isLetterOrDigit() }
-            label.contains(wanted) || wanted.contains(label)
-        } ?: return false
+        val apps = packageManager.queryIntentActivities(launcher, 0).map {
+            it to it.loadLabel(packageManager).toString().lowercase().filter { c -> c.isLetterOrDigit() }
+        }
+        val match = (apps.firstOrNull { it.second == wanted }
+            ?: apps.firstOrNull { it.second.isNotEmpty() && (it.second.contains(wanted) || wanted.contains(it.second)) })?.first
+            ?: return false
         val intent = packageManager.getLaunchIntentForPackage(match.activityInfo.packageName) ?: return false
-        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (fresh) intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        startActivity(intent)
         return true
     }
 
@@ -927,14 +979,15 @@ class PhoneControl : AccessibilityService() {
         node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, bundle)
         Thread.sleep(TYPE_CHECK_MS)
         node.refresh()
-        if (node.text?.toString()?.contains(text) == true) return true
+        val typed = text.trim()
+        if (node.text?.toString()?.contains(typed) == true) return true
         // Kuch websites seedha text nahi letin, wahan paste karke dekho
         getSystemService(ClipboardManager::class.java)
             .setPrimaryClip(ClipData.newPlainText("Sahayak", text))
         node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
         Thread.sleep(TYPE_CHECK_MS)
         node.refresh()
-        return node.text?.toString()?.contains(text) == true
+        return node.text?.toString()?.contains(typed) == true
     }
 
     private fun pressEnter(): Boolean {
@@ -1046,9 +1099,11 @@ class PhoneControl : AccessibilityService() {
         private val MEDIA_LABEL = Regex("^[0-9][0-9 :._,-]*$")
         private val MEDIA_FILE = Regex("\\.(mp4|mov|mkv|3gp|webm|jpe?g|png)\\b|\\b\\d{1,2}:\\d{2}$", RegexOption.IGNORE_CASE)
         private val FINAL_BUTTONS = listOf("Upload Short", "Upload video", "Post Short")
-        private val POPUP_WORDS = listOf("Not now", "No thanks", "Skip", "Later", "Got it", "OK", "Close", "Dismiss", "Allow", "While using the app", "Continue")
+        private val POPUP_WORDS = listOf("Not now", "No thanks", "Skip", "Later", "Got it", "OK", "Dismiss", "Allow", "While using the app", "Continue")
         private const val REPLAY_RETRY_MS = 500L
         private const val REPLAY_WAIT_MS = 2_000L
+        private const val SCREEN_WAIT_MS = 6_000L
+        private const val YOUTUBE = "com.google.android.youtube"
         private val OPEN_STEP = Regex("^open app (.+)$")
         private val QUOTED_TAP = Regex("^tap \"(.+)\"$")
         private val POINT_TAP = Regex("^tap the icon at x=(\\d+) y=(\\d+)$")
