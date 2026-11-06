@@ -319,13 +319,40 @@ class PhoneControl : AccessibilityService() {
             row != null && tapNode(row)
         }
         if (!found) {
-            RunLog.add(this, "short accounts: " + screenLabels().take(14).joinToString(" | ") { it.take(40) })
-            return failed("Channel $channel not found in the account list")
+            val seen = screenLabels()
+            RunLog.add(this, "short accounts: " + seen.take(14).joinToString(" | ") { it.take(40) })
+            ShortsQueue.saveChannels(this, ShortsLogic.channelsFrom(seen))
+            return failed("Channel $channel not found. Press Find my channels")
         }
         Thread.sleep(UPLOAD_WAIT_MS * 2)
         if (!retry { tapText("You") }) return failed("You tab not found after switching")
         Thread.sleep(UPLOAD_WAIT_MS)
         return ShortsLogic.channelShown(screenLabels(), channel) || failed("Could not confirm channel $channel")
+    }
+
+    /** YouTube se asli channel padho, taaki naam haath se na likhna pade. */
+    fun readChannels(): List<String> {
+        val open = packageManager.getLaunchIntentForPackage(YOUTUBE) ?: return emptyList()
+        startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        Thread.sleep(UPLOAD_WAIT_MS)
+        if (!retry { tapText("You") }) return emptyList()
+        Thread.sleep(UPLOAD_WAIT_MS)
+        val current = ShortsLogic.handles(screenLabels())
+        val listed = if (retry { tapText("Switch account") || tapText("Switch channel") || tapText("Accounts") }) {
+            Thread.sleep(UPLOAD_WAIT_MS)
+            val seen = screenLabels()
+            RunLog.add(this, "short accounts: " + seen.take(14).joinToString(" | ") { it.take(40) })
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            ShortsLogic.channelsFrom(seen)
+        } else {
+            emptyList()
+        }
+        return (current + listed).distinct()
+    }
+
+    fun openAutoUpload() {
+        startActivity(Intent(this, YouTubeActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
     }
 
     private fun shareToYouTube(uriText: String, caption: String): Boolean {
@@ -528,7 +555,9 @@ class PhoneControl : AccessibilityService() {
                 if (!channelOk) {
                     channelOk = ShortsLogic.channelShown(labels, set.channel)
                     if (!channelOk && ++channelMiss >= SHORT_CHANNEL_ROUNDS) {
-                        return ShortResult(ShortOutcome.CHANNEL, "Channel ${set.channel} not selected in YouTube")
+                        val now = ShortsLogic.handles(labels).firstOrNull()
+                        ShortsQueue.saveChannels(this, listOfNotNull(now) + ShortsQueue.channels(this).filter { it != now })
+                        return ShortResult(ShortOutcome.CHANNEL, "YouTube is on " + (now ?: "another channel") + ", not ${set.channel}. Press Find my channels")
                     }
                     if (!channelOk) return@repeat
                 }

@@ -65,6 +65,17 @@ object ShortsQueue {
             .putInt("from", value.from).putInt("to", value.to).putBoolean("auto", value.auto).apply()
     }
 
+    fun channels(context: Context): List<String> {
+        val array = JSONArray(prefs(context).getString("channels", "[]"))
+        return List(array.length()) { array.getString(it) }
+    }
+
+    fun saveChannels(context: Context, list: List<String>) {
+        if (list.isNotEmpty()) prefs(context).edit().putString("channels", JSONArray(list).toString()).apply()
+    }
+
+    fun isBusy() = busy.get()
+
     private fun load(context: Context): MutableList<JSONObject> {
         val array = JSONArray(prefs(context).getString(ITEMS, "[]"))
         return MutableList(array.length()) { array.getJSONObject(it) }

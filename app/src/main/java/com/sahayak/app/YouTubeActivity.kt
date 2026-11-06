@@ -28,6 +28,7 @@ class YouTubeActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var channel: EditText
     private lateinit var channelSaved: TextView
+    private lateinit var channelList: LinearLayout
     private lateinit var tags: EditText
     private lateinit var useName: CheckBox
     private lateinit var preview: TextView
@@ -64,6 +65,9 @@ class YouTubeActivity : Activity() {
         page.addView(button("Save channel") { saveChannel() })
         channelSaved = text("", 15f, true)
         page.addView(channelSaved)
+        page.addView(button("Find my channels") { findChannels() })
+        channelList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(channelList)
 
         page.addView(heading("Caption"))
         tags = input("#baby #babydance", InputType.TYPE_CLASS_TEXT)
@@ -181,6 +185,38 @@ class YouTubeActivity : Activity() {
     )
 
     private fun saveAll() = ShortsQueue.saveSettings(this, current())
+
+    private fun findChannels() {
+        val control = PhoneControl.instance
+        if (control == null) {
+            status.text = "Turn on phone control in Sahayak first."
+            return
+        }
+        if (ShortsQueue.isBusy()) {
+            status.text = "An upload is running. Try after it finishes."
+            return
+        }
+        val app = applicationContext
+        moveTaskToBack(true)
+        Thread {
+            val found = control.readChannels()
+            ShortsQueue.saveChannels(app, found)
+            RunLog.add(app, "channels found " + found.size)
+            control.openAutoUpload()
+        }.start()
+    }
+
+    private fun renderChannels(saved: String) {
+        channelList.removeAllViews()
+        val found = ShortsQueue.channels(this)
+        if (found.isNotEmpty()) channelList.addView(text("Tap your channel:", 15f, false))
+        found.forEach { name ->
+            channelList.addView(button((if (name.equals(saved, ignoreCase = true)) "✓ " else "") + name) {
+                channel.setText(name)
+                saveChannel()
+            })
+        }
+    }
 
     private fun saveChannel() {
         val value = ShortsLogic.channelValue(channel.text.toString())
@@ -321,6 +357,7 @@ class YouTubeActivity : Activity() {
     private fun render() {
         val set = ShortsQueue.settings(this)
         channelSaved.text = if (set.channel.isBlank()) "No channel saved" else "Uploads go to: " + set.channel
+        renderChannels(set.channel)
         fromButton.text = "From " + timeLabel(from)
         toButton.text = "To " + timeLabel(to)
         autoButton.text = if (set.auto) "Stop automatic uploads" else "Start automatic uploads"

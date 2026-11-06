@@ -70,6 +70,12 @@ class ShortsLogicTest {
         assertFalse(ShortsLogic.channelShown(listOf("filmy doctor", "@trailerpecharcha-b6i"), "VarshaVatte"))
     }
 
+    @Test fun readsChannelsFromAccountList() {
+        val list = listOf("accounts", "varsha@gmail.com", "baby 🤗", "@varshavatte", "filmy doctor", "@trailerpecharcha-b6i", "add account")
+        assertEquals(listOf("@varshavatte", "@trailerpecharcha-b6i"), ShortsLogic.channelsFrom(list))
+        assertEquals(listOf("baby 🤗", "filmy doctor"), ShortsLogic.channelsFrom(listOf("accounts", "varsha@gmail.com", "baby 🤗", "filmy doctor", "add account")))
+    }
+
     @Test fun channelMatchIsStrict() {
         assertFalse(ShortsLogic.channelShown(listOf("baby songs"), "@baby"))
         assertFalse(ShortsLogic.channelShown(listOf("filmy doctor"), "@filmy"))

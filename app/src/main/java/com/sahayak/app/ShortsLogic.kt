@@ -70,6 +70,20 @@ object ShortsLogic {
     fun leftUpload(labels: List<String>) = labels.isNotEmpty() && "add details" !in labels &&
         !isAudiencePage(labels) && !isVisibilityPage(labels)
 
+    private val HANDLE = Regex("(?:^|[\\s•·,])(@[a-z0-9_.-]+)")
+    private val NOT_A_NAME = listOf(
+        "account", "sign", "manage", "incognito", "turn on", "subscriber", "video", "privacy", "terms",
+        "close", "back", "navigate", "switch", "google", "help", "settings", "channel"
+    )
+
+    fun handles(labels: List<String>): List<String> =
+        labels.flatMap { label -> HANDLE.findAll(label).map { it.groupValues[1] }.toList() }.distinct()
+
+    /** Accounts list se channel: @handle mile to wahi, warna chhote naam. */
+    fun channelsFrom(labels: List<String>): List<String> = handles(labels).ifEmpty {
+        labels.filter { label -> label.length in 2..40 && '@' !in label && NOT_A_NAME.none { it in label } }.distinct().take(12)
+    }
+
     /** Link, @handle ya naam: tulna ke liye sirf pehchan wala hissa. */
     fun channelKey(channel: String): String {
         val text = channel.trim().trimEnd('/')
