@@ -371,10 +371,15 @@ class PhoneControl : AccessibilityService() {
         return if (firm) tapCentre(node) else tapNode(node)
     }
 
-    private fun leavePage() {
-        // Screen khud wapas aa gayi ho to details se bahar nahi nikalna
-        if (ShortsLogic.isDetailsPage(screenLabels())) return
+    /** Sirf ek baar wapas. Do baar Back se Add details band hokar video draft ban jati hai. */
+    private fun leavePage(stillThere: (List<String>) -> Boolean) {
+        val labels = screenLabels()
+        if (!stillThere(labels) || ShortsLogic.isDetailsPage(labels)) return
         if (SHORT_LEAVE_WORDS.none { tapExact(it) }) performGlobalAction(GLOBAL_ACTION_BACK)
+        repeat(SHORT_LEAVE_ROUNDS) {
+            Thread.sleep(REPLAY_RETRY_MS)
+            if (!stillThere(screenLabels())) return
+        }
     }
 
     private fun captionBox(): AccessibilityNodeInfo? {
@@ -421,6 +426,7 @@ class PhoneControl : AccessibilityService() {
         repeat(SHORT_CONFIRM_ROUNDS) {
             Thread.sleep(1_000L)
             val labels = screenLabels()
+            if (it < 2) RunLog.add(this, "short after press: " + labels.take(10).joinToString(" | ") { word -> word.take(40) })
             if (ShortsLogic.limitHit(labels)) return ShortResult(ShortOutcome.LIMIT)
             if (labels.any { "upload failed" in it }) return ShortResult(ShortOutcome.NO_RETRY, "YouTube says upload failed")
             val home = rootInActiveWindow?.packageName?.toString() == YOUTUBE && ShortsLogic.leftUpload(labels)
@@ -455,6 +461,11 @@ class PhoneControl : AccessibilityService() {
         lastWorkError = ""
         if (set.channel.isBlank()) return ShortResult(ShortOutcome.CHANNEL, "Type your channel in YouTube Auto Upload")
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
+        // Channel pehle hi pakka karo: Add details ke beech nikalne se video draft ban jati hai
+        val channelReady = ensureChannel(set.channel)
+        RunLog.add(this, "short channel ready " + channelReady + " " + lastWorkError)
+        lastWorkError = ""
+        if (abort) return ShortResult(ShortOutcome.STOPPED)
         // Sikhaya hua raasta: Create, Add, gallery. File name na ho tabhi seedha share.
         var shared = fileName.isBlank()
         if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, lastWorkError.ifEmpty { "YouTube did not open" })
@@ -465,7 +476,7 @@ class PhoneControl : AccessibilityService() {
         val wantedCaption = ShortsLogic.norm(caption).take(SHORT_CAPTION_CHECK)
         var channelOk = false
         var channelMiss = 0
-        var switched = false
+        var detailsSeen = false
         var visibilityDone = false
         var audienceDone = false
         var audienceChosen = false
@@ -492,7 +503,7 @@ class PhoneControl : AccessibilityService() {
                 tapWhere(pageTries > 1) { it.startsWith(set.visibility) }
                 Thread.sleep(SHORT_TAP_WAIT_MS)
                 // Kuch screen chunte hi khud wapas chali jati hain, details se bahar nahi nikalna
-                if (ShortsLogic.isVisibilityPage(screenLabels())) leavePage()
+                leavePage(ShortsLogic::isVisibilityPage)
                 return@repeat
             }
             if (ShortsLogic.isAudiencePage(labels)) {
@@ -503,12 +514,13 @@ class PhoneControl : AccessibilityService() {
                 val after = screenLabels()
                 if (ShortsLogic.finalButton(after) != null) {
                     audienceDone = true
-                } else if (ShortsLogic.isAudiencePage(after)) {
-                    leavePage()
+                } else {
+                    leavePage(ShortsLogic::isAudiencePage)
                 }
                 return@repeat
             }
             if (ShortsLogic.isDetailsPage(labels)) {
+                detailsSeen = true
                 if (!logged) {
                     logged = true
                     RunLog.add(this, "short details: " + labels.take(14).joinToString(" | ") { it.take(40) })
@@ -516,14 +528,7 @@ class PhoneControl : AccessibilityService() {
                 if (!channelOk) {
                     channelOk = ShortsLogic.channelShown(labels, set.channel)
                     if (!channelOk && ++channelMiss >= SHORT_CHANNEL_ROUNDS) {
-                        if (switched) return ShortResult(ShortOutcome.CHANNEL, "Channel ${set.channel} not selected in YouTube")
-                        switched = true
-                        channelMiss = 0
-                        val changed = ensureChannel(set.channel)
-                        if (abort) return ShortResult(ShortOutcome.STOPPED)
-                        if (!changed) return ShortResult(ShortOutcome.CHANNEL, lastWorkError)
-                        picked = false
-                        if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open")
+                        return ShortResult(ShortOutcome.CHANNEL, "Channel ${set.channel} not selected in YouTube")
                     }
                     if (!channelOk) return@repeat
                 }
@@ -559,6 +564,12 @@ class PhoneControl : AccessibilityService() {
                     return@repeat
                 }
                 if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final, onPress)
+            }
+            // Add details ek baar khul gaya to dobara shuru nahi karna, idhar-udhar nahi jana
+            if (detailsSeen && !ShortsLogic.isDetailsPage(labels) &&
+                (ShortsLogic.isHome(labels) || ShortsLogic.isCamera(labels) || ShortsLogic.isGallery(labels))
+            ) {
+                return shortFail("YouTube left Add details before upload", labels)
             }
             // Purana draft chalu ya delete nahi karna: usme doosri video ho sakti hai
             if (labels.any { "draft" in it } && "continue" in labels) return shortFail("YouTube asks about an old draft. Finish or delete it", labels)
@@ -1360,6 +1371,7 @@ class PhoneControl : AccessibilityService() {
         private const val SHORT_CAPTION_CHECK = 30
         private const val SHORT_CHANNEL_ROUNDS = 3
         private const val SHORT_GALLERY_ROUNDS = 4
+        private const val SHORT_LEAVE_ROUNDS = 10
         private val SHORT_LEAVE_WORDS = listOf("done", "save", "navigate up", "back")
         private val SHORT_CAPTION_WORDS = listOf("caption your short", "caption", "add a title", "create a title", "title")
         private val SHORT_NEXT_WORDS = listOf("next", "done", "continue")
