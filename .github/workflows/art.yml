@@ -43,7 +43,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           for try in 1 2 3; do
-            sudo timeout 180 apt-get install -y -qq blender webp && break
+            sudo timeout 180 apt-get install -y -qq blender webp python3-numpy && break
             sudo dpkg --configure -a || true
           done
           blender --version | head -1
