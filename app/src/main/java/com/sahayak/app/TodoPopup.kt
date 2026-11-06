@@ -162,12 +162,9 @@ class TodoPopup(
 
     private fun speaker(): TextToSpeech = tts
 
-    private fun speech(items: List<org.json.JSONObject>, swag: Boolean): String {
-        val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
-        val tasks = items.take(MAX_SPOKEN).joinToString(". Also, ") { it.optString("text") }
-        val line = if (swag) SWAG_LINES.random() else "your to do list."
-        return hello(prefs) + ", " + line + " $tasks"
-    }
+    /** Sirf list, koi hello ya extra line nahi. */
+    private fun speech(items: List<org.json.JSONObject>): String =
+        items.take(MAX_SPOKEN).joinToString(". ") { it.optString("text") }
 
     private fun hello(prefs: android.content.SharedPreferences): String {
         val name = prefs.getString("name", "").orEmpty()
@@ -293,7 +290,7 @@ class TodoPopup(
                 setTextColor(Color.LTGRAY)
             })
         }
-        reveal(card, speech(items, swag), if (swag) SWAG_MS else 0L)
+        reveal(card, speech(items), if (swag) SWAG_MS else 0L)
     }
 
     private fun reveal(card: LinearLayout, words: String, waitMs: Long = 0L) {
@@ -378,12 +375,6 @@ class TodoPopup(
         private const val SWAG_MS = 3_000L
         private const val SWAG_PITCH = 0.82f
         private const val SWAG_RATE = 0.9f
-        private val SWAG_LINES = listOf(
-            "watch the style. Here is your work.",
-            "the boss has arrived. Now listen.",
-            "style first, then work. Here it comes.",
-            "one look, one list. Let us finish this."
-        )
         private const val NIGHT_HOUR = 22
         private const val MORNING_HOUR = 6
         private const val MANY_TASKS = 5
