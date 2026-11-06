@@ -19,7 +19,8 @@ scene.render.resolution_x = scene.render.resolution_y = 512 if MODE == 'preview'
 scene.render.image_settings.file_format = 'PNG'
 scene.render.image_settings.color_mode = 'RGBA'
 scene.view_settings.view_transform = 'Filmic'
-scene.view_settings.look = 'Medium High Contrast'
+scene.view_settings.look = 'High Contrast'
+scene.view_settings.exposure = -0.2
 
 def mat(name, color, rough=0.45, sss=0.0, sheen=0.0, coat=0.0, metal=0.0, radius=(0.5, 0.25, 0.15)):
     m = bpy.data.materials.new(name)
@@ -106,24 +107,36 @@ for s in (-1, 1):
     ball("foot", orange, (s * 0.6, -0.28, -1.92), (0.5, 0.68, 0.27), root)
 
 head = empty("head", root, (0, -0.1, 0.72))
-meta("skull", purple, [((0, 0, 0), (1.28, 1.05, 1.0), 1.6)], head)
+ball("skull", purple, (0, 0, 0), (1.25, 1.05, 1.1), head)
 ball("muzzle", purple_light, (0, -0.78, -0.3), (0.76, 0.55, 0.52), head)
-for s in (-1, 1):
-    ear = empty("ear", head, (s * 1.2, 0.05, 0.72))
-    ear.rotation_euler = (0, s * 0.5, 0)
-    ball("ear_out", purple, (0, 0, 0), (0.44, 0.22, 0.56), ear)
-    ball("ear_in", orange, (0, -0.12, 0), (0.29, 0.13, 0.39), ear)
+
+def rod(name, material, a, b, radius, parent):
+    a, b = Vector(a), Vector(b)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=radius, depth=(b - a).length, location=(a + b) / 2)
+    o = bpy.context.object
+    o.name = name
+    o.rotation_mode = 'QUATERNION'
+    o.rotation_quaternion = (b - a).to_track_quat('Z', 'Y')
+    bpy.ops.object.shade_smooth()
+    o.data.materials.append(material)
+    o.parent = parent
+    return o
+
+# Antennae instead of ears, so Chhotu is its own character
+for s_ in (-1, 1):
+    rod("antenna", orange, (s_ * 0.42, 0, 0.9), (s_ * 0.86, 0, 1.55), 0.055, head)
+    ball("antenna_tip", orange, (s_ * 0.9, 0, 1.62), 0.17, head)
 
 eyes = []
 for s in (-1, 1):
-    e = empty("eye", head, (s * 0.53, -0.84, 0.2))
-    ball("sclera", white, (0, 0, 0), (0.47, 0.34, 0.53), e)
-    look = empty("look", e, (0, -0.28, 0))
-    ball("iris", iris, (0, 0, 0), (0.28, 0.1, 0.3), look)
-    ball("pupil", pupil, (0, -0.07, 0), (0.17, 0.07, 0.19), look)
-    ball("spark1", white, (0.09, -0.15, 0.11), 0.065, look, 24)
-    ball("spark2", white, (-0.09, -0.15, -0.09), 0.03, look, 24)
-    lid = ball("lid", purple, (0, 0, 0), (0.5, 0.38, 0.56), e)
+    e = empty("eye", head, (s * 0.5, -0.8, 0.2))
+    ball("sclera", white, (0, 0, 0), (0.41, 0.3, 0.47), e)
+    look = empty("look", e, (0, -0.25, 0))
+    ball("iris", iris, (0, 0, 0), (0.25, 0.09, 0.27), look)
+    ball("pupil", pupil, (0, -0.06, 0), (0.15, 0.06, 0.17), look)
+    ball("spark1", white, (0.08, -0.13, 0.1), 0.055, look, 24)
+    ball("spark2", white, (-0.08, -0.13, -0.08), 0.026, look, 24)
+    lid = ball("lid", purple, (0, 0, 0), (0.435, 0.33, 0.5), e)
     bm = bmesh.new()
     bm.from_mesh(lid.data)
     bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, 0), plane_no=(0, 0, 1), clear_inner=True)
@@ -133,26 +146,26 @@ for s in (-1, 1):
 
 brows = []
 for s in (-1, 1):
-    b = ball("brow", orange, (s * 0.53, -0.92, 0.87), (0.32, 0.09, 0.075), head)
-    b.rotation_euler = (0, s * 0.12, 0)
+    b = ball("brow", orange, (s * 0.5, -0.76, 0.74), (0.27, 0.075, 0.065), head)
+    b.rotation_euler = (0, s * 0.14, 0)
     brows.append(b)
-ball("nose", orange, (0, -1.24, -0.06), (0.14, 0.1, 0.1), head)
+ball("nose", orange, (0, -1.31, -0.12), (0.14, 0.1, 0.1), head)
 
-mouth = empty("mouth", head, (0, -1.15, -0.48))
-ball("mouth_in", mouth_dark, (0, 0.03, 0), (0.38, 0.1, 0.17), mouth)
-tongue = ball("tongue", tongue_m, (0, -0.03, -0.09), (0.2, 0.08, 0.08), mouth)
-teeth = ball("teeth", tooth_m, (0, -0.05, 0.11), (0.23, 0.06, 0.05), mouth)
+mouth = empty("mouth", head, (0, -1.27, -0.5))
+ball("mouth_in", mouth_dark, (0, 0, 0), (0.36, 0.08, 0.16), mouth)
+tongue = ball("tongue", tongue_m, (0, -0.05, -0.08), (0.19, 0.07, 0.075), mouth)
+teeth = ball("teeth", tooth_m, (0, -0.06, 0.1), (0.21, 0.05, 0.045), mouth)
 
 arms = []
 for s in (-1, 1):
-    a = empty("arm", root, (s * 1.02, -0.05, -0.28))
-    meta("limb", purple, [((0, 0, -0.1), (0.25, 0.25, 0.4), 0.42), ((0, 0, -0.62), (0.22, 0.22, 0.35), 0.38)], a, 0.03)
-    ball("hand", orange, (0, -0.05, -0.92), 0.28, a)
-    a.rotation_euler = (0.25, 0, s * 0.55)
+    a = empty("arm", root, (s * 1.0, -0.05, -0.3))
+    ball("limb", purple, (0, 0, -0.42), (0.25, 0.25, 0.56), a)
+    ball("hand", orange, (0, -0.03, -0.98), 0.28, a)
+    a.rotation_euler = (0.2, -s * 0.5, 0)
     arms.append(a)
 
-mail = empty("mail", arms[1], (0.05, -0.2, -1.1))
-mail.rotation_euler = (math.radians(90), 0, math.radians(8))
+mail = empty("mail", root, (1.68, -0.42, 0.62))
+mail.rotation_euler = (math.radians(90), math.radians(-12), 0)
 bpy.ops.mesh.primitive_cube_add(size=1)
 sheet = bpy.context.object
 sheet.parent = mail
@@ -172,10 +185,10 @@ ball("seal", seal, (0, 0.05, 0.12), (0.14, 0.14, 0.06), mail, 32)
 mail_parts = [sheet, flap] + [c for c in mail.children if c.name.startswith("seal")]
 
 cam_data = bpy.data.cameras.new("cam")
-cam_data.lens = 55
+cam_data.lens = 64
 cam = bpy.data.objects.new("cam", cam_data)
 bpy.context.collection.objects.link(cam)
-cam.location = (0, -10.6, 0.05)
+cam.location = (0.2, -10.6, 0.02)
 cam.rotation_euler = (math.radians(89.6), 0, 0)
 scene.camera = cam
 
@@ -188,18 +201,14 @@ def area(loc, energy, size, color):
     o.location = loc
     o.rotation_euler = (Vector((0, 0, 0)) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
 
-area((4, -6, 5), 650, 5, (1, 0.93, 0.84))
-area((-5, -4, 1), 220, 6, (0.72, 0.84, 1))
-area((-4, 5, 4), 900, 3, (0.62, 0.78, 1))
+area((4, -6, 5), 430, 5, (1, 0.93, 0.84))
+area((-5, -4, 1), 110, 6, (0.72, 0.84, 1))
+area((-4, 5, 4), 750, 3, (0.62, 0.78, 1))
 area((5, 5, -1), 420, 3, (1, 0.72, 0.5))
 scene.world = bpy.data.worlds.new("w")
 scene.world.use_nodes = True
 scene.world.node_tree.nodes["Background"].inputs[0].default_value = (0.75, 0.8, 1, 1)
-scene.world.node_tree.nodes["Background"].inputs[1].default_value = 0.42
-
-bpy.ops.mesh.primitive_circle_add(vertices=64, radius=3.2, fill_type='NGON', location=(0, 0, -2.17))
-ground = bpy.context.object
-ground.is_shadow_catcher = True
+scene.world.node_tree.nodes["Background"].inputs[1].default_value = 0.28
 
 ARM0, ARM1 = arms[0].rotation_euler.copy(), arms[1].rotation_euler.copy()
 
@@ -219,12 +228,12 @@ def pose(t, talk, has_mail, blink):
         look.location.z = math.cos(w) * 0.035
         lid.rotation_euler = (math.radians(-104 + blink * 104), 0, 0)
     for b in brows:
-        b.location.z = 0.87 + say * 0.06
-    arms[0].rotation_euler = (ARM0[0], ARM0[1], ARM0[2] - math.sin(w + 0.6) * 0.14)
+        b.location.z = 0.74 + say * 0.05
+    arms[0].rotation_euler = (0.2, ARM0[1] + math.sin(w + 0.6) * 0.14, 0)
     if has_mail:
-        arms[1].rotation_euler = (1.2, math.radians(-132) + math.sin(w * 2) * 0.1, 0.3)
+        arms[1].rotation_euler = (0.1, -2.25 + math.sin(w * 2) * 0.08, 0)
     else:
-        arms[1].rotation_euler = (ARM1[0], ARM1[1], ARM1[2] + math.sin(w) * 0.14)
+        arms[1].rotation_euler = (0.2, ARM1[1] - math.sin(w) * 0.14, 0)
     for p in mail_parts:
         p.hide_render = not has_mail
 
