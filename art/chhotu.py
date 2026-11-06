@@ -83,16 +83,16 @@ def fur(name, root, tip):
     t.links.new(mix.outputs[0], out.inputs["Surface"])
     return m
 
-skin = mat("skin", srgb("6A50D8"), 0.6, sss=0.3)
-skin_light = mat("skin_light", srgb("C9BCFF"), 0.6, sss=0.3)
-fur_main = fur("fur_main", srgb("3F1FD6"), srgb("8A63FF"))
-fur_light = fur("fur_light", srgb("B9A5FF"), srgb("EDE6FF"))
+skin = mat("skin", srgb("7A3CE0"), 0.6, sss=0.3)
+skin_light = mat("skin_light", srgb("EBD8FF"), 0.6, sss=0.3)
+fur_main = fur("fur_main", srgb("6A22E0"), srgb("B07CFF"))
+fur_light = fur("fur_light", srgb("E8CFFF"), srgb("FFF4FB"))
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
 nose_m = mat("nose", srgb("FF8A3C"), 0.18, sss=0.3, coat=1.0)
 pad_m = mat("pad", srgb("FFB067"), 0.38, sss=0.5, coat=0.3)
-brow_m = mat("brow", srgb("24136E"), 0.55, sss=0.2)
+brow_m = mat("brow", srgb("1C0A52"), 0.5, sss=0.2)
 tip_m = mat("tip", srgb("FFA63D"), 0.25, sss=0.4, coat=0.7, emission=0.6)
 stalk_m = mat("stalk", srgb("FFA63D"), 0.4, sss=0.4)
 tear_m = mat("tear", srgb("9AD8FF"), 0.03, coat=1.0)
@@ -153,7 +153,7 @@ def eye_material():
 
 eye_m, eye_ramp = eye_material()
 spark_m = mat("spark", (1, 1, 1), 0.4, emission=4.0)
-lid_m = mat("lid", srgb("6147D6"), 0.5, sss=0.3)
+lid_m = mat("lid", srgb("7A3CE0"), 0.5, sss=0.3)
 
 # ---------- helpers ----------
 def empty(name, parent=None, loc=(0, 0, 0)):
@@ -351,6 +351,8 @@ muzzle = gauss(unit, M, 0.47)
 for s in (-1, 1):
     keep = keep * smooth01((1 - unit @ EYE_DIR[s]) * 2 / (0.36 * 0.36) - 0.65)
 short = 0.28 + 0.72 * smooth01((rho_v - 0.1) / 0.75)
+for s in (-1, 1):
+    short = short * (0.35 + 0.65 * smooth01((1 - unit @ EYE_DIR[s]) * 2 / (0.62 * 0.62) - 0.2))
 add_group(face, "main", keep * smooth01((0.72 - muzzle) / 0.5))
 add_group(face, "pale", keep * smooth01((muzzle - 0.28) / 0.4))
 add_group(face, "len", short)
@@ -387,7 +389,7 @@ for s in (-1, 1):
     gaze = empty("gaze", e)
     ball_o = ball("eyeball", eye_m, (0, 0, 0), R_EYE, gaze, 64)
     for x, z, r in ((0.13, 0.17, 0.082), (-0.11, -0.12, 0.04)):
-        ball("catchlight", spark_m, (x, -math.sqrt(max(R_EYE ** 2 - x * x - z * z, 0)) * 1.005, z), (r, r * 0.45, r), e, 20)
+        ball("catchlight", spark_m, (x, -math.sqrt(max(R_EYE ** 2 - x * x - z * z, 0)) * 1.005, z), (r, r * 0.16, r), e, 20)
     roll = empty("roll", e)
     up = empty("up", roll); low = empty("low", roll)
     upper = half_shell("upper", up, True); upper.scale = (R_EYE * 1.07,) * 3
@@ -422,12 +424,12 @@ def brow_points(s, inner, outer):
         lift = 0.31 + (inner if t < 0 else outer) * abs(t) / 0.27 + (inner + outer) * 0.5 * (1 - abs(t) / 0.27) + 0.05 * (1 - (t / 0.27) ** 2)
         d = e + np.array([s * t, 0.0, lift])
         d = d / np.linalg.norm(d)
-        pts.append(tuple(surface(d[None, :])[0] + d * 0.10))
+        pts.append(tuple(surface(d[None, :])[0] + d * 0.135))
     return pts
 
 brows = {}
 for s in (-1, 1):
-    o, sp = curve("brow", brow_points(s, 0, 0), [0.45, 1.0, 1.15, 0.95, 0.4], 0.075, brow_m, head)
+    o, sp = curve("brow", brow_points(s, 0, 0), [0.5, 1.05, 1.2, 1.0, 0.45], 0.088, brow_m, head)
     brows[s] = sp
 
 nose_dir = M + V * 0.235; nose_dir /= np.linalg.norm(nose_dir)
@@ -750,7 +752,8 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('idle', 0.2), ('happy', 0.25), ('sad', 0.3), ('surprised', 0.1), ('grumpy', 0.1), ('talk', 0.05)]
+    wanted = [('idle', 0.2), ('happy', 0.25), ('excited', 0.25), ('talk', 0.05), ('mail', 0.2),
+              ('sad', 0.3), ('surprised', 0.1), ('sleepy', 0.5), ('grumpy', 0.1), ('thinking', 0.2)]
     for name, t in wanted:
         render(f"{OUT}/{name}.png", name, t)
 else:
