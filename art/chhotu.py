@@ -84,9 +84,9 @@ def fur(name, root, tip):
     return m
 
 skin = mat("skin", srgb("7A3CE0"), 0.6, sss=0.3)
-skin_light = mat("skin_light", srgb("EBD8FF"), 0.6, sss=0.3)
+skin_light = mat("skin_light", srgb("FFD8BC"), 0.6, sss=0.3)
 fur_main = fur("fur_main", srgb("6A22E0"), srgb("B07CFF"))
-fur_light = fur("fur_light", srgb("E8CFFF"), srgb("FFF4FB"))
+fur_light = fur("fur_light", srgb("FFC9A8"), srgb("FFF0DE"))
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
@@ -97,7 +97,8 @@ tip_m = mat("tip", srgb("FFA63D"), 0.25, sss=0.4, coat=0.7, emission=0.6)
 stalk_m = mat("stalk", srgb("FFA63D"), 0.4, sss=0.4)
 tear_m = mat("tear", srgb("9AD8FF"), 0.03, coat=1.0)
 put(tear_m.node_tree.nodes["Principled BSDF"], ["Transmission Weight", "Transmission"], 0.85)
-paper = mat("paper", srgb("F7F3EA"), 0.55, coat=0.15)
+paper = mat("paper", srgb("FFFDF6"), 0.5, coat=0.15, emission=0.12)
+flap_m = mat("flap", srgb("FFE9C9"), 0.5, coat=0.1, emission=0.08)
 seal = mat("seal", srgb("E63946"), 0.2, coat=1.0)
 
 def eye_material():
@@ -545,16 +546,18 @@ for s in (-1, 1):
         ball("toe", pad_m, (s * 0.54 + 0.3 * math.sin(ang), -0.3 - 0.54 * math.cos(ang), -2.03), (0.11, 0.1, 0.085), root, 24)
 
 # letter
-mail = empty("mail", hands[1], (-0.02, -0.25, 0.28))
-mail.rotation_euler = (math.radians(90), math.radians(-10), 0)
+mail = empty("mail", root, (0, 0, 0))
+mail.rotation_euler = (math.radians(90), math.radians(-9), 0)
 bpy.ops.mesh.primitive_cube_add(size=1)
 sheet = bpy.context.object
 sheet.parent = mail
-sheet.scale = (1.15, 0.78, 0.05)
+sheet.scale = (1.5, 1.02, 0.05)
 b = sheet.modifiers.new("b", 'BEVEL'); b.width = 0.03; b.segments = 4
 sheet.data.materials.append(paper)
-stamp = ball("seal", seal, (0, 0.0, 0.05), (0.13, 0.13, 0.05), mail, 32)
-mail_parts = [sheet, stamp]
+flap = new_mesh("flap", [(-0.74, 0.5, 0.032), (0.74, 0.5, 0.032), (0, -0.14, 0.032)], [(0, 1, 2)], mail, [flap_m], False)
+flap.location = (0, 0, 0.0)
+stamp = ball("seal", seal, (0, -0.1, 0.05), (0.15, 0.15, 0.05), mail, 32)
+mail_parts = [sheet, flap, stamp]
 
 # ---------- camera and light ----------
 target = Vector((0, 0, -0.42))
@@ -741,6 +744,7 @@ def apply(p, name):
         tooth.hide_render = p["hu"] < 0.025 or opening < 0.08
     for part in mail_parts:
         part.hide_render = not p["mail"]
+    mail.location = (p["ra"][0] - 0.08, p["ra"][1] - 0.32, p["ra"][2] + 0.42)
     pupil = p["pupil"]
     eye_ramp.elements[1].position = pupil
     eye_ramp.elements[2].position = pupil + 0.04
@@ -752,8 +756,7 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('idle', 0.2), ('happy', 0.25), ('excited', 0.25), ('talk', 0.05), ('mail', 0.2),
-              ('sad', 0.3), ('surprised', 0.1), ('sleepy', 0.5), ('grumpy', 0.1), ('thinking', 0.2)]
+    wanted = [('idle', 0.2), ('mail', 0.2)]
     for name, t in wanted:
         render(f"{OUT}/{name}.png", name, t)
 else:
