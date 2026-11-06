@@ -6,8 +6,10 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Shader
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -30,6 +32,8 @@ import java.util.Locale
 @SuppressLint("ViewConstructor")
 private class CrackView(context: Context, private val centerY: Float) : View(context) {
     private val paths = ArrayList<Path>()
+    private val shards = ArrayList<FloatArray>()
+    private val shardPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = 7f
@@ -50,6 +54,14 @@ private class CrackView(context: Context, private val centerY: Float) : View(con
 
     private fun build(width: Float, height: Float) {
         val random = java.util.Random(7)
+        repeat(SHARDS) {
+            val angle = random.nextDouble() * 2 * Math.PI
+            val speed = height * (0.3f + random.nextFloat() * 0.6f)
+            shards.add(floatArrayOf(
+                (Math.cos(angle) * speed).toFloat(), (Math.sin(angle) * speed).toFloat(),
+                18f + random.nextFloat() * 42f, random.nextFloat() * 360f
+            ))
+        }
         val reach = Math.hypot(width.toDouble(), height.toDouble()).toFloat() * 0.75f
         for (i in 0 until CRACKS) {
             val angle = i * (2 * Math.PI / CRACKS) + random.nextDouble() * 0.3
@@ -85,10 +97,28 @@ private class CrackView(context: Context, private val centerY: Float) : View(con
             canvas.drawPath(it, line)
         }
         canvas.restore()
+        val t = progress
+        shards.forEach { s ->
+            val x = width / 2f + s[0] * t
+            val y = centerY + s[1] * t + height * 0.35f * t * t
+            val size = s[2]
+            canvas.save()
+            canvas.rotate(s[3] + t * 540f, x, y)
+            shardPaint.shader = LinearGradient(x, y - size, x + size, y + size,
+                Color.argb(230, 230, 250, 255), Color.argb(70, 130, 210, 255), Shader.TileMode.CLAMP)
+            canvas.drawPath(Path().apply {
+                moveTo(x, y - size)
+                lineTo(x + size * 0.8f, y + size * 0.6f)
+                lineTo(x - size * 0.6f, y + size * 0.4f)
+                close()
+            }, shardPaint)
+            canvas.restore()
+        }
     }
 
     companion object {
         private const val CRACKS = 16
+        private const val SHARDS = 34
     }
 }
 
@@ -152,15 +182,18 @@ class TodoPopup(private val service: AccessibilityService) {
                 cornerRadius = 18 * density
             }
         }
-        val top = LinearLayout(service).apply { gravity = Gravity.CENTER_VERTICAL }
+        val top = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
         val robot = MiniBuddy(service)
         buddy = robot
-        top.addView(robot, LinearLayout.LayoutParams((84 * density).toInt(), (84 * density).toInt()))
+        top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
             text = "To-do: tap when done"
             textSize = 15f
             setTextColor(Color.rgb(32, 201, 151))
-            setPadding(pad, 0, 0, 0)
+            gravity = Gravity.CENTER
         })
         card.addView(top)
         items.take(MAX_ROWS).forEach { item ->
@@ -212,13 +245,14 @@ class TodoPopup(private val service: AccessibilityService) {
         }
         cracks.animate().alpha(0f).setStartDelay(CRACK_MS + 450L).setDuration(350L).start()
 
-        card.scaleX = 0.15f
-        card.scaleY = 0.15f
+        card.scaleX = 0.05f
+        card.scaleY = 0.05f
+        card.translationY = 260 * density
         card.alpha = 0f
         windows.addView(card, params)
         box = card
         card.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        card.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(POP_MS)
+        card.animate().scaleX(1f).scaleY(1f).translationY(0f).alpha(1f).setDuration(POP_MS)
             .setInterpolator(OvershootInterpolator(3.5f)).start()
         ObjectAnimator.ofFloat(card, View.ROTATION, 0f, -2.5f, 2.5f, -1.5f, 1.5f, 0f).apply {
             duration = POP_MS + 120L
@@ -265,7 +299,7 @@ class TodoPopup(private val service: AccessibilityService) {
         private const val MAX_SPEECH_MS = 15_000L
         private const val MAX_SPOKEN = 3
         private const val POP_MS = 420L
-        private const val CRACK_MS = 260L
+        private const val CRACK_MS = 520L
         private const val LEAVE_MS = 220L
         private const val AFTER_TAP_MS = 1_000L
         private const val MAX_ROWS = 5

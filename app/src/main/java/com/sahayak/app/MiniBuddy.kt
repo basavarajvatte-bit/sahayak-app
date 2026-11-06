@@ -5,13 +5,18 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.Shader
 import android.view.View
 import android.view.animation.LinearInterpolator
+import kotlin.math.abs
 import kotlin.math.sin
 
-/** Sahayak ka apna chhota robot: jhoolta hai, palak jhapkata hai, bolte waqt muh hilata hai. */
+/** Chhotu: Sahayak ka apna 3D jaisa cartoon. Kisi film ka character nahi. */
 @SuppressLint("ViewConstructor")
 class MiniBuddy(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -39,61 +44,94 @@ class MiniBuddy(context: Context) : View(context) {
         super.onDetachedFromWindow()
     }
 
+    private fun ball(canvas: Canvas, x: Float, y: Float, radius: Float, light: Int, dark: Int) {
+        paint.shader = RadialGradient(x - radius * 0.35f, y - radius * 0.4f, radius * 1.5f, light, dark, Shader.TileMode.CLAMP)
+        canvas.drawCircle(x, y, radius, paint)
+        paint.shader = null
+    }
+
     override fun onDraw(canvas: Canvas) {
-        val size = minOf(width, height).toFloat()
-        val unit = size / 100f
+        val u = minOf(width, height) / 100f
         val cx = width / 2f
-        val wave = sin(time * 9f)
-        val bob = sin(time * 6f) * 3f * unit
+        val beat = sin(time * 7f)
+        val squash = 1f + abs(sin(time * 5.5f)) * 0.04f
         canvas.save()
-        canvas.translate(0f, bob)
-        canvas.rotate(wave * 4f, cx, 60f * unit)
-
-        // Antenna
-        paint.color = Color.rgb(255, 214, 102)
-        paint.strokeWidth = 4f * unit
-        paint.style = Paint.Style.STROKE
-        canvas.drawLine(cx, 28f * unit, cx, 13f * unit, paint)
-        paint.style = Paint.Style.FILL
-        paint.color = if (sin(time * 12f) > 0) Color.rgb(255, 107, 107) else Color.rgb(255, 214, 102)
-        canvas.drawCircle(cx, 10f * unit, 7f * unit, paint)
-
-        // Haath
-        paint.color = Color.rgb(32, 201, 151)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 7f * unit
-        paint.strokeCap = Paint.Cap.ROUND
-        canvas.drawLine(cx - 34f * unit, 60f * unit, cx - 45f * unit, (46f + wave * 12f) * unit, paint)
-        canvas.drawLine(cx + 34f * unit, 60f * unit, cx + 45f * unit, (46f - wave * 12f) * unit, paint)
+        canvas.translate(0f, beat * 2f * u)
+        canvas.scale(2f - squash, squash, cx, 92f * u)
         paint.style = Paint.Style.FILL
 
-        // Sharir
-        box.set(cx - 36f * unit, 26f * unit, cx + 36f * unit, 92f * unit)
-        paint.color = Color.rgb(32, 201, 151)
-        canvas.drawRoundRect(box, 22f * unit, 22f * unit, paint)
-        box.set(cx - 28f * unit, 33f * unit, cx + 28f * unit, 76f * unit)
-        paint.color = Color.rgb(16, 42, 67)
-        canvas.drawRoundRect(box, 15f * unit, 15f * unit, paint)
+        // Parchhai
+        paint.color = Color.argb(70, 0, 0, 0)
+        box.set(cx - 30f * u, 90f * u, cx + 30f * u, 98f * u)
+        canvas.drawOval(box, paint)
+
+        // Kaan
+        ball(canvas, cx - 36f * u, 33f * u, 12f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
+        ball(canvas, cx + 36f * u, 33f * u, 12f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
+
+        // Sharir aur sir
+        paint.shader = LinearGradient(0f, 18f * u, 0f, 94f * u, Color.rgb(112, 92, 255), Color.rgb(38, 22, 150), Shader.TileMode.CLAMP)
+        box.set(cx - 38f * u, 18f * u, cx + 38f * u, 94f * u)
+        canvas.drawRoundRect(box, 38f * u, 38f * u, paint)
+        paint.shader = null
+
+        // Chamak
+        paint.color = Color.argb(70, 255, 255, 255)
+        box.set(cx - 26f * u, 23f * u, cx + 4f * u, 37f * u)
+        canvas.drawOval(box, paint)
+
+        // Pet
+        ball(canvas, cx, 78f * u, 17f * u, Color.rgb(173, 229, 255), Color.rgb(84, 142, 220))
 
         // Aankhein
-        val blink = (time * 1.1f) % 3f < 0.08f
-        paint.color = Color.WHITE
-        val eyeHeight = if (blink) 1.2f else 8f
-        box.set(cx - 18f * unit, (48f - eyeHeight) * unit, cx - 6f * unit, (48f + eyeHeight) * unit)
-        canvas.drawOval(box, paint)
-        box.set(cx + 6f * unit, (48f - eyeHeight) * unit, cx + 18f * unit, (48f + eyeHeight) * unit)
-        canvas.drawOval(box, paint)
-        if (!blink) {
-            paint.color = Color.rgb(16, 42, 67)
-            canvas.drawCircle(cx - 12f * unit, 49f * unit, 3.5f * unit, paint)
-            canvas.drawCircle(cx + 12f * unit, 49f * unit, 3.5f * unit, paint)
+        val blink = (time * 1.1f) % 3f < 0.09f
+        val eyeY = 46f * u
+        val look = sin(time * 2.2f) * 2.5f * u
+        if (blink) {
+            paint.color = Color.rgb(20, 12, 70)
+            box.set(cx - 25f * u, eyeY - u, cx - 7f * u, eyeY + u)
+            canvas.drawRoundRect(box, u, u, paint)
+            box.set(cx + 7f * u, eyeY - u, cx + 25f * u, eyeY + u)
+            canvas.drawRoundRect(box, u, u, paint)
+        } else {
+            ball(canvas, cx - 16f * u, eyeY, 12f * u, Color.WHITE, Color.rgb(205, 217, 240))
+            ball(canvas, cx + 16f * u, eyeY, 12f * u, Color.WHITE, Color.rgb(205, 217, 240))
+            paint.color = Color.rgb(18, 16, 48)
+            canvas.drawCircle(cx - 16f * u + look, eyeY + u, 5.5f * u, paint)
+            canvas.drawCircle(cx + 16f * u + look, eyeY + u, 5.5f * u, paint)
+            paint.color = Color.WHITE
+            canvas.drawCircle(cx - 14f * u + look, eyeY - u, 1.8f * u, paint)
+            canvas.drawCircle(cx + 18f * u + look, eyeY - u, 1.8f * u, paint)
         }
 
+        // Bhauhein
+        val lift = if (talking) abs(sin(time * 18f)) * 3f else 0f
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 3.2f * u
+        paint.color = Color.rgb(255, 196, 92)
+        canvas.drawLine(cx - 27f * u, (33f - lift) * u, cx - 9f * u, (29f - lift) * u, paint)
+        canvas.drawLine(cx + 9f * u, (29f - lift) * u, cx + 27f * u, (33f - lift) * u, paint)
+        paint.style = Paint.Style.FILL
+
         // Muh
-        val open = if (talking) (3f + 7f * kotlin.math.abs(sin(time * 28f))) else 1.5f
-        paint.color = Color.rgb(255, 107, 107)
-        box.set(cx - 9f * unit, (66f - open / 2) * unit, cx + 9f * unit, (66f + open / 2) * unit)
-        canvas.drawRoundRect(box, 4f * unit, 4f * unit, paint)
+        val open = if (talking) 3f + 9f * abs(sin(time * 26f)) else 2f
+        val mouth = Path().apply {
+            moveTo(cx - 12f * u, 62f * u)
+            quadTo(cx, (62f + open * 1.6f) * u, cx + 12f * u, 62f * u)
+            close()
+        }
+        paint.color = Color.rgb(70, 8, 40)
+        canvas.drawPath(mouth, paint)
+        if (talking) {
+            paint.color = Color.rgb(255, 104, 136)
+            canvas.drawCircle(cx, (62f + open * 0.45f) * u, 3f * u, paint)
+        }
+
+        // Haath screen ki taraf
+        val push = abs(sin(time * 8f)) * 3f
+        ball(canvas, cx - 41f * u, (61f - push) * u, 9f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
+        ball(canvas, cx + 41f * u, (61f + push) * u, 9f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
         canvas.restore()
     }
 }
