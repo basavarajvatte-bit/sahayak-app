@@ -7,28 +7,36 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RadialGradient
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.view.View
 import android.view.animation.LinearInterpolator
 import java.io.IOException
-import kotlin.math.abs
-import kotlin.math.sin
+import java.util.Collections
 
-/** Chhotu: Sahayak ka apna 3D jaisa cartoon. Kisi film ka character nahi. */
+/** Chhotu: Sahayak ka apna 3D creature. Kisi film ka character nahi. */
 @SuppressLint("ViewConstructor")
 class MiniBuddy(context: Context) : View(context) {
     private val frameBox = RectF()
     private val framePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val box = RectF()
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val shadowBox = RectF()
     private var time = 0f
-    var talking = false
-    var holdingMail = false
+    private var shown: List<Bitmap> = emptyList()
+
+    /** Kaunsa bhaav: idle, happy, excited, talk, mail, sad, surprised, sleepy, grumpy, thinking. */
+    var mood = "idle"
+        set(value) {
+            field = value
+            Frames.prepare(context, value)
+        }
+
+    init {
+        Frames.prepare(context, mood)
+    }
 
     private val ticker = ValueAnimator.ofFloat(0f, 1000f).apply {
         duration = 1_000_000L
@@ -50,125 +58,21 @@ class MiniBuddy(context: Context) : View(context) {
         super.onDetachedFromWindow()
     }
 
-    private fun ball(canvas: Canvas, x: Float, y: Float, radius: Float, light: Int, dark: Int) {
-        paint.shader = RadialGradient(x - radius * 0.35f, y - radius * 0.4f, radius * 1.5f, light, dark, Shader.TileMode.CLAMP)
-        canvas.drawCircle(x, y, radius, paint)
-        paint.shader = null
-    }
-
     override fun onDraw(canvas: Canvas) {
-        val set = when {
-            holdingMail -> Frames.mail
-            talking -> Frames.talk
-            else -> Frames.idle
-        }
-        val frame = set.getOrNull((time * FPS).toInt() % maxOf(set.size, 1))
-        if (frame != null) {
-            frameBox.set(0f, 0f, width.toFloat(), height.toFloat())
-            canvas.drawBitmap(frame, null, frameBox, framePaint)
-            return
-        }
-        val u = minOf(width, height) / 100f
-        val cx = width / 2f
-        val beat = sin(time * 7f)
-        val squash = 1f + abs(sin(time * 5.5f)) * 0.04f
+        Frames.get(mood)?.let { shown = it }
+        val frame = shown.getOrNull((time * FPS).toInt() % maxOf(shown.size, 1)) ?: return
+        val w = width.toFloat()
+        val h = height.toFloat()
+        shadowBox.set(w * 0.2f, h * 0.86f, w * 0.8f, h * 0.98f)
+        shadowPaint.shader = RadialGradient(
+            w / 2f, h * 0.92f, w * 0.3f, Color.argb(120, 0, 0, 0), Color.TRANSPARENT, Shader.TileMode.CLAMP
+        )
         canvas.save()
-        canvas.translate(0f, beat * 2f * u)
-        canvas.scale(2f - squash, squash, cx, 92f * u)
-        paint.style = Paint.Style.FILL
-
-        // Parchhai
-        paint.color = Color.argb(70, 0, 0, 0)
-        box.set(cx - 30f * u, 90f * u, cx + 30f * u, 98f * u)
-        canvas.drawOval(box, paint)
-
-        // Kaan
-        ball(canvas, cx - 36f * u, 33f * u, 12f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
-        ball(canvas, cx + 36f * u, 33f * u, 12f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
-
-        // Sharir aur sir
-        paint.shader = LinearGradient(0f, 18f * u, 0f, 94f * u, Color.rgb(112, 92, 255), Color.rgb(38, 22, 150), Shader.TileMode.CLAMP)
-        box.set(cx - 38f * u, 18f * u, cx + 38f * u, 94f * u)
-        canvas.drawRoundRect(box, 38f * u, 38f * u, paint)
-        paint.shader = null
-
-        // Chamak
-        paint.color = Color.argb(70, 255, 255, 255)
-        box.set(cx - 26f * u, 23f * u, cx + 4f * u, 37f * u)
-        canvas.drawOval(box, paint)
-
-        // Pet
-        ball(canvas, cx, 78f * u, 17f * u, Color.rgb(173, 229, 255), Color.rgb(84, 142, 220))
-
-        // Aankhein
-        val blink = (time * 1.1f) % 3f < 0.09f
-        val eyeY = 46f * u
-        val look = sin(time * 2.2f) * 2.5f * u
-        if (blink) {
-            paint.color = Color.rgb(20, 12, 70)
-            box.set(cx - 25f * u, eyeY - u, cx - 7f * u, eyeY + u)
-            canvas.drawRoundRect(box, u, u, paint)
-            box.set(cx + 7f * u, eyeY - u, cx + 25f * u, eyeY + u)
-            canvas.drawRoundRect(box, u, u, paint)
-        } else {
-            ball(canvas, cx - 16f * u, eyeY, 12f * u, Color.WHITE, Color.rgb(205, 217, 240))
-            ball(canvas, cx + 16f * u, eyeY, 12f * u, Color.WHITE, Color.rgb(205, 217, 240))
-            paint.color = Color.rgb(18, 16, 48)
-            canvas.drawCircle(cx - 16f * u + look, eyeY + u, 5.5f * u, paint)
-            canvas.drawCircle(cx + 16f * u + look, eyeY + u, 5.5f * u, paint)
-            paint.color = Color.WHITE
-            canvas.drawCircle(cx - 14f * u + look, eyeY - u, 1.8f * u, paint)
-            canvas.drawCircle(cx + 18f * u + look, eyeY - u, 1.8f * u, paint)
-        }
-
-        // Bhauhein
-        val lift = if (talking) abs(sin(time * 18f)) * 3f else 0f
-        paint.style = Paint.Style.STROKE
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeWidth = 3.2f * u
-        paint.color = Color.rgb(255, 196, 92)
-        canvas.drawLine(cx - 27f * u, (33f - lift) * u, cx - 9f * u, (29f - lift) * u, paint)
-        canvas.drawLine(cx + 9f * u, (29f - lift) * u, cx + 27f * u, (33f - lift) * u, paint)
-        paint.style = Paint.Style.FILL
-
-        // Muh
-        val open = if (talking) 3f + 9f * abs(sin(time * 26f)) else 2f
-        val mouth = Path().apply {
-            moveTo(cx - 12f * u, 62f * u)
-            quadTo(cx, (62f + open * 1.6f) * u, cx + 12f * u, 62f * u)
-            close()
-        }
-        paint.color = Color.rgb(70, 8, 40)
-        canvas.drawPath(mouth, paint)
-        if (talking) {
-            paint.color = Color.rgb(255, 104, 136)
-            canvas.drawCircle(cx, (62f + open * 0.45f) * u, 3f * u, paint)
-        }
-
-        // Haath screen ki taraf
-        val push = abs(sin(time * 8f)) * 3f
-        ball(canvas, cx - 41f * u, (61f - push) * u, 9f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
-        ball(canvas, cx + 41f * u, (61f + push) * u, 9f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
-        if (holdingMail) drawEnvelope(canvas, cx + 30f * u, (45f + push) * u, u)
+        canvas.scale(1f, 0.2f, w / 2f, h * 0.92f)
+        canvas.drawCircle(w / 2f, h * 0.92f, w * 0.3f, shadowPaint)
         canvas.restore()
-    }
-
-    private fun drawEnvelope(canvas: Canvas, x: Float, y: Float, u: Float) {
-        canvas.save()
-        canvas.rotate(-10f + sin(time * 7f) * 6f, x, y)
-        paint.shader = LinearGradient(x, y - 15f * u, x, y + 15f * u, Color.WHITE, Color.rgb(214, 226, 245), Shader.TileMode.CLAMP)
-        box.set(x - 23f * u, y - 15f * u, x + 23f * u, y + 15f * u)
-        canvas.drawRoundRect(box, 3f * u, 3f * u, paint)
-        paint.shader = null
-        paint.color = Color.rgb(130, 150, 190)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 1.6f * u
-        canvas.drawLine(x - 23f * u, y - 15f * u, x, y + 3f * u, paint)
-        canvas.drawLine(x + 23f * u, y - 15f * u, x, y + 3f * u, paint)
-        paint.style = Paint.Style.FILL
-        paint.color = Color.rgb(230, 57, 70)
-        canvas.drawCircle(x, y + 2f * u, 4.5f * u, paint)
-        canvas.restore()
+        frameBox.set(0f, 0f, w, h)
+        canvas.drawBitmap(frame, null as Rect?, frameBox, framePaint)
     }
 
     companion object {
@@ -176,32 +80,34 @@ class MiniBuddy(context: Context) : View(context) {
     }
 }
 
-/** Blender se render hue asli 3D frames. Ek baar load hote hain. */
+/** Blender ke frames. Ek clip zaroorat par load, sirf aakhri teen yaad rehte hain. */
 object Frames {
-    @Volatile var idle: List<Bitmap> = emptyList()
-    @Volatile var talk: List<Bitmap> = emptyList()
-    @Volatile var mail: List<Bitmap> = emptyList()
-    private var started = false
+    private const val COUNT = 24
+    private const val KEEP = 3
+    private val clips = Collections.synchronizedMap(object : LinkedHashMap<String, List<Bitmap>>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Bitmap>>) = size > KEEP
+    })
+    private val loading = Collections.synchronizedSet(HashSet<String>())
 
-    private fun read(context: Context, name: String): List<Bitmap> = (0 until 24).mapNotNull { i ->
-        try {
-            context.assets.open("chhotu/" + name + "_" + i.toString().padStart(2, '0') + ".webp").use {
-                BitmapFactory.decodeStream(it)
-            }
-        } catch (e: IOException) {
-            null
-        }
-    }
+    fun get(name: String): List<Bitmap>? = clips[name]
 
-    @Synchronized
-    fun load(context: Context) {
-        if (started) return
-        started = true
+    fun prepare(context: Context, name: String) {
+        if (clips.containsKey(name) || !loading.add(name)) return
         val app = context.applicationContext
         Thread {
-            idle = read(app, "idle")
-            talk = read(app, "talk")
-            mail = read(app, "mail")
+            val frames = (0 until COUNT).mapNotNull { i ->
+                try {
+                    app.assets.open("chhotu/" + name + "_" + i.toString().padStart(2, '0') + ".webp").use {
+                        BitmapFactory.decodeStream(it)
+                    }
+                } catch (e: IOException) {
+                    null
+                }
+            }
+            clips[name] = frames
+            loading.remove(name)
         }.start()
     }
+
+    fun load(context: Context) = prepare(context, "idle")
 }

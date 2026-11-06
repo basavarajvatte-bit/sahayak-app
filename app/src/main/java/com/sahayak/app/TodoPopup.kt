@@ -130,18 +130,20 @@ class TodoPopup(private val service: AccessibilityService) {
     private var box: LinearLayout? = null
     private var crack: CrackView? = null
     private var buddy: MiniBuddy? = null
+    private var speakMood = "talk"
+    private var endMood = "happy"
     private var ttsReady = false
     private val tts: TextToSpeech = TextToSpeech(service) { status ->
         if (status == TextToSpeech.SUCCESS) {
             speaker().language = Locale("en", "IN")
             speaker().setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    main.post { buddy?.talking = true }
+                    main.post { buddy?.mood = speakMood }
                 }
 
                 override fun onDone(utteranceId: String?) {
                     main.post {
-                        buddy?.talking = false
+                        buddy?.mood = endMood
                         main.removeCallbacks(hideLater)
                         main.postDelayed(hideLater, AFTER_SPEECH_MS)
                     }
@@ -190,8 +192,12 @@ class TodoPopup(private val service: AccessibilityService) {
                 hide()
             }
         }
-        val robot = MiniBuddy(service).apply { holdingMail = true }
+        val robot = MiniBuddy(service).apply { mood = "surprised" }
         buddy = robot
+        speakMood = "mail"
+        endMood = "happy"
+        Frames.prepare(service, "mail")
+        main.postDelayed({ if (buddy === robot) robot.mood = "mail" }, MAIL_SURPRISE_MS)
         card.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         card.addView(TextView(service).apply {
             text = message
@@ -200,6 +206,17 @@ class TodoPopup(private val service: AccessibilityService) {
             gravity = Gravity.CENTER
         })
         reveal(card, message)
+    }
+
+    /** Chhotu ka mood: raat ko neend, kaam zyada ho to gussa ya soch. */
+    private fun todoMood(count: Int): String {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return when {
+            hour >= NIGHT_HOUR || hour < MORNING_HOUR -> "sleepy"
+            count >= MANY_TASKS -> "grumpy"
+            count >= SOME_TASKS -> "thinking"
+            else -> "happy"
+        }
     }
 
     private fun canSpeak(): Boolean = ttsReady &&
@@ -223,8 +240,11 @@ class TodoPopup(private val service: AccessibilityService) {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        val robot = MiniBuddy(service)
+        val robot = MiniBuddy(service).apply { mood = todoMood(items.size) }
         buddy = robot
+        speakMood = "talk"
+        endMood = "sad"
+        Frames.prepare(service, "talk")
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
             text = "To-do: tap when done"
@@ -244,6 +264,9 @@ class TodoPopup(private val service: AccessibilityService) {
                     text = "✓  " + item.optString("text")
                     alpha = 0.5f
                     isClickable = false
+                    if (ttsReady) tts.stop()
+                    endMood = "excited"
+                    buddy?.mood = "excited"
                     main.removeCallbacks(hideLater)
                     main.postDelayed(hideLater, AFTER_TAP_MS)
                 }
@@ -336,13 +359,18 @@ class TodoPopup(private val service: AccessibilityService) {
 
     companion object {
         private const val SHOW_MS = 1_000L
-        private const val AFTER_SPEECH_MS = 400L
+        private const val AFTER_SPEECH_MS = 1_800L
+        private const val MAIL_SURPRISE_MS = 1_000L
+        private const val NIGHT_HOUR = 22
+        private const val MORNING_HOUR = 6
+        private const val MANY_TASKS = 5
+        private const val SOME_TASKS = 3
         private const val MAX_SPEECH_MS = 15_000L
         private const val MAX_SPOKEN = 3
         private const val POP_MS = 420L
         private const val CRACK_MS = 520L
         private const val LEAVE_MS = 220L
-        private const val AFTER_TAP_MS = 1_000L
+        private const val AFTER_TAP_MS = 1_800L
         private const val MAX_ROWS = 5
     }
 }
