@@ -1,0 +1,51 @@
+name: Render Chhotu
+
+on:
+  push:
+    branches: [main]
+    paths: ["art/chhotu.py", "art/mode.txt"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq blender webp
+          blender --version | head -1
+      - name: Render
+        run: |
+          MODE=$(cat art/mode.txt)
+          blender -b -noaudio -P art/chhotu.py -- "$MODE" "$PWD/art/out"
+          ls art/out | wc -l
+      - name: Save
+        run: |
+          MODE=$(cat art/mode.txt)
+          if [ "$MODE" = preview ]; then
+            mkdir -p art/preview && cp art/out/*.png art/preview/
+          else
+            mkdir -p app/src/main/assets/chhotu
+            for f in art/out/*.png; do
+              cwebp -quiet -q 86 -alpha_q 90 "$f" -o "app/src/main/assets/chhotu/$(basename "${f%.png}").webp"
+            done
+          fi
+          rm -rf art/out
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add art/preview app/src/main/assets 2>/dev/null || true
+          git commit -m "Render Chhotu art ($MODE)" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Build app
+        if: ${{ hashFiles('art/mode.txt') != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main
