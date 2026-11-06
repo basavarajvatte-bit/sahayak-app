@@ -764,6 +764,22 @@ def clip(name, t):
         p["ra"] = wave(wave(hold, (1.5, -0.4, 1.25), float(smooth01((t - 0.24) / 0.1))), (1.1, -1.05, -0.2), k)
         p["la"] = (-1.32, -0.2, -0.82)
         p["spin"] = t * 9 * 2 * math.pi
+    elif name == 'dance':
+        step = math.sin(w * 3)
+        bounce = abs(math.sin(w * 6))
+        p.update(mw=0.3, mc=0.1, hu=0.03, hl=0.15, smile=1.0, llid=-22, ulid=30, bi=0.06, bo=0.08, tongue=0.6,
+                 pupil=0.32, z=bounce * 0.12, sq=1 - (1 - bounce) * 0.05, x=step * 0.22, tilt=-step * 0.14,
+                 turn=step * 0.25, hz=-step * 0.25, hy=step * 0.12, hx=-0.05 + bounce * 0.07, spread=0.3, gx=-step * 0.08)
+        # part one: disco point, arms take turns
+        a = 0.5 + 0.5 * math.sin(w * 3)
+        right = wave((1.0, -0.4, -0.95), (1.3, -0.45, 1.1), a)
+        left = wave((-1.3, -0.45, 1.1), (-1.0, -0.4, -0.95), a)
+        # part two: both hands up, waving
+        wav = math.sin(w * 6) * 0.25
+        mix = float(smooth01((t - 0.42) / 0.16)) * (1 - float(smooth01((t - 0.9) / 0.1)))
+        p["ra"] = wave(right, (1.05 + wav, -0.4, 1.05), mix)
+        p["la"] = wave(left, (-1.05 + wav, -0.4, 1.05), mix)
+        b = blink(t, 0.7)
     elif name in ('swagidle', 'swagtalk'):
         beat = math.sin(w * 2)
         if name == 'swagtalk':
@@ -785,9 +801,9 @@ def apply(p, name):
     p = dict(p, mw=p["mw"] * 1.22, hu=p["hu"] * 1.3, hl=p["hl"] * 1.3)
     v, center = head_verts(p)
     set_key(face_key, v)
-    root.location = (0, 0, p["z"])
+    root.location = (p.get("x", 0.0), 0, p["z"])
     root.scale = (2 - p["sq"], 2 - p["sq"], p["sq"])
-    root.rotation_euler = (p["lean"], 0, p["turn"])
+    root.rotation_euler = (p["lean"], p.get("tilt", 0.0), p["turn"])
     head.rotation_euler = (p["hx"], p["hy"], p["hz"])
     for s in (-1, 1):
         e = eyes[s]
@@ -875,10 +891,10 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('idle', 0.2), ('happy', 0.25), ('swagidle', 0.1)]
+    wanted = [('dance', 0.1), ('dance', 0.27), ('dance', 0.6), ('dance', 0.75)]
     for i, (name, t) in enumerate(wanted):
         render(f"{OUT}/{i}_{name}.png", name, t)
 else:
-    N = 54 if MODE == 'swag' else 36
+    N = 54 if MODE in ('swag', 'dance') else 36
     for i in range(N):
         render(f"{OUT}/{MODE}_{i:02d}.png", MODE, i / N)
