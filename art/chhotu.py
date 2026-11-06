@@ -16,11 +16,7 @@ scene.cycles.samples = 64 if MODE == 'preview' else 40
 scene.cycles.use_adaptive_sampling = True
 scene.cycles.adaptive_threshold = 0.03
 scene.cycles.use_denoising = True
-try:
-    scene.cycles.denoiser = 'OPENIMAGEDENOISE'
-    print("DENOISER", scene.cycles.denoiser)
-except Exception as e:
-    print("DENOISER failed", e)
+scene.cycles.denoiser = 'OPENIMAGEDENOISE'
 scene.cycles.max_bounces = 6
 scene.render.film_transparent = True
 SIZE = 512 if MODE == 'preview' else 384
@@ -32,7 +28,7 @@ try:
     scene.view_settings.look = 'AgX - Punchy'
 except Exception:
     scene.view_settings.view_transform = 'Filmic'
-scene.view_settings.exposure = 0.1
+scene.view_settings.exposure = 0.45
 
 # ---------- materials ----------
 def srgb(h):
@@ -82,10 +78,10 @@ def fur(name, root, tip):
     t.links.new(hair.outputs[0], out.inputs["Surface"])
     return m
 
-skin = mat("skin", srgb("4A30C8"), 0.6, sss=0.3)
-skin_light = mat("skin_light", srgb("A997FF"), 0.6, sss=0.3)
-fur_main = fur("fur_main", srgb("2C1A9A"), srgb("7A5CFF"))
-fur_light = fur("fur_light", srgb("A796F0"), srgb("D9CEFF"))
+skin = mat("skin", srgb("6A50D8"), 0.6, sss=0.3)
+skin_light = mat("skin_light", srgb("C9BCFF"), 0.6, sss=0.3)
+fur_main = fur("fur_main", srgb("5A3AE8"), srgb("B49DFF"))
+fur_light = fur("fur_light", srgb("D0C4FF"), srgb("FAF7FF"))
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
@@ -151,7 +147,8 @@ def eye_material():
     return m, cr
 
 eye_m, eye_ramp = eye_material()
-lid_m = mat("lid", srgb("3A24B0"), 0.5, sss=0.3)
+spark_m = mat("spark", (1, 1, 1), 0.4, emission=4.0)
+lid_m = mat("lid", srgb("6147D6"), 0.5, sss=0.3)
 
 # ---------- helpers ----------
 def empty(name, parent=None, loc=(0, 0, 0)):
@@ -347,7 +344,7 @@ rho_v = np.concatenate([RHO[ring], np.zeros(extra)])
 keep = smooth01((rho_v - 0.09) / 0.1)
 muzzle = gauss(unit, M, 0.47)
 for s in (-1, 1):
-    keep = keep * smooth01((1 - unit @ EYE_DIR[s]) * 2 / (0.40 * 0.40) - 0.7)
+    keep = keep * smooth01((1 - unit @ EYE_DIR[s]) * 2 / (0.36 * 0.36) - 0.65)
 short = 0.28 + 0.72 * smooth01((rho_v - 0.1) / 0.75)
 add_group(face, "main", keep * smooth01((0.72 - muzzle) / 0.5))
 add_group(face, "pale", keep * smooth01((muzzle - 0.28) / 0.4))
@@ -358,8 +355,8 @@ add_fur(face, "muzzle_fur", fur_light, 4000, 16, 0.10, "pale", "len", 3, 0.0)
 # ---------- eyes ----------
 eye_c = {}
 for s in (-1, 1):
-    eye_c[s] = surface(EYE_DIR[s][None, :])[0] - EYE_DIR[s] * 0.20
-R_EYE = 0.385
+    eye_c[s] = surface(EYE_DIR[s][None, :])[0] - EYE_DIR[s] * 0.235
+R_EYE = 0.415
 eyes = {}
 
 def half_shell(name, parent, top):
@@ -384,6 +381,8 @@ for s in (-1, 1):
     e.rotation_euler = (0, 0, s * 0.16)
     gaze = empty("gaze", e)
     ball_o = ball("eyeball", eye_m, (0, 0, 0), R_EYE, gaze, 64)
+    for x, z, r in ((0.13, 0.17, 0.082), (-0.11, -0.12, 0.04)):
+        ball("catchlight", spark_m, (x, -math.sqrt(max(R_EYE ** 2 - x * x - z * z, 0)) * 1.005, z), (r, r * 0.45, r), e, 20)
     roll = empty("roll", e)
     up = empty("up", roll); low = empty("low", roll)
     upper = half_shell("upper", up, True); upper.scale = (R_EYE * 1.07,) * 3
@@ -449,7 +448,7 @@ for s in (-1, 1):
     tip = ball("antenna_tip", tip_m, pts[-1], 0.15, head)
     ant[s] = (base, sp, tip)
 
-tears = {s: ball("tear", tear_m, (0, 0, 0), (0.06, 0.05, 0.085), head, 24) for s in (-1, 1)}
+tears = {s: ball("tear", tear_m, (0, 0, 0), (0.075, 0.06, 0.105), head, 24) for s in (-1, 1)}
 
 # ---------- body, limbs ----------
 def lathe_ellipsoid(a, b, c, nu=120, nv=90, pear=0.14):
@@ -506,11 +505,11 @@ def tube_faces():
     f = []
     for i in range(NA - 1):
         for j in range(NC):
-            f.append((i * NC + j, i * NC + (j + 1) % NC, (i + 1) * NC + (j + 1) % NC, (i + 1) * NC + j))
+            f.append((i * NC + j, (i + 1) * NC + j, (i + 1) * NC + (j + 1) % NC, i * NC + (j + 1) % NC))
     s, e = NA * NC, NA * NC + 1
     for j in range(NC):
-        f.append((j, s, (j + 1) % NC))
-        f.append(((NA - 1) * NC + j, (NA - 1) * NC + (j + 1) % NC, e))
+        f.append((j, (j + 1) % NC, s))
+        f.append(((NA - 1) * NC + j, e, (NA - 1) * NC + (j + 1) % NC))
     return f
 
 arms, hands = {}, {}
@@ -584,7 +583,7 @@ scene.world.node_tree.nodes["Background"].inputs[0].default_value = (0.8, 0.84, 
 scene.world.node_tree.nodes["Background"].inputs[1].default_value = 0.35
 
 # ---------- emotions ----------
-BASE = dict(REST, ulid=42.0, llid=-58.0, roll=0.0, bi=0.0, bo=0.0, gx=0.0, gz=0.0, pupil=0.27,
+BASE = dict(REST, ulid=42.0, llid=-58.0, roll=0.0, bi=0.0, bo=0.0, gx=0.0, gz=0.0, pupil=0.31,
             hx=0.0, hy=0.0, hz=0.0, z=0.0, sq=1.0, lean=0.0, turn=0.0, droop=0.0, spread=0.0,
             tongue=0.0, tear=0.0, mail=False, teeth=True,
             la=(-1.18, -0.3, -1.0), ra=(1.18, -0.3, -1.0))
@@ -686,6 +685,7 @@ def clip(name, t):
     return p
 
 def apply(p, name):
+    p = dict(p, mw=p["mw"] * 1.22, hu=p["hu"] * 1.3, hl=p["hl"] * 1.3)
     v, center = head_verts(p)
     set_key(face_key, v)
     root.location = (0, 0, p["z"])
@@ -711,8 +711,9 @@ def apply(p, name):
             ang += drop * 0.72 + math.sin(2 * math.pi * (i * 0.1 + p["z"])) * 0.02
             cur = cur + np.array([s * (spread + math.sin(ang) * 0.17), 0, math.cos(ang) * 0.17])
         tip.location = tuple(np.array(sp.points[-1].co[:3]))
-        d = eye_c[s] + np.array([s * 0.14, -0.31, -0.36 - p["tear"] * 0.45])
-        tears[s].location = tuple(d)
+        fall = EYE_DIR[s] + np.array([s * 0.04, -0.05, -0.42 - p["tear"] * 0.42])
+        fall = fall / np.linalg.norm(fall)
+        tears[s].location = tuple(surface(fall[None, :])[0] + fall * 0.16)
         tears[s].hide_render = name != 'sad'
         o, key, a = arms[s]
         h = np.array(p["ra"] if s > 0 else p["la"])
