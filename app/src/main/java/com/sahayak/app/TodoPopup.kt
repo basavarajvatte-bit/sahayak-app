@@ -160,9 +160,46 @@ class TodoPopup(private val service: AccessibilityService) {
 
     private fun speech(items: List<org.json.JSONObject>): String {
         val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
-        val name = prefs.getString("name", "").orEmpty()
         val tasks = items.take(MAX_SPOKEN).joinToString(". Also, ") { it.optString("text") }
-        return if (name.isEmpty()) tasks else "$name, $tasks"
+        return hello(prefs) + ", your to do list. $tasks"
+    }
+
+    private fun hello(prefs: android.content.SharedPreferences): String {
+        val name = prefs.getString("name", "").orEmpty()
+        return if (name.isEmpty()) "Hi" else "Hi $name"
+    }
+
+    /** Naya mail aane par Chhotu envelope lekar aata hai. */
+    fun showMail() {
+        hide()
+        val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
+        val message = hello(prefs) + ", you got a mail!"
+        val pad = (14 * density).toInt()
+        val card = LinearLayout(service).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply {
+                setColor(Color.argb(242, 20, 24, 33))
+                cornerRadius = 18 * density
+            }
+            setOnClickListener {
+                service.packageManager.getLaunchIntentForPackage("com.google.android.gm")?.let { open ->
+                    service.startActivity(open.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+                hide()
+            }
+        }
+        val robot = MiniBuddy(service).apply { holdingMail = true }
+        buddy = robot
+        card.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
+        card.addView(TextView(service).apply {
+            text = message
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+        })
+        reveal(card, message)
     }
 
     private fun canSpeak(): Boolean = ttsReady &&
@@ -219,6 +256,10 @@ class TodoPopup(private val service: AccessibilityService) {
                 setTextColor(Color.LTGRAY)
             })
         }
+        reveal(card, speech(items))
+    }
+
+    private fun reveal(card: LinearLayout, words: String) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -260,7 +301,7 @@ class TodoPopup(private val service: AccessibilityService) {
         }
         if (canSpeak()) {
             main.postDelayed({
-                tts.speak(speech(items), TextToSpeech.QUEUE_FLUSH, Bundle(), "todo")
+                tts.speak(words, TextToSpeech.QUEUE_FLUSH, Bundle(), "todo")
             }, POP_MS)
             main.postDelayed(hideLater, MAX_SPEECH_MS)
         } else {

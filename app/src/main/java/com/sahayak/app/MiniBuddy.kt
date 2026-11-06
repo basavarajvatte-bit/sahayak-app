@@ -23,6 +23,7 @@ class MiniBuddy(context: Context) : View(context) {
     private val box = RectF()
     private var time = 0f
     var talking = false
+    var holdingMail = false
 
     private val ticker = ValueAnimator.ofFloat(0f, 1000f).apply {
         duration = 1_000_000L
@@ -132,6 +133,25 @@ class MiniBuddy(context: Context) : View(context) {
         val push = abs(sin(time * 8f)) * 3f
         ball(canvas, cx - 41f * u, (61f - push) * u, 9f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
         ball(canvas, cx + 41f * u, (61f + push) * u, 9f * u, Color.rgb(255, 196, 92), Color.rgb(204, 96, 22))
+        if (holdingMail) drawEnvelope(canvas, cx + 30f * u, (45f + push) * u, u)
+        canvas.restore()
+    }
+
+    private fun drawEnvelope(canvas: Canvas, x: Float, y: Float, u: Float) {
+        canvas.save()
+        canvas.rotate(-10f + sin(time * 7f) * 6f, x, y)
+        paint.shader = LinearGradient(x, y - 15f * u, x, y + 15f * u, Color.WHITE, Color.rgb(214, 226, 245), Shader.TileMode.CLAMP)
+        box.set(x - 23f * u, y - 15f * u, x + 23f * u, y + 15f * u)
+        canvas.drawRoundRect(box, 3f * u, 3f * u, paint)
+        paint.shader = null
+        paint.color = Color.rgb(130, 150, 190)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.6f * u
+        canvas.drawLine(x - 23f * u, y - 15f * u, x, y + 3f * u, paint)
+        canvas.drawLine(x + 23f * u, y - 15f * u, x, y + 3f * u, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(230, 57, 70)
+        canvas.drawCircle(x, y + 2f * u, 4.5f * u, paint)
         canvas.restore()
     }
 }

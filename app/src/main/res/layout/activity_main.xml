@@ -144,7 +144,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:minHeight="48dp"
-                android:text="Mini robot speaks my tasks on unlock"
+                android:text="Chhotu speaks my tasks on unlock"
+                android:textSize="16sp" />
+
+            <CheckBox
+                android:id="@+id/mailBuddy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="Chhotu tells me about new Gmail mail"
                 android:textSize="16sp" />
 
             <LinearLayout

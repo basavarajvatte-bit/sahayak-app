@@ -2,6 +2,7 @@ package com.sahayak.app
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityService
+import android.app.KeyguardManager
 import android.accessibilityservice.GestureDescription
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -22,6 +23,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.BatteryManager
 import android.os.Environment
+import android.os.PowerManager
 import android.os.StatFs
 import android.os.Bundle
 import android.provider.AlarmClock
@@ -54,7 +56,12 @@ class PhoneControl : AccessibilityService() {
     private var todoPopup: TodoPopup? = null
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            todoPopup?.show()
+            if (mailWaiting) {
+                mailWaiting = false
+                todoPopup?.showMail()
+            } else {
+                todoPopup?.show()
+            }
         }
     }
 
@@ -177,8 +184,28 @@ class PhoneControl : AccessibilityService() {
         }
     }
 
+    private var lastMailAt = 0L
+    private var mailWaiting = false
+
+    /** Gmail ka naya notification: Chhotu batata hai. Mail ka text nahi padha jata. */
+    private fun watchMail(event: AccessibilityEvent) {
+        if (event.eventType != AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) return
+        if (event.packageName?.toString() != GMAIL) return
+        val prefs = getSharedPreferences("sahayak", MODE_PRIVATE)
+        if (!prefs.getBoolean("mail_buddy", true)) return
+        val now = System.currentTimeMillis()
+        if (now - lastMailAt < MAIL_GAP_MS) return
+        lastMailAt = now
+        val awake = getSystemService(PowerManager::class.java).isInteractive
+        val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        if (awake && !locked) todoPopup?.showMail() else mailWaiting = true
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event != null) recordStep(event)
+        if (event != null) {
+            recordStep(event)
+            watchMail(event)
+        }
     }
 
     override fun onInterrupt() = Unit
@@ -982,6 +1009,7 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_SCAN = 1_500
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
+        private const val MAIL_GAP_MS = 30_000L
         private const val UPLOAD_ROUNDS = 30
         private const val UPLOAD_WAIT_MS = 2_000L
         private const val LAST_APP_MS = 200L

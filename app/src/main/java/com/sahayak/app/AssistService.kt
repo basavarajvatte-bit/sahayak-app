@@ -458,6 +458,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 } else {
                     releasedAt = System.currentTimeMillis()
                     RunLog.add(this, "order listener")
+                    voiceRecognised()
                     dispatchOrder(words)
                 }
             }
@@ -592,6 +593,14 @@ class AssistService : Service(), GeminiLive.Callback {
             caption?.show(text)
             mainHandler.removeCallbacks(hideReply)
             mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
+        }
+    }
+
+    private fun voiceRecognised() {
+        mainHandler.post {
+            caption?.show("▌▌▌ VOICE RECOGNISED ▌▌▌")
+            mainHandler.removeCallbacks(hideReply)
+            mainHandler.postDelayed(hideReply, VOICE_BANNER_MS)
         }
     }
 
@@ -793,6 +802,7 @@ class AssistService : Service(), GeminiLive.Callback {
             if (stopRequested) return
             releasedAt = System.currentTimeMillis()
             RunLog.add(this, "order whisper")
+            voiceRecognised()
             dispatchOrder(text)
         } catch (e: IOException) {
             if (stopRequested) return
@@ -1092,6 +1102,7 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val NUDGE_GAP_MS = 5_000L
         private const val LATENCY_WINDOW_MS = 15_000L
         private const val MIC_TAIL_MS = 80L
+        private const val VOICE_BANNER_MS = 900L
         private const val ORDER_WINDOW_MS = 300_000L
         private const val HISTORY_SIZE = 8
         private const val MAX_REVIEWS = 3

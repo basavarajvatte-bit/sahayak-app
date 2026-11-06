@@ -67,6 +67,10 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        findViewById<CheckBox>(R.id.mailBuddy).apply {
+            isChecked = prefs.getBoolean("mail_buddy", true)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("mail_buddy", on).apply() }
+        }
         findViewById<CheckBox>(R.id.todoSpeak).apply {
             isChecked = prefs.getBoolean("todo_speak", true)
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("todo_speak", on).apply() }
