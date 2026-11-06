@@ -426,13 +426,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:minHeight="48dp"
-                android:text="Learn my habits daily"
+                android:text="Strong memory and learning"
                 android:textSize="17sp" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="When on, your commands are saved on this phone and sent to Gemini once a day to learn. Long numbers are hidden. Turning this off deletes the daily record."
+                android:text="When on, your orders and results are saved on this phone. Sahayak can search them, and sends them to Gemini to learn after every few orders. Long numbers are hidden and lines with passwords or OTPs are skipped. Turning this off deletes the record."
                 android:textColor="#667085"
                 android:textSize="14sp" />
 

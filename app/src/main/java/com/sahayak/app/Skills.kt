@@ -214,6 +214,7 @@ object Skills {
         .put("format", "sahayak-backup-1")
         .put("skills", JSONArray(all(context)))
         .put("memory", JSONArray(Memory.all(context)))
+        .put("brain", Brain.exportJson(context))
         .toString(2)
 
     /** Backup se wapas: purana kuch mitata nahi. */
@@ -235,6 +236,7 @@ object Skills {
         }
         val facts = backup.optJSONArray("memory") ?: JSONArray()
         for (i in 0 until facts.length()) Memory.add(context, facts.optString(i))
+        Brain.importJson(context, backup.optJSONObject("brain"))
         return added
     }
 }

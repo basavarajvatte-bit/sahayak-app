@@ -268,6 +268,7 @@ object ShortsQueue {
             ShortOutcome.DONE -> {
                 item.put("status", UPLOADED).put("reason", "")
                 update(context, item)
+                History.add(context, "youtube", "uploaded $name")
                 WorkList.notifyText(context, NOTE_ID, "Upload started: $name")
                 if (scheduled) armNextSlot(context)
             }

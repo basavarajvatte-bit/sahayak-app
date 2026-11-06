@@ -12,6 +12,7 @@ import android.content.Context
 import android.text.format.DateFormat
 import org.json.JSONArray
 import java.util.Date
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 
 /** Aapke orders se roz seekhna. Sirf aapke chalu karne par, aur aap kabhi bhi mita sakte hain. */
@@ -24,8 +25,9 @@ object DailyLearning {
     private const val JOB_ID = 417
     private const val MAX_LINES = 300
     private const val MIN_LINES = 3
-    private val SECRET_WORDS = listOf("password", "otp", "cvv", "upi pin", "पासवर्ड", "ओटीपी")
-    private val LONG_NUMBER = Regex("\\d{6,}")
+    private const val NUDGE_LINES = 12
+    private const val ONCE = "strong_memory_on"
+    private val learning = AtomicBoolean(false)
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -54,12 +56,24 @@ object DailyLearning {
     @Synchronized
     fun note(context: Context, text: String) {
         if (!isEnabled(context)) return
-        val lower = text.lowercase()
-        if (SECRET_WORDS.any { it in lower }) return
-        val clean = LONG_NUMBER.replace(text, "[number]").take(200)
+        val clean = BrainLogic.scrub(text, 200) ?: return
         val stamp = DateFormat.format("EEE HH:mm", Date()).toString()
         val next = (lines(context) + "$stamp: $clean").takeLast(MAX_LINES)
         prefs(context).edit().putString(LINES, JSONArray(next).toString()).apply()
+    }
+
+    /** Aapne strong memory maangi: ek baar chalu. Baad mein aap band karein to band rahegi. */
+    fun enableOnce(context: Context) {
+        if (prefs(context).getBoolean(ONCE, false)) return
+        prefs(context).edit().putBoolean(ONCE, true).apply()
+        if (!isEnabled(context)) setEnabled(context, true)
+    }
+
+    /** Din bhar ke intezar ke bina, kuch orders ke baad hi seekh lo. */
+    fun nudge(context: Context) {
+        if (!isEnabled(context) || lines(context).size < NUDGE_LINES) return
+        val app = context.applicationContext
+        Thread { learn(app, false) }.start()
     }
 
     fun summary(context: Context): String = prefs(context).getString(SUMMARY, "").orEmpty()
@@ -67,6 +81,7 @@ object DailyLearning {
     @Synchronized
     fun clear(context: Context) {
         prefs(context).edit().remove(LINES).remove(SUMMARY).apply()
+        History.clear(context)
     }
 
     /** App khulne par bhi: agar din ki seekh baaki ho to chala do. */
@@ -78,12 +93,22 @@ object DailyLearning {
         }
     }
 
-    fun learn(context: Context) {
+    fun learn(context: Context, announce: Boolean = true) {
+        if (!learning.compareAndSet(false, true)) return
+        try {
+            learnNow(context, announce)
+        } finally {
+            learning.set(false)
+        }
+    }
+
+    private fun learnNow(context: Context, announce: Boolean) {
         val journal = lines(context)
         if (!isEnabled(context) || journal.size < MIN_LINES) return
         val key = SecureStore(context.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
         if (key.isEmpty()) return
-        val result = Planner(GeminiLive.newClient(), key, 40L).learn(Memory.all(context), journal) ?: return
+        val result = Planner(GeminiLive.newClient(), key, 40L).learn(Memory.all(context), Brain.profile(context), journal) ?: return
+        result.optString("profile").takeIf { it.isNotBlank() }?.let { Brain.setProfile(context, it) }
         val add = result.optJSONArray("add") ?: JSONArray()
         val remove = result.optJSONArray("remove") ?: JSONArray()
         for (i in 0 until remove.length()) Memory.remove(context, remove.optString(i))
@@ -91,11 +116,12 @@ object DailyLearning {
         for (i in 0 until add.length()) if (Memory.add(context, add.optString(i))) learned++
         val text = result.optString("summary")
         synchronized(this) {
-            prefs(context).edit().remove(LINES).putString(SUMMARY, text)
+            val later = lines(context).filter { it !in journal }
+            prefs(context).edit().putString(LINES, JSONArray(later).toString()).putString(SUMMARY, text)
                 .putLong(LAST_RUN, System.currentTimeMillis()).apply()
         }
         RunLog.add(context, "daily_learning added $learned")
-        if (learned > 0) notifyDone(context, learned)
+        if (announce && learned > 0) notifyDone(context, learned)
     }
 
     private fun notifyDone(context: Context, count: Int) {

@@ -93,9 +93,12 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.clearLearning).setOnClickListener {
             DailyLearning.clear(this)
             Memory.all(this).forEach { Memory.remove(this, it) }
+            Brain.clear(this)
             renderMemory()
             statusText.text = "All learned data deleted."
         }
+        DailyLearning.enableOnce(this)
+        learnBox.isChecked = DailyLearning.isEnabled(this)
         DailyLearning.runIfDue(this)
         findViewById<Button>(R.id.backupButton).setOnClickListener {
             startActivityForResult(
@@ -399,6 +402,32 @@ class MainActivity : Activity() {
         findViewById<TextView>(R.id.learnSummary).text = if (summary.isEmpty()) "" else "Learned today: $summary"
         val box = findViewById<LinearLayout>(R.id.memoryBox)
         box.removeAllViews()
+        box.addView(TextView(this).apply {
+            text = History.count(this@MainActivity).toString() + " past records saved on this phone"
+            textSize = 15f
+            setTextColor(0xFF1F5C4D.toInt())
+        })
+        val who = Brain.profile(this)
+        if (who.isNotEmpty()) {
+            box.addView(TextView(this).apply {
+                text = "Profile: $who"
+                textSize = 15f
+                setTextColor(0xFF1D2433.toInt())
+            })
+        }
+        Brain.books(this).forEach { book ->
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(TextView(this).apply {
+                text = "Learned: " + book.optString("name") + " (worked " + book.optInt("wins") + " times)"
+                textSize = 15f
+                setTextColor(0xFF1D2433.toInt())
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(smallButton("Remove") {
+                Brain.remove(this, book.optString("name"))
+                renderMemory()
+            })
+            box.addView(row)
+        }
         Memory.all(this).forEach { fact ->
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             row.addView(TextView(this).apply {
