@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -138,6 +139,9 @@ class TodoPopup(
     private val tts: TextToSpeech = TextToSpeech(service) { status ->
         if (status == TextToSpeech.SUCCESS) {
             speaker().language = Locale("en", "IN")
+            bestVoice()?.let { speaker().voice = it }
+            speaker().setPitch(CARTOON_PITCH)
+            speaker().setSpeechRate(CARTOON_RATE)
             speaker().setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
                     main.post { buddy?.mood = speakMood }
@@ -162,6 +166,15 @@ class TodoPopup(
 
     private fun speaker(): TextToSpeech = tts
 
+    /** Phone ki sabse saaf English voice, jo pehle se installed ho. Pehli pasand India wali. */
+    private fun bestVoice(): Voice? = try {
+        speaker().voices.orEmpty()
+            .filter { it.locale.language == "en" && !it.isNetworkConnectionRequired && "notInstalled" !in it.features }
+            .maxWithOrNull(compareBy<Voice>({ it.quality }, { it.locale.country == "IN" }))
+    } catch (e: RuntimeException) {
+        null // kuch phones ki TTS engine voice list nahi deti
+    }
+
     /** Sirf list, koi hello ya extra line nahi. */
     private fun speech(items: List<org.json.JSONObject>): String =
         items.take(MAX_SPOKEN).joinToString(". ") { it.optString("text") }
@@ -176,10 +189,6 @@ class TodoPopup(
         hide()
         val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
         val message = hello(prefs) + ", you got a mail!"
-        if (ttsReady) {
-            tts.setPitch(1f)
-            tts.setSpeechRate(1f)
-        }
         val pad = (14 * density).toInt()
         val card = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
@@ -239,11 +248,6 @@ class TodoPopup(
         speakMood = "swagtalk"
         endMood = "swagidle"
         Frames.prepare(service, speakMood)
-        // Thodi dheemi aur bhaari awaaz, attitude ke saath
-        if (ttsReady) {
-            tts.setPitch(SWAG_PITCH)
-            tts.setSpeechRate(SWAG_RATE)
-        }
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
             text = "To-do: tap when done"
@@ -361,8 +365,8 @@ class TodoPopup(
         private const val AFTER_SPEECH_MS = 1_800L
         private const val MAIL_SURPRISE_MS = 1_000L
         private const val SWAG_MS = 3_000L
-        private const val SWAG_PITCH = 0.82f
-        private const val SWAG_RATE = 0.9f
+        private const val CARTOON_PITCH = 1.6f
+        private const val CARTOON_RATE = 1.08f
         private const val MAX_SPEECH_MS = 15_000L
         private const val MAX_SPOKEN = 3
         private const val POP_MS = 420L
