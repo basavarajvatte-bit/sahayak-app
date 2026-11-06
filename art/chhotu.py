@@ -2,7 +2,7 @@
 # Run with: blender -b -P chhotu.py -- <preview|clipname> <outdir>
 import bpy, math, os, sys
 import numpy as np
-from mathutils import Vector
+from mathutils import Vector, Matrix, Quaternion
 
 args = sys.argv[sys.argv.index("--") + 1:]
 MODE, OUT = args[0], args[1]
@@ -275,7 +275,7 @@ def lip_curve(p):
     x = p["mw"] * np.sign(c) * np.abs(c) ** 0.85
     mid = p["mc"] * (x / max(p["mw"], 0.01)) ** 2 + p["my"]
     h = np.where(s > 0, p["hu"], p["hl"])
-    y = mid + np.sign(s) * np.abs(s) ** 0.8 * h
+    y = mid + np.sign(s) * np.abs(s) ** 0.8 * h + p.get("ms", 0.0) * x / max(p["mw"], 0.01)
     return x + p["mx"], y
 
 def head_verts(p):
@@ -559,6 +559,47 @@ flap.location = (0, 0, 0.0)
 stamp = ball("seal", seal, (0, -0.1, 0.05), (0.15, 0.15, 0.05), mail, 32)
 mail_parts = [sheet, flap, stamp]
 
+# original sunglasses: gold rim, deep glossy lenses
+def plate(name, w, h, y, material, parent, bend=0.12, n=56):
+    verts = [(0, y, 0)]
+    for j in range(n):
+        a = 2 * math.pi * j / n
+        c, s_ = math.cos(a), math.sin(a)
+        x = w * math.copysign(abs(c) ** 0.55, c)
+        z = h * math.copysign(abs(s_) ** 0.62, s_) * (1.0 + 0.1 * (x / w))
+        verts.append((x, y + bend * (x / w) ** 2 * 0.3, z))
+    faces = [(0, j + 1, (j + 1) % n + 1) for j in range(n)]
+    return new_mesh(name, verts, faces, parent, [material])
+
+frame_m = mat("shade_frame", srgb("0B0B10"), 0.16, coat=1.0)
+gold_m = mat("shade_gold", srgb("FFC247"), 0.2, coat=1.0)
+gold_m.node_tree.nodes["Principled BSDF"].inputs["Metallic"].default_value = 1.0
+lens_m = mat("shade_lens", srgb("080A14"), 0.04, coat=1.0)
+shine_m = mat("shine", (1, 0.96, 0.82), 0.3, emission=14.0)
+shades = empty("shades")
+shades.rotation_mode = 'QUATERNION'
+LENS_X = 0.52
+shade_parts = []
+for s in (-1, 1):
+    pivot = empty("lens_at", shades, (s * LENS_X, 0, 0))
+    pivot.rotation_euler = (0, 0, s * 0.14)
+    shade_parts.append(plate("rim", 0.455, 0.355, 0.012, gold_m, pivot))
+    shade_parts.append(plate("frame", 0.435, 0.335, 0.0, frame_m, pivot))
+    shade_parts.append(plate("lens", 0.40, 0.30, -0.016, lens_m, pivot))
+    hinge = Vector((s * 0.95, 0.03, 0.08))
+    arm = bpy.data.curves.new("temple", 'CURVE')
+    arm.dimensions = '3D'; arm.bevel_depth = 0.028; arm.bevel_resolution = 3
+    sp = arm.splines.new('POLY'); sp.points.add(1)
+    sp.points[0].co = (*hinge, 1); sp.points[1].co = (s * 1.18, 0.9, 0.12, 1)
+    arm.materials.append(gold_m)
+    o = bpy.data.objects.new("temple", arm); bpy.context.collection.objects.link(o); o.parent = shades
+    shade_parts.append(o)
+bridge = curve("bridge", [(-0.14, 0.0, 0.1), (-0.07, -0.015, 0.145), (0, -0.02, 0.155), (0.07, -0.015, 0.145), (0.14, 0.0, 0.1)],
+               [1, 1, 1, 1, 1], 0.03, gold_m, shades)[0]
+shade_parts.append(bridge)
+glint = ball("glint", shine_m, (0, -0.04, 0), (0.07, 0.01, 0.07), shades, 20)
+SHADE_LOCAL = Matrix.Translation((0, float(eye_c[1][1]) - R_EYE * 1.1, float(eye_c[1][2]) + 0.02))
+
 # ---------- camera and light ----------
 target = Vector((0, 0, -0.42))
 cam_data = bpy.data.cameras.new("cam")
@@ -593,7 +634,7 @@ scene.world.node_tree.nodes["Background"].inputs[0].default_value = (0.8, 0.84, 
 scene.world.node_tree.nodes["Background"].inputs[1].default_value = 0.35
 
 # ---------- emotions ----------
-BASE = dict(REST, ulid=42.0, llid=-58.0, roll=0.0, bi=0.0, bo=0.0, gx=0.0, gz=0.0, pupil=0.31,
+BASE = dict(REST, sf=None, glint=None, ulid=42.0, llid=-58.0, roll=0.0, bi=0.0, bo=0.0, gx=0.0, gz=0.0, pupil=0.31,
             hx=0.0, hy=0.0, hz=0.0, z=0.0, sq=1.0, lean=0.0, turn=0.0, droop=0.0, spread=0.0,
             tongue=0.0, tear=0.0, mail=False, teeth=True,
             la=(-1.18, -0.3, -1.0), ra=(1.18, -0.3, -1.0))
@@ -688,6 +729,29 @@ def clip(name, t):
                  gx=0.17, gz=0.16, hz=-0.15 + math.sin(w) * 0.03, hy=0.12, hx=-0.08, spread=0.2)
         p["ra"] = (0.58, -1.12, -0.04)
         b = blink(t, 0.6)
+    elif name == 'swag':
+        k = float(smooth01((t - 0.62) / 0.14))
+        catch = float(np.exp(-(((t - 0.6) / 0.04) ** 2)))
+        p.update(mw=lerp(0.16, 0.24, k), mc=lerp(0.03, 0.09, k), ms=lerp(0.015, 0.05, k), smile=lerp(0.3, 0.8, k), bi=-0.03, bo=0.16,
+                 ulid=lerp(26, 22, k), llid=-40, gx=lerp(0.14, 0.0, k), pupil=0.27, z=-catch * 0.06, sq=1 - catch * 0.07,
+                 hx=lerp(0.0, 0.02, k) + catch * 0.14 - float(smooth01((t - 0.3) / 0.2)) * (1 - k) * 0.2,
+                 hz=lerp(0.12, -0.2, k), hy=lerp(-0.04, 0.09, k), spread=0.3, sf=float(np.clip((t - 0.28) / 0.34, 0, 1)),
+                 glint=float(np.clip((t - 0.76) / 0.16, 0, 1)) if t > 0.76 else None)
+        hold = (1.42, -0.55, 0.62)
+        p["ra"] = wave(wave(hold, (1.5, -0.4, 1.25), float(smooth01((t - 0.24) / 0.1))), (1.1, -1.05, -0.2), k)
+        p["la"] = (-1.32, -0.2, -0.82)
+        p["spin"] = t * 9 * 2 * math.pi
+    elif name in ('swagidle', 'swagtalk'):
+        beat = math.sin(w * 2)
+        if name == 'swagtalk':
+            talk(p, t)
+            p["hu"] *= 0.7; p["hl"] *= 0.7
+        else:
+            p.update(mw=0.24, mc=0.09, smile=0.8)
+        p.update(ms=0.05, bo=0.16, bi=-0.03, ulid=22, llid=-40, sf=1.0, hz=-0.2 + math.sin(w) * 0.04, hy=0.09, hx=0.03 + abs(beat) * 0.07,
+                 spread=0.3, z=abs(beat) * 0.025)
+        p["ra"] = (1.1, -1.05, -0.2 + (math.sin(w * 2) * 0.1 if name == 'swagtalk' else 0.0))
+        p["la"] = (-1.32, -0.2, -0.82)
     if b > 0:
         p["ulid"] = lerp(p["ulid"], -9, b)
         p["llid"] = lerp(p["llid"], -28, b)
@@ -749,17 +813,47 @@ def apply(p, name):
     eye_ramp.elements[1].position = pupil
     eye_ramp.elements[2].position = pupil + 0.04
 
+def place_shades(p):
+    f = p["sf"]
+    for part in shade_parts:
+        part.hide_render = f is None
+    glint.hide_render = p["glint"] is None
+    if f is None:
+        shades.matrix_world = Matrix.Translation((0, 0, 40))
+        return
+    on = head.matrix_world @ SHADE_LOCAL
+    goal, turn, _ = on.decompose()
+    grip = hands[1].matrix_world.translation + Vector((-0.12, -0.28, 0.2))
+    top = (grip + goal) / 2 + Vector((0.1, -0.2, 1.9))
+    if f <= 0:
+        pos = grip
+        rot = Quaternion((0, 0, 1), p.get("spin", 0.0))
+    elif f >= 1:
+        pos, rot = goal, turn
+    else:
+        pos = grip * (1 - f) ** 2 + top * (2 * f * (1 - f)) + goal * f * f
+        rot = Quaternion((1, 0, 0), (1 - f) * 2 * math.pi * 2).slerp(turn, float(smooth01((f - 0.45) / 0.55)))
+    shades.matrix_world = Matrix.Translation(pos) @ rot.to_matrix().to_4x4()
+    if p["glint"] is not None:
+        g = p["glint"]
+        glint.location = (-0.85 + g * 1.7, -0.05, 0.1)
+        r = 0.12 * math.sin(g * math.pi)
+        glint.scale = (r, 0.01, r)
+
 def render(path, name, t):
-    apply(clip(name, t), name)
+    p = clip(name, t)
+    apply(p, name)
+    bpy.context.view_layer.update()
+    place_shades(p)
     bpy.context.view_layer.update()
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('idle', 0.2), ('mail', 0.2)]
-    for name, t in wanted:
-        render(f"{OUT}/{name}.png", name, t)
+    wanted = [('swag', 0.12), ('swag', 0.45), ('swag', 0.6), ('swag', 0.84), ('swagidle', 0.1), ('swagtalk', 0.05)]
+    for i, (name, t) in enumerate(wanted):
+        render(f"{OUT}/{i}_{name}.png", name, t)
 else:
-    N = 24
+    N = 36 if MODE == 'swag' else 24
     for i in range(N):
         render(f"{OUT}/{MODE}_{i:02d}.png", MODE, i / N)
