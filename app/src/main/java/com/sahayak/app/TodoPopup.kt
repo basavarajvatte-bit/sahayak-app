@@ -248,6 +248,7 @@ class TodoPopup(
         speakMood = "swagtalk"
         endMood = "swagidle"
         Frames.prepare(service, speakMood)
+        Frames.prepare(service, "dance")
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
             text = "To-do: tap when done"
@@ -268,8 +269,8 @@ class TodoPopup(
                     alpha = 0.5f
                     isClickable = false
                     if (ttsReady) tts.stop()
-                    endMood = "excited"
-                    buddy?.mood = "excited"
+                    endMood = "dance"
+                    buddy?.mood = "dance"
                     main.removeCallbacks(hideLater)
                     main.postDelayed(hideLater, AFTER_TAP_MS)
                 }
@@ -372,7 +373,7 @@ class TodoPopup(
         private const val POP_MS = 420L
         private const val CRACK_MS = 520L
         private const val LEAVE_MS = 220L
-        private const val AFTER_TAP_MS = 1_800L
+        private const val AFTER_TAP_MS = 3_200L
         private const val MAX_ROWS = 5
     }
 }

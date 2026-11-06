@@ -57,7 +57,7 @@ class TodoActivity : Activity() {
             setPadding(dp(16), dp(20), dp(16), dp(32))
         }
         setContentView(ScrollView(this).apply { addView(page) })
-        page.addView(MiniBuddy(this).apply { mood = "happy" }, LinearLayout.LayoutParams(dp(180), dp(180)).apply {
+        page.addView(MiniBuddy(this).apply { mood = "dance" }, LinearLayout.LayoutParams(dp(180), dp(180)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         })
         page.addView(label("Chhotu To-Do", 26f, true).apply { gravity = Gravity.CENTER })

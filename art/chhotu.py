@@ -772,13 +772,13 @@ def clip(name, t):
                  turn=step * 0.25, hz=-step * 0.25, hy=step * 0.12, hx=-0.05 + bounce * 0.07, spread=0.3, gx=-step * 0.08)
         # part one: disco point, arms take turns
         a = 0.5 + 0.5 * math.sin(w * 3)
-        right = wave((1.0, -0.4, -0.95), (1.3, -0.45, 1.1), a)
-        left = wave((-1.3, -0.45, 1.1), (-1.0, -0.4, -0.95), a)
+        right = wave((1.15, -0.45, -0.9), (1.8, -0.55, 1.05), a)
+        left = wave((-1.8, -0.55, 1.05), (-1.15, -0.45, -0.9), a)
         # part two: both hands up, waving
-        wav = math.sin(w * 6) * 0.25
+        wav = math.sin(w * 6) * 0.22
         mix = float(smooth01((t - 0.42) / 0.16)) * (1 - float(smooth01((t - 0.9) / 0.1)))
-        p["ra"] = wave(right, (1.05 + wav, -0.4, 1.05), mix)
-        p["la"] = wave(left, (-1.05 + wav, -0.4, 1.05), mix)
+        p["ra"] = wave(right, (1.72 + wav, -0.55, 0.95), mix)
+        p["la"] = wave(left, (-1.72 + wav, -0.55, 0.95), mix)
         b = blink(t, 0.7)
     elif name in ('swagidle', 'swagtalk'):
         beat = math.sin(w * 2)
