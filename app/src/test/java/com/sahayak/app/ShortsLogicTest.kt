@@ -48,6 +48,22 @@ class ShortsLogicTest {
         assertFalse(ShortsLogic.channelShown(listOf("@varshavatte2"), "@VarshaVatte"))
     }
 
+    @Test fun picksExactVideoInGallery() {
+        val cell = "10_robot_dance.mp4 1 0:10"
+        assertTrue(ShortsLogic.sameVideo(cell, "10_Robot_Dance.mp4"))
+        assertFalse(ShortsLogic.sameVideo(cell, "Robot_Dance.mp4"))
+        assertFalse(ShortsLogic.sameVideo("110_robot_dance.mp4 0:10", "10_Robot_Dance.mp4"))
+        assertFalse(ShortsLogic.sameVideo(cell, ""))
+    }
+
+    @Test fun readsTaughtScreens() {
+        assertTrue(ShortsLogic.isHome(listOf("home", "shorts", "create", "subscriptions")))
+        assertTrue(ShortsLogic.isCamera(listOf("video", "short", "live", "post", "add")))
+        assertTrue(ShortsLogic.isGallery(listOf("close", "create video")))
+        assertTrue(ShortsLogic.isGallery(listOf("10_robot_dance.mp4 0:10")))
+        assertFalse(ShortsLogic.isGallery(details))
+    }
+
     @Test fun readsAudiencePage() {
         val page = listOf(ShortsLogic.norm("Yes, it’s made for kids"), ShortsLogic.norm("No, it’s not made for kids"))
         assertTrue(ShortsLogic.isAudiencePage(page))

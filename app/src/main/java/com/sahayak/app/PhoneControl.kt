@@ -336,6 +336,13 @@ class PhoneControl : AccessibilityService() {
         return launch(intent, YOUTUBE)
     }
 
+    private fun beginUpload(shared: Boolean, uriText: String, caption: String): Boolean {
+        if (shared) return shareToYouTube(uriText, caption)
+        val open = packageManager.getLaunchIntentForPackage(YOUTUBE) ?: return false
+        startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        return true
+    }
+
     private fun screenLabels(): List<String> =
         visibleNodes().map { ShortsLogic.norm(label(it)) }.filter { it.isNotEmpty() }
 
@@ -427,10 +434,16 @@ class PhoneControl : AccessibilityService() {
      * Har round screen padhkar ek kaam: channel, visibility, audience, caption, phir Upload.
      * Teeno pakke hue bina Upload kabhi nahi dabta.
      */
-    fun uploadShort(uriText: String, caption: String, set: ShortsQueue.Settings): ShortResult {
+    fun uploadShort(uriText: String, fileName: String, caption: String, set: ShortsQueue.Settings): ShortResult {
         abort = false
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
-        if (!shareToYouTube(uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open the video")
+        // Sikhaya hua raasta: Create, Add, gallery. File name na ho tabhi seedha share.
+        var shared = fileName.isBlank()
+        if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open")
+        var picked = false
+        var galleryStill = 0
+        var lastGallery = ""
+        var lastTap = ""
         val wantedCaption = ShortsLogic.norm(caption).take(SHORT_CAPTION_CHECK)
         var channelOk = set.channel.isBlank()
         var channelMiss = 0
@@ -488,7 +501,8 @@ class PhoneControl : AccessibilityService() {
                         switched = true
                         channelMiss = 0
                         if (!ensureChannel(set.channel)) return ShortResult(ShortOutcome.NO_RETRY, lastWorkError)
-                        if (!shareToYouTube(uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open the video")
+                        picked = false
+                        if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open")
                     }
                     if (!channelOk) return@repeat
                 }
@@ -529,10 +543,40 @@ class PhoneControl : AccessibilityService() {
                 if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final)
             }
             if (labels.any { "draft" in it } && SHORT_DRAFT_WORDS.any { tapExact(it) }) return@repeat
-            if (SHORT_NEXT_WORDS.any { tapExact(it) }) {
+            if (!shared && !picked && ShortsLogic.isGallery(labels)) {
+                val video = visibleNodes().firstOrNull { ShortsLogic.sameVideo(ShortsLogic.norm(label(it)), fileName) }
+                if (video != null) {
+                    RunLog.add(this, "short gallery picked: " + label(video).take(60))
+                    tapNode(video)
+                    picked = true
+                    Thread.sleep(SHORT_TAP_WAIT_MS)
+                    // Gallery mein dobara tap se video hat jati hai, isliye sirf Next band ho tabhi
+                    val next = visibleNodes().firstOrNull { ShortsLogic.norm(label(it)) == "next" }
+                    if (next != null && !next.isEnabled) tapCentre(video)
+                    return@repeat
+                }
+                val screenNow = labels.joinToString("|")
+                galleryStill = if (screenNow == lastGallery) galleryStill + 1 else 0
+                lastGallery = screenNow
+                if (galleryStill >= SHORT_GALLERY_ROUNDS) {
+                    RunLog.add(this, "short gallery: name not found, using share")
+                    shared = true
+                    if (!beginUpload(true, uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open the video")
+                } else if (labels.any { ".mp4" in it || ".mov" in it }) {
+                    scroll(true)
+                }
+                return@repeat
+            }
+            val word = SHORT_NEXT_WORDS.firstOrNull { it in labels }
+            if (word != null) {
+                val screenNow = labels.joinToString("|")
+                tapWhere(screenNow == lastTap) { it == word }
+                lastTap = screenNow
                 Thread.sleep(SHORT_TAP_WAIT_MS)
                 return@repeat
             }
+            if (!shared && ShortsLogic.isCamera(labels) && tapExact("add")) return@repeat
+            if (!shared && ShortsLogic.isHome(labels) && tapExact("create")) return@repeat
             SHORT_POPUP_WORDS.any { tapExact(it) }
         }
         return shortFail("YouTube upload screen not reached", screenLabels())
@@ -545,7 +589,7 @@ class PhoneControl : AccessibilityService() {
         return when (item.optString("kind")) {
             "youtube" -> {
                 val set = ShortsQueue.settings(this).let { it.copy(channel = item.optString("subject").ifBlank { it.channel }) }
-                val result = uploadShort(item.optString("to"), item.optString("message"), set)
+                val result = uploadShort(item.optString("to"), "", item.optString("message"), set)
                 lastWorkError = result.reason
                 result.outcome == ShortOutcome.DONE
             }
@@ -1296,6 +1340,7 @@ class PhoneControl : AccessibilityService() {
         private const val SHORT_CAPTION_TRIES = 4
         private const val SHORT_CAPTION_CHECK = 30
         private const val SHORT_CHANNEL_ROUNDS = 3
+        private const val SHORT_GALLERY_ROUNDS = 4
         private val SHORT_LEAVE_WORDS = listOf("done", "save", "navigate up", "back")
         private val SHORT_CAPTION_WORDS = listOf("caption your short", "caption", "add a title", "create a title", "title")
         private val SHORT_NEXT_WORDS = listOf("next", "done", "continue")

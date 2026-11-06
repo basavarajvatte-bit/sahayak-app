@@ -23,6 +23,20 @@ object ShortsLogic {
     fun isVisibilityPage(labels: List<String>) =
         listOf("public", "unlisted", "private").all { word -> labels.any { it.startsWith(word) } }
 
+    private val MEDIA_NAME = Regex("\\.(mp4|mov|mkv|3gp|webm|avi)(\\s|$)")
+
+    fun isGallery(labels: List<String>) = "create video" in labels || labels.any { MEDIA_NAME.containsMatchIn(it) }
+
+    fun isHome(labels: List<String>) = "home" in labels && "create" in labels
+
+    fun isCamera(labels: List<String>) = "add" in labels && "short" in labels
+
+    /** Poora file naam milna zaroori: robot.mp4 ko 10_robot.mp4 par nahi dabana. */
+    fun sameVideo(label: String, fileName: String): Boolean {
+        val wanted = norm(fileName)
+        return wanted.isNotEmpty() && Regex("(^|\\s)" + Regex.escape(wanted) + "(\\s|$)").containsMatchIn(label)
+    }
+
     fun finalButton(labels: List<String>): String? = FINAL_BUTTONS.firstOrNull { it in labels }
 
     fun isDetailsPage(labels: List<String>) = "add details" in labels || finalButton(labels) != null

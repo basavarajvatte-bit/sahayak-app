@@ -241,7 +241,7 @@ object ShortsQueue {
             return
         }
         val caption = ShortsLogic.caption(item.optString("name"), set.tags, set.useName)
-        val result = control.uploadShort(item.optString("uri"), caption, set)
+        val result = control.uploadShort(item.optString("uri"), item.optString("name"), caption, set)
         RunLog.add(context, "short " + result.outcome + " " + item.optString("name") + " " + result.reason)
         finish(context, item, result, scheduled)
     }
