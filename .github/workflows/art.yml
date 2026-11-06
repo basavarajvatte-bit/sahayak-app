@@ -2,12 +2,12 @@ name: Render Chhotu
 
 on:
   push:
-    branches: [main]
+    branches: [main, art-dev]
     paths: ["art/chhotu.py", "art/mode.txt", ".github/workflows/art.yml"]
   workflow_dispatch:
 
 concurrency:
-  group: render-art
+  group: render-art-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -15,9 +15,27 @@ permissions:
   actions: write
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      clips: ${{ steps.p.outputs.clips }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: |
+          if [ "$(cat art/mode.txt)" = preview ]; then
+            echo 'clips=["preview"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'clips=["idle","happy","excited","talk","mail","sad","surprised","sleepy","grumpy","thinking"]' >> "$GITHUB_OUTPUT"
+          fi
   render:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        clip: ${{ fromJson(needs.plan.outputs.clips) }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Blender
@@ -31,30 +49,44 @@ jobs:
           blender --version | head -1
       - name: Render
         run: |
-          MODE=$(cat art/mode.txt)
-          blender -b -noaudio -P art/chhotu.py -- "$MODE" "$PWD/art/out"
+          blender -b -noaudio -P art/chhotu.py -- "${{ matrix.clip }}" "$PWD/art/out"
           ls art/out | wc -l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ matrix.clip }}
+          path: art/out
+          retention-days: 2
+  save:
+    needs: render
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: art/got
       - name: Save
-        run: |
-          MODE=$(cat art/mode.txt)
-          if [ "$MODE" = preview ]; then
-            mkdir -p art/preview && cp art/out/*.png art/preview/
-          else
-            mkdir -p app/src/main/assets/chhotu
-            for f in art/out/*.png; do
-              cwebp -quiet -q 86 -alpha_q 90 "$f" -o "app/src/main/assets/chhotu/$(basename "${f%.png}").webp"
-            done
-          fi
-          rm -rf art/out
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add art/preview 2>/dev/null || true
-          git add app/src/main/assets 2>/dev/null || true
-          git commit -m "Render Chhotu art ($MODE)" || exit 0
-          git pull --rebase origin main
-          git push origin HEAD:main
-      - name: Build app
-        if: ${{ hashFiles('art/mode.txt') != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build.yml --ref main
+        run: |
+          sudo apt-get install -y -qq webp
+          MODE=$(cat art/mode.txt)
+          if [ "$MODE" = preview ]; then
+            mkdir -p art/preview
+            rm -f art/preview/*
+            cp art/got/*/*.png art/preview/
+          else
+            mkdir -p app/src/main/assets/chhotu
+            rm -f app/src/main/assets/chhotu/*
+            for f in art/got/*/*.png; do
+              cwebp -quiet -q 84 -alpha_q 90 "$f" -o "app/src/main/assets/chhotu/$(basename "${f%.png}").webp"
+            done
+          fi
+          rm -rf art/got
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add art/preview app/src/main/assets 2>/dev/null || true
+          git commit -m "Render Chhotu art ($MODE)" || exit 0
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          if [ "$GITHUB_REF_NAME" = main ]; then gh workflow run build.yml --ref main; fi
