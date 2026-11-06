@@ -27,6 +27,7 @@ import java.util.Locale
 class YouTubeActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var channel: EditText
+    private lateinit var channelSaved: TextView
     private lateinit var tags: EditText
     private lateinit var useName: CheckBox
     private lateinit var preview: TextView
@@ -60,6 +61,9 @@ class YouTubeActivity : Activity() {
         channel = input("Channel handle, like @VarshaVatte", InputType.TYPE_CLASS_TEXT)
         channel.setText(ShortsLogic.channelValue(set.channel))
         page.addView(channel)
+        page.addView(button("Save channel") { saveChannel() })
+        channelSaved = text("", 15f, true)
+        page.addView(channelSaved)
 
         page.addView(heading("Caption"))
         tags = input("#baby #babydance", InputType.TYPE_CLASS_TEXT)
@@ -167,7 +171,6 @@ class YouTubeActivity : Activity() {
     }
 
     private fun current(): ShortsQueue.Settings = ShortsQueue.settings(this).copy(
-        channel = ShortsLogic.channelValue(channel.text.toString()),
         tags = tags.text.toString().trim(),
         useName = useName.isChecked,
         kids = audience.checkedRadioButtonId == AUDIENCE_IDS,
@@ -178,6 +181,18 @@ class YouTubeActivity : Activity() {
     )
 
     private fun saveAll() = ShortsQueue.saveSettings(this, current())
+
+    private fun saveChannel() {
+        val value = ShortsLogic.channelValue(channel.text.toString())
+        if (value.isEmpty()) {
+            status.text = "Type your channel name first."
+            return
+        }
+        ShortsQueue.saveSettings(this, current().copy(channel = value))
+        channel.setText(value)
+        render()
+        status.text = "Channel saved: $value"
+    }
 
     private fun timeLabel(minute: Int): String {
         val hour = (minute / 60).let { if (it % 12 == 0) 12 else it % 12 }
@@ -200,8 +215,9 @@ class YouTubeActivity : Activity() {
     }
 
     private fun ready(): Boolean {
-        if (channel.text.isBlank()) {
-            status.text = "Type your channel name first."
+        val saved = ShortsQueue.settings(this).channel
+        if (saved.isBlank() || ShortsLogic.channelValue(channel.text.toString()) != saved) {
+            status.text = "Press Save channel first."
             return false
         }
         if (PhoneControl.instance == null) {
@@ -304,6 +320,7 @@ class YouTubeActivity : Activity() {
 
     private fun render() {
         val set = ShortsQueue.settings(this)
+        channelSaved.text = if (set.channel.isBlank()) "No channel saved" else "Uploads go to: " + set.channel
         fromButton.text = "From " + timeLabel(from)
         toButton.text = "To " + timeLabel(to)
         autoButton.text = if (set.auto) "Stop automatic uploads" else "Start automatic uploads"
