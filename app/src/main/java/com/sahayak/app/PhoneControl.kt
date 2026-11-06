@@ -302,9 +302,9 @@ class PhoneControl : AccessibilityService() {
     }
 
     private fun ensureChannel(channel: String): Boolean {
-        val open = packageManager.getLaunchIntentForPackage("com.google.android.youtube")
+        val open = packageManager.getLaunchIntentForPackage(YOUTUBE)
             ?: return failed("YouTube app not found")
-        startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         Thread.sleep(UPLOAD_WAIT_MS)
         if (!retry { tapText("You") }) return failed("You tab not found in YouTube")
         Thread.sleep(UPLOAD_WAIT_MS)
@@ -319,34 +319,207 @@ class PhoneControl : AccessibilityService() {
         return screenHas(channel) || failed("Could not confirm channel $channel")
     }
 
-    private fun uploadToYouTube(uriText: String, title: String, savedChannel: String): Boolean {
-        val channel = savedChannel.ifBlank {
-            getSharedPreferences("sahayak", MODE_PRIVATE).getString("youtube_channel", "").orEmpty()
-        }
-        if (channel.isBlank()) return failed("Type your channel name in the Video queue first")
-        if (!ensureChannel(channel)) return false
+    private fun shareToYouTube(uriText: String, caption: String): Boolean {
         val intent = Intent(Intent.ACTION_SEND).setType("video/*")
             .putExtra(Intent.EXTRA_STREAM, Uri.parse(uriText))
-            .putExtra(Intent.EXTRA_TITLE, title)
-            .putExtra(Intent.EXTRA_SUBJECT, title)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        if (!launch(intent, "com.google.android.youtube")) return failed("YouTube did not open the video")
-        var titled = false
-        repeat(UPLOAD_ROUNDS) {
-            Thread.sleep(UPLOAD_WAIT_MS)
-            if (rootInActiveWindow?.packageName?.toString() != "com.google.android.youtube") return@repeat
-            val nodes = visibleNodes()
-            if (!titled) {
-                nodes.firstOrNull { it.isEditable }?.let { titled = typeInto(it, title) }
+            .putExtra(Intent.EXTRA_TITLE, caption)
+            .putExtra(Intent.EXTRA_SUBJECT, caption)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        return launch(intent, YOUTUBE)
+    }
+
+    private fun screenLabels(): List<String> =
+        visibleNodes().map { ShortsLogic.norm(label(it)) }.filter { it.isNotEmpty() }
+
+    private fun tapExact(word: String): Boolean {
+        val node = visibleNodes().firstOrNull { ShortsLogic.norm(label(it)) == word } ?: return false
+        return tapNode(node)
+    }
+
+    private fun tapCentre(node: AccessibilityNodeInfo): Boolean {
+        val box = Rect()
+        node.getBoundsInScreen(box)
+        return gesture(box.exactCenterX(), box.exactCenterY(), box.exactCenterX(), box.exactCenterY(), 60)
+    }
+
+    /** Pehle node ka click, doosri baar se screen par asli tap. */
+    private fun tapWhere(firm: Boolean, test: (String) -> Boolean): Boolean {
+        val node = visibleNodes().firstOrNull { test(ShortsLogic.norm(label(it))) } ?: return false
+        return if (firm) tapCentre(node) else tapNode(node)
+    }
+
+    private fun leavePage() {
+        if (SHORT_LEAVE_WORDS.none { tapExact(it) }) performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    private fun captionBox(): AccessibilityNodeInfo? {
+        val boxes = visibleNodes().filter { it.isEditable && !it.isPassword }
+        return boxes.firstOrNull { node ->
+            val hint = ShortsLogic.norm(node.hintText?.toString() ?: label(node))
+            "caption" in hint || "title" in hint
+        } ?: boxes.firstOrNull()
+    }
+
+    /** Teen raaste: seedha likho, box dabakar likho, phir lamba dabakar paste. */
+    private fun typeCaption(caption: String): Boolean {
+        var box = captionBox()
+        if (box == null) {
+            val spot = visibleNodes().firstOrNull { node ->
+                val words = ShortsLogic.norm(label(node))
+                SHORT_CAPTION_WORDS.any { it in words }
+            } ?: return false
+            tapNode(spot)
+            Thread.sleep(SHORT_TAP_WAIT_MS)
+            box = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: captionBox()
+            if (box == null) {
+                tapCentre(spot)
+                Thread.sleep(SHORT_TAP_WAIT_MS)
+                box = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: captionBox()
             }
-            val words = nodes.map { label(it).lowercase() }
-            val final = listOf("upload short", "upload video", "upload").firstOrNull { it in words }
-            if (final != null) {
-                return tapText(final)
-            }
-            listOf("next", "continue").firstOrNull { it in words }?.let { tapText(it) }
         }
-        return failed(if (screenHas("made for kids")) "Choose Made for kids in YouTube first" else "Upload button not found")
+        val target = box ?: return false
+        target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        Thread.sleep(SHORT_TAP_WAIT_MS / 2)
+        if (typeInto(target, caption)) return true
+        val area = Rect()
+        target.getBoundsInScreen(area)
+        gesture(area.exactCenterX(), area.exactCenterY(), area.exactCenterX(), area.exactCenterY(), SHORT_HOLD_MS)
+        Thread.sleep(SHORT_TAP_WAIT_MS)
+        return tapExact("paste")
+    }
+
+    private fun pressFinal(button: String): ShortResult {
+        if (!tapExact(button)) return ShortResult(ShortOutcome.RETRY, "Could not press $button")
+        repeat(SHORT_CONFIRM_ROUNDS) {
+            Thread.sleep(1_000L)
+            val labels = screenLabels()
+            if (ShortsLogic.limitHit(labels)) return ShortResult(ShortOutcome.LIMIT)
+            if (labels.isNotEmpty() && button !in labels) return ShortResult(ShortOutcome.DONE)
+        }
+        return ShortResult(ShortOutcome.NO_RETRY, "Pressed $button but the screen did not change. Check YouTube")
+    }
+
+    private fun shortFail(reason: String, labels: List<String>): ShortResult {
+        RunLog.add(this, "short screen: " + labels.take(14).joinToString(" | ") { it.take(40) })
+        return ShortResult(ShortOutcome.RETRY, reason)
+    }
+
+    /** Lock screen sirf swipe wali ho to khol do. PIN ya pattern phone ke maalik ka kaam hai. */
+    fun swipeUnlock() {
+        val keys = getSystemService(KeyguardManager::class.java)
+        if (!keys.isKeyguardLocked || keys.isDeviceSecure) return
+        val metrics = resources.displayMetrics
+        val x = metrics.widthPixels / 2f
+        gesture(x, metrics.heightPixels * 0.85f, x, metrics.heightPixels * 0.2f, 300)
+    }
+
+    /**
+     * Har round screen padhkar ek kaam: channel, visibility, audience, caption, phir Upload.
+     * Teeno pakke hue bina Upload kabhi nahi dabta.
+     */
+    fun uploadShort(uriText: String, caption: String, set: ShortsQueue.Settings): ShortResult {
+        abort = false
+        if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
+        if (!shareToYouTube(uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open the video")
+        val wantedCaption = ShortsLogic.norm(caption).take(SHORT_CAPTION_CHECK)
+        var channelOk = set.channel.isBlank()
+        var channelMiss = 0
+        var switched = false
+        var visibilityDone = false
+        var audienceDone = false
+        var captionTries = 0
+        var pageTries = 0
+        var outside = 0
+        repeat(SHORT_ROUNDS) {
+            if (abort) return ShortResult(ShortOutcome.STOPPED)
+            Thread.sleep(SHORT_ROUND_MS)
+            if (rootInActiveWindow?.packageName?.toString() != YOUTUBE) {
+                outside++
+                if (outside > SHORT_OUTSIDE_ROUNDS) return ShortResult(ShortOutcome.RETRY, "YouTube closed during upload")
+                return@repeat
+            }
+            outside = 0
+            val labels = screenLabels()
+            if (ShortsLogic.limitHit(labels)) return ShortResult(ShortOutcome.LIMIT)
+            if (pageTries > SHORT_PAGE_TRIES) return shortFail("Could not set audience or visibility", labels)
+
+            if (ShortsLogic.isVisibilityPage(labels)) {
+                pageTries++
+                tapWhere(pageTries > 1) { it.startsWith(set.visibility) }
+                Thread.sleep(SHORT_TAP_WAIT_MS)
+                // Kuch screen chunte hi khud wapas chali jati hain, details se bahar nahi nikalna
+                if (ShortsLogic.isVisibilityPage(screenLabels())) leavePage()
+                return@repeat
+            }
+            if (ShortsLogic.isAudiencePage(labels)) {
+                pageTries++
+                tapWhere(pageTries > 1) { if (set.kids) ShortsLogic.yesOption(it) else ShortsLogic.noOption(it) }
+                Thread.sleep(SHORT_TAP_WAIT_MS)
+                val after = screenLabels()
+                if (ShortsLogic.finalButton(after) != null) {
+                    audienceDone = true
+                } else if (ShortsLogic.isAudiencePage(after)) {
+                    leavePage()
+                }
+                return@repeat
+            }
+            if (ShortsLogic.isDetailsPage(labels)) {
+                if (!channelOk) {
+                    channelOk = ShortsLogic.channelShown(labels, set.channel)
+                    if (!channelOk && ++channelMiss >= SHORT_CHANNEL_ROUNDS) {
+                        if (switched) return ShortResult(ShortOutcome.NO_RETRY, "Channel ${set.channel} not selected in YouTube")
+                        switched = true
+                        channelMiss = 0
+                        if (!ensureChannel(set.channel)) return ShortResult(ShortOutcome.NO_RETRY, lastWorkError)
+                        if (!shareToYouTube(uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open the video")
+                    }
+                    if (!channelOk) return@repeat
+                }
+                val final = ShortsLogic.finalButton(labels)
+                if (!visibilityDone) {
+                    if (ShortsLogic.visibilityShown(labels, set.visibility)) {
+                        visibilityDone = true
+                    } else if (ShortsLogic.visibilityRow(labels)) {
+                        pageTries++
+                        tapWhere(pageTries > 1) { "visibility" in it }
+                        return@repeat
+                    } else if (final != null) {
+                        if (set.visibility != "public") return shortFail("Visibility option not found", labels)
+                        visibilityDone = true
+                    }
+                }
+                if (!audienceDone) {
+                    when {
+                        ShortsLogic.audienceUnset(labels) -> {
+                            pageTries++
+                            tapWhere(pageTries > 1) { "select audience" in it }
+                            return@repeat
+                        }
+                        ShortsLogic.audienceWrong(labels, set.kids) -> {
+                            pageTries++
+                            tapWhere(pageTries > 1) { it.length <= 40 && "made for kids" in it && !it.startsWith("what") }
+                            return@repeat
+                        }
+                        final != null -> audienceDone = true
+                    }
+                }
+                if (wantedCaption.isNotEmpty() && labels.none { wantedCaption in it }) {
+                    captionTries++
+                    if (captionTries > SHORT_CAPTION_TRIES) return shortFail("Could not type the caption", labels)
+                    typeCaption(caption)
+                    return@repeat
+                }
+                if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final)
+            }
+            if (labels.any { "draft" in it } && SHORT_DRAFT_WORDS.any { tapExact(it) }) return@repeat
+            if (SHORT_NEXT_WORDS.any { tapExact(it) }) {
+                Thread.sleep(SHORT_TAP_WAIT_MS)
+                return@repeat
+            }
+            SHORT_POPUP_WORDS.any { tapExact(it) }
+        }
+        return shortFail("YouTube upload screen not reached", screenLabels())
     }
 
     /** Tay samay wala kaam, bina AI ke. */
@@ -354,7 +527,12 @@ class PhoneControl : AccessibilityService() {
         lastWorkError = ""
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
         return when (item.optString("kind")) {
-            "youtube" -> uploadToYouTube(item.optString("to"), item.optString("message"), item.optString("subject"))
+            "youtube" -> {
+                val set = ShortsQueue.settings(this).let { it.copy(channel = item.optString("subject").ifBlank { it.channel }) }
+                val result = uploadShort(item.optString("to"), item.optString("message"), set)
+                lastWorkError = result.reason
+                result.outcome == ShortOutcome.DONE
+            }
             "whatsapp" -> {
                 val opened = openWhatsApp(JSONObject().put("contact", item.optString("to")).put("message", item.optString("message")))
                 opened.optString("status") == "ok" &&
@@ -1092,7 +1270,21 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
         private const val MAIL_GAP_MS = 30_000L
-        private const val UPLOAD_ROUNDS = 30
+        private const val SHORT_ROUNDS = 150
+        private const val SHORT_ROUND_MS = 1_200L
+        private const val SHORT_TAP_WAIT_MS = 1_200L
+        private const val SHORT_HOLD_MS = 800L
+        private const val SHORT_CONFIRM_ROUNDS = 30
+        private const val SHORT_OUTSIDE_ROUNDS = 12
+        private const val SHORT_PAGE_TRIES = 8
+        private const val SHORT_CAPTION_TRIES = 4
+        private const val SHORT_CAPTION_CHECK = 30
+        private const val SHORT_CHANNEL_ROUNDS = 3
+        private val SHORT_LEAVE_WORDS = listOf("done", "save", "navigate up", "back")
+        private val SHORT_CAPTION_WORDS = listOf("caption your short", "caption", "add a title", "create a title", "title")
+        private val SHORT_NEXT_WORDS = listOf("next", "done", "continue")
+        private val SHORT_DRAFT_WORDS = listOf("start over", "start new", "discard")
+        private val SHORT_POPUP_WORDS = listOf("got it", "not now", "no thanks", "skip", "dismiss", "ok", "allow", "while using the app")
         private const val UPLOAD_WAIT_MS = 2_000L
         private const val LAST_APP_MS = 200L
         private const val REPLAY_TRIES = 20

@@ -52,6 +52,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".YouTubeActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".DailyLearningJob"
             android:exported="false"

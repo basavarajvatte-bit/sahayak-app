@@ -193,41 +193,12 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
 
-            <TextView
-                style="@style/Label"
-                android:text="Video queue for YouTube" />
-
-            <EditText
-                android:id="@+id/videoChannel"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:hint="Exact YouTube channel name"
-                android:importantForAutofill="no"
-                android:inputType="text"
-                android:textSize="16sp" />
-
-            <EditText
-                android:id="@+id/videoGap"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:hint="Hours between videos (default 6)"
-                android:importantForAutofill="no"
-                android:inputType="number"
-                android:textSize="16sp" />
-
             <Button
-                android:id="@+id/testUploadButton"
+                android:id="@+id/youtubeButton"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:text="Test upload now"
-                android:textAllCaps="false"
-                android:textSize="17sp" />
-
-            <Button
-                android:id="@+id/addVideosButton"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="Add videos"
+                android:layout_marginTop="14dp"
+                android:text="YouTube Auto Upload"
                 android:textAllCaps="false"
                 android:textSize="17sp" />
         </LinearLayout>

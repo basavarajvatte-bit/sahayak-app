@@ -81,14 +81,8 @@ class MainActivity : Activity() {
             input.setText("")
             renderTodos()
         }
-        findViewById<EditText>(R.id.videoChannel).setText(prefs.getString(PREF_CHANNEL, ""))
-        findViewById<Button>(R.id.addVideosButton).setOnClickListener { pickVideos(REQUEST_VIDEOS, true) }
-        findViewById<Button>(R.id.testUploadButton).setOnClickListener {
-            if (PhoneControl.instance == null) {
-                statusText.text = "Turn on phone control first."
-            } else {
-                pickVideos(REQUEST_TEST_UPLOAD, false)
-            }
+        findViewById<Button>(R.id.youtubeButton).setOnClickListener {
+            startActivity(Intent(this, YouTubeActivity::class.java))
         }
         val learnBox = findViewById<CheckBox>(R.id.learnBox)
         learnBox.isChecked = DailyLearning.isEnabled(this)
@@ -187,50 +181,6 @@ class MainActivity : Activity() {
         renderRatings()
         renderTodos()
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
-    }
-
-    private fun displayName(uri: Uri): String {
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { row ->
-            if (row.moveToFirst()) return row.getString(0).orEmpty().substringBeforeLast(".")
-        }
-        return "My video"
-    }
-
-    private fun pickVideos(request: Int, many: Boolean) {
-        startActivityForResult(
-            Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*")
-                .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, many)
-                .addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION),
-            request
-        )
-    }
-
-    private fun queueVideos(data: Intent, now: Boolean) {
-        val clip = data.clipData
-        val uris = if (clip != null) List(clip.itemCount) { clip.getItemAt(it).uri } else listOfNotNull(data.data)
-        val channel = findViewById<EditText>(R.id.videoChannel).text.toString().trim()
-        if (channel.isEmpty()) {
-            statusText.text = "Type your YouTube channel name first."
-            return
-        }
-        prefs.edit().putString(PREF_CHANNEL, channel).apply()
-        val gapHours = findViewById<EditText>(R.id.videoGap).text.toString().toLongOrNull()?.coerceIn(1, 168) ?: 6L
-        val latest = WorkList.all(this).filter { it.optString("kind") == "youtube" && it.optString("status") == "pending" }
-            .maxOfOrNull { it.optLong("at") } ?: System.currentTimeMillis()
-        uris.forEachIndexed { index, uri ->
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            val name = displayName(uri)
-            val at = if (now) System.currentTimeMillis() + 3_000L else latest + (index + 1) * gapHours * 3_600_000L
-            val item = WorkList.add(this, "youtube", at, "$channel: $name", uri.toString(), channel, name)
-            if (now) {
-                val id = item.optString("id")
-                val app = applicationContext
-                moveTaskToBack(true)
-                Thread { WorkList.run(app, id) }.start()
-            }
-        }
-        statusText.text = uris.size.toString() + " videos added to the queue."
-        renderWork()
     }
 
     private fun handleBackup(request: Int, uri: Uri) {
@@ -586,10 +536,6 @@ class MainActivity : Activity() {
     @Deprecated("Plain Activity API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_VIDEOS || requestCode == REQUEST_TEST_UPLOAD) {
-            if (resultCode == RESULT_OK && data != null) queueVideos(data, requestCode == REQUEST_TEST_UPLOAD)
-            return
-        }
         if (requestCode == REQUEST_BACKUP || requestCode == REQUEST_RESTORE) {
             val uri = data?.data
             if (resultCode == RESULT_OK && uri != null) handleBackup(requestCode, uri)
@@ -612,9 +558,6 @@ class MainActivity : Activity() {
         private const val REQUEST_SCREEN = 2
         private const val LOW_RATING = 5
         private const val REQUEST_BACKUP = 3
-        private const val REQUEST_VIDEOS = 5
-        private const val REQUEST_TEST_UPLOAD = 6
-        private const val PREF_CHANNEL = "youtube_channel"
         private const val REQUEST_RESTORE = 4
         private const val PREF_LANGUAGE = "language"
         private const val PREF_NAME = "name"
