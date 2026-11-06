@@ -36,6 +36,7 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.Toast
 import org.json.JSONArray
@@ -142,6 +143,9 @@ class PhoneControl : AccessibilityService() {
         Toast.makeText(this, "Saved: $teachName", Toast.LENGTH_SHORT).show()
     }
 
+    private fun isKeyboardPackage(pkg: String): Boolean =
+        getSystemService(InputMethodManager::class.java).enabledInputMethodList.any { it.packageName == pkg }
+
     private fun addStep(step: String) {
         val steps = teachSteps ?: return
         if (steps.size < MAX_TEACH_STEPS && steps.lastOrNull() != step) steps.add(step)
@@ -152,7 +156,9 @@ class PhoneControl : AccessibilityService() {
         val pkg = event.packageName?.toString().orEmpty()
         if (pkg.isEmpty() || pkg == packageName || pkg == "com.android.systemui" || isFinance(pkg)) return
         when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (pkg != lastApp && "launcher" !in pkg) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> if (isKeyboardPackage(pkg)) {
+                Unit
+            } else if (pkg != lastApp && "launcher" !in pkg) {
                 lastApp = pkg
                 val app = try {
                     packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
@@ -172,9 +178,11 @@ class PhoneControl : AccessibilityService() {
                 } else {
                     val box = Rect()
                     event.source?.getBoundsInScreen(box)
-                    val metrics = resources.displayMetrics
-                    addStep("tap the icon at x=" + box.centerX() * 1000 / metrics.widthPixels +
-                        " y=" + box.centerY() * 1000 / metrics.heightPixels)
+                    if (!box.isEmpty) {
+                        val metrics = resources.displayMetrics
+                        addStep("tap the icon at x=" + box.centerX() * 1000 / metrics.widthPixels +
+                            " y=" + box.centerY() * 1000 / metrics.heightPixels)
+                    }
                 }
             }
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> if (!event.isPassword) {
@@ -438,11 +446,31 @@ class PhoneControl : AccessibilityService() {
         return Replay(true, -1, "")
     }
 
+    private fun keyboardApp(name: String): Boolean {
+        val lower = name.lowercase()
+        if ("keyboard" in lower || lower == "gboard" || lower == "swiftkey") return true
+        return getSystemService(InputMethodManager::class.java).enabledInputMethodList.any {
+            it.loadLabel(packageManager).toString().equals(name, ignoreCase = true)
+        }
+    }
+
+    /** Recording ke faltu steps: keyboard aur 0,0 wale tap. */
+    private fun skipStep(step: String): Boolean {
+        OPEN_STEP.find(step)?.let { if (keyboardApp(it.groupValues[1])) return true }
+        return step.endsWith("x=0 y=0")
+    }
+
+    private fun finalButton(step: String): String? =
+        if (step.startsWith("screen shows")) FINAL_BUTTONS.firstOrNull { step.contains(it, ignoreCase = true) } else null
+
     private fun replayStep(step: String): Boolean {
+        if (skipStep(step)) return true
+        finalButton(step)?.let { return findAndTap(it) }
         val before = screenText()
         val done = OPEN_STEP.find(step)?.let { openApp(it.groupValues[1]) }
             ?: QUOTED_TAP.find(step)?.let { match ->
-                if (MEDIA_LABEL.matches(match.groupValues[1])) tapFirstMedia() else findAndTap(match.groupValues[1])
+                val words = match.groupValues[1]
+                if (MEDIA_LABEL.matches(words) || MEDIA_FILE.containsMatchIn(words)) retry { tapFirstMedia() } else findAndTap(words)
             }
             ?: POINT_TAP.find(step)?.let { tapPosition(it.groupValues[1].toInt(), it.groupValues[2].toInt()) }
             ?: QUOTED_TYPE.find(step)?.let { match -> retry { typeFocused(match.groupValues[1]) } }
@@ -1016,6 +1044,8 @@ class PhoneControl : AccessibilityService() {
         private const val LAST_APP_MS = 200L
         private const val REPLAY_TRIES = 20
         private val MEDIA_LABEL = Regex("^[0-9][0-9 :._,-]*$")
+        private val MEDIA_FILE = Regex("\\.(mp4|mov|mkv|3gp|webm|jpe?g|png)\\b|\\b\\d{1,2}:\\d{2}$", RegexOption.IGNORE_CASE)
+        private val FINAL_BUTTONS = listOf("Upload Short", "Upload video", "Post Short")
         private val POPUP_WORDS = listOf("Not now", "No thanks", "Skip", "Later", "Got it", "OK", "Close", "Dismiss", "Allow", "While using the app", "Continue")
         private const val REPLAY_RETRY_MS = 500L
         private const val REPLAY_WAIT_MS = 2_000L
