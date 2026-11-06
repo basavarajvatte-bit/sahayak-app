@@ -301,14 +301,15 @@ class PhoneControl : AccessibilityService() {
         return false
     }
 
-    private fun ensureChannel(channel: String): Boolean {
+    private fun ensureChannel(savedChannel: String): Boolean {
+        val channel = ShortsLogic.channelKey(savedChannel)
         val open = packageManager.getLaunchIntentForPackage(YOUTUBE)
             ?: return failed("YouTube app not found")
         startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         Thread.sleep(UPLOAD_WAIT_MS)
         if (!retry { tapText("You") }) return failed("You tab not found in YouTube")
         Thread.sleep(UPLOAD_WAIT_MS)
-        if (screenHas(channel)) return true
+        if (ShortsLogic.channelShown(screenLabels(), channel)) return true
         val switched = retry { tapText("Switch account") || tapText("Switch channel") || tapText("Accounts") }
         if (!switched) return failed("Channel $channel not shown, and Switch account not found")
         Thread.sleep(UPLOAD_WAIT_MS)
@@ -316,10 +317,17 @@ class PhoneControl : AccessibilityService() {
         Thread.sleep(UPLOAD_WAIT_MS * 2)
         if (!retry { tapText("You") }) return failed("You tab not found after switching")
         Thread.sleep(UPLOAD_WAIT_MS)
-        return screenHas(channel) || failed("Could not confirm channel $channel")
+        return ShortsLogic.channelShown(screenLabels(), channel) || failed("Could not confirm channel $channel")
     }
 
     private fun shareToYouTube(uriText: String, caption: String): Boolean {
+        // Upload background mein chalta hai, permission screen band hone par bhi rehni chahiye
+        try {
+            grantUriPermission(YOUTUBE, Uri.parse(uriText), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: SecurityException) {
+            lastWorkError = "Video permission lost. Add the video again"
+            return false
+        }
         val intent = Intent(Intent.ACTION_SEND).setType("video/*")
             .putExtra(Intent.EXTRA_STREAM, Uri.parse(uriText))
             .putExtra(Intent.EXTRA_TITLE, caption)
@@ -395,6 +403,7 @@ class PhoneControl : AccessibilityService() {
             Thread.sleep(1_000L)
             val labels = screenLabels()
             if (ShortsLogic.limitHit(labels)) return ShortResult(ShortOutcome.LIMIT)
+            if (labels.any { "upload failed" in it }) return ShortResult(ShortOutcome.NO_RETRY, "YouTube says upload failed")
             if (labels.isNotEmpty() && button !in labels) return ShortResult(ShortOutcome.DONE)
         }
         return ShortResult(ShortOutcome.NO_RETRY, "Pressed $button but the screen did not change. Check YouTube")
@@ -431,6 +440,7 @@ class PhoneControl : AccessibilityService() {
         var captionTries = 0
         var pageTries = 0
         var outside = 0
+        var logged = false
         repeat(SHORT_ROUNDS) {
             if (abort) return ShortResult(ShortOutcome.STOPPED)
             Thread.sleep(SHORT_ROUND_MS)
@@ -445,6 +455,7 @@ class PhoneControl : AccessibilityService() {
             if (pageTries > SHORT_PAGE_TRIES) return shortFail("Could not set audience or visibility", labels)
 
             if (ShortsLogic.isVisibilityPage(labels)) {
+                RunLog.add(this, "short visibility page: " + labels.take(10).joinToString(" | ") { it.take(40) })
                 pageTries++
                 tapWhere(pageTries > 1) { it.startsWith(set.visibility) }
                 Thread.sleep(SHORT_TAP_WAIT_MS)
@@ -453,6 +464,7 @@ class PhoneControl : AccessibilityService() {
                 return@repeat
             }
             if (ShortsLogic.isAudiencePage(labels)) {
+                RunLog.add(this, "short audience page: " + labels.take(10).joinToString(" | ") { it.take(40) })
                 pageTries++
                 tapWhere(pageTries > 1) { if (set.kids) ShortsLogic.yesOption(it) else ShortsLogic.noOption(it) }
                 Thread.sleep(SHORT_TAP_WAIT_MS)
@@ -465,6 +477,10 @@ class PhoneControl : AccessibilityService() {
                 return@repeat
             }
             if (ShortsLogic.isDetailsPage(labels)) {
+                if (!logged) {
+                    logged = true
+                    RunLog.add(this, "short details: " + labels.take(14).joinToString(" | ") { it.take(40) })
+                }
                 if (!channelOk) {
                     channelOk = ShortsLogic.channelShown(labels, set.channel)
                     if (!channelOk && ++channelMiss >= SHORT_CHANNEL_ROUNDS) {
@@ -507,7 +523,7 @@ class PhoneControl : AccessibilityService() {
                 if (wantedCaption.isNotEmpty() && labels.none { wantedCaption in it }) {
                     captionTries++
                     if (captionTries > SHORT_CAPTION_TRIES) return shortFail("Could not type the caption", labels)
-                    typeCaption(caption)
+                    RunLog.add(this, "short caption " + captionTries + " typed " + typeCaption(caption))
                     return@repeat
                 }
                 if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final)

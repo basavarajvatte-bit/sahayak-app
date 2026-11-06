@@ -44,9 +44,29 @@ object ShortsLogic {
         "upload limit" in label || "daily limit" in label || ("too many" in label && "upload" in label)
     }
 
+    /** Link, @handle ya naam: tulna ke liye sirf pehchan wala hissa. */
+    fun channelKey(channel: String): String {
+        val text = channel.trim().trimEnd('/')
+        val handle = text.substringAfterLast('@', "").substringBefore('/').substringBefore('?').trim()
+        return when {
+            handle.isNotEmpty() -> handle
+            "://" in text || "youtube.com" in text.lowercase() -> text.substringAfterLast('/').substringBefore('?')
+            else -> text
+        }
+    }
+
+    /** Box mein link aaye to @handle ki tarah rakho. */
+    fun channelValue(channel: String): String {
+        val text = channel.trim()
+        return if ('@' in text || '/' in text) "@" + channelKey(text) else text
+    }
+
+    /** Poora shabd milna zaroori: channel "baby" ko caption #baby se match nahi hona chahiye. */
     fun channelShown(labels: List<String>, channel: String): Boolean {
-        val wanted = norm(channel).removePrefix("@")
-        return wanted.isNotEmpty() && labels.any { wanted in it }
+        val wanted = norm(channelKey(channel))
+        if (wanted.isEmpty()) return false
+        val pattern = Regex("(^|[\\s@])" + Regex.escape(wanted) + "($|\\s)")
+        return labels.any { '#' !in it && pattern.containsMatchIn(it) }
     }
 
     /** 10_Robot_Dance se Robot Dance. */

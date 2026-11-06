@@ -57,8 +57,8 @@ class YouTubeActivity : Activity() {
         page.addView(status)
 
         page.addView(heading("Channel"))
-        channel = input("Exact channel name or handle", InputType.TYPE_CLASS_TEXT)
-        channel.setText(set.channel)
+        channel = input("Channel handle, like @VarshaVatte", InputType.TYPE_CLASS_TEXT)
+        channel.setText(ShortsLogic.channelValue(set.channel))
         page.addView(channel)
 
         page.addView(heading("Caption"))
@@ -166,7 +166,7 @@ class YouTubeActivity : Activity() {
     }
 
     private fun current(): ShortsQueue.Settings = ShortsQueue.settings(this).copy(
-        channel = channel.text.toString().trim(),
+        channel = ShortsLogic.channelValue(channel.text.toString()),
         tags = tags.text.toString().trim(),
         useName = useName.isChecked,
         kids = audience.checkedRadioButtonId == 1,

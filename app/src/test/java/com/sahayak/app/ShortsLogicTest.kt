@@ -29,6 +29,25 @@ class ShortsLogicTest {
         assertFalse(ShortsLogic.channelShown(details, "Other channel"))
     }
 
+    @Test fun understandsChannelLinks() {
+        assertEquals("VarshaVatte", ShortsLogic.channelKey("https://www.youtube.com/@VarshaVatte"))
+        assertEquals("VarshaVatte", ShortsLogic.channelKey("https://youtube.com/@VarshaVatte/shorts?si=abc"))
+        assertEquals("VarshaVatte", ShortsLogic.channelKey(" @VarshaVatte "))
+        assertEquals("filmy doctor", ShortsLogic.channelKey("filmy doctor"))
+        assertEquals("@VarshaVatte", ShortsLogic.channelValue("https://www.youtube.com/@VarshaVatte/"))
+        assertEquals("baby", ShortsLogic.channelValue(" baby "))
+        val screen = listOf("baby 🤗 @varshavatte")
+        assertTrue(ShortsLogic.channelShown(screen, "https://www.youtube.com/@VarshaVatte"))
+        assertTrue(ShortsLogic.channelShown(screen, "baby"))
+        assertTrue(ShortsLogic.channelShown(listOf("@varshavatte"), "@VarshaVatte"))
+    }
+
+    @Test fun captionIsNotMistakenForChannel() {
+        assertFalse(ShortsLogic.channelShown(listOf("#baby #babydance", "filmy doctor"), "baby"))
+        assertFalse(ShortsLogic.channelShown(listOf("babydance"), "baby"))
+        assertFalse(ShortsLogic.channelShown(listOf("@varshavatte2"), "@VarshaVatte"))
+    }
+
     @Test fun readsAudiencePage() {
         val page = listOf(ShortsLogic.norm("Yes, it’s made for kids"), ShortsLogic.norm("No, it’s not made for kids"))
         assertTrue(ShortsLogic.isAudiencePage(page))

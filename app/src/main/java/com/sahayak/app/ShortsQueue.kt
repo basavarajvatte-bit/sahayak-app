@@ -130,7 +130,9 @@ object ShortsQueue {
 
     @Synchronized
     fun clearUploaded(context: Context) {
-        save(context, load(context).filter { it.optString("status") != UPLOADED })
+        val (gone, kept) = load(context).partition { it.optString("status") == UPLOADED }
+        save(context, kept)
+        gone.forEach { release(context, it) }
     }
 
     @Synchronized
@@ -250,7 +252,6 @@ object ShortsQueue {
             ShortOutcome.DONE -> {
                 item.put("status", UPLOADED).put("reason", "")
                 update(context, item)
-                release(context, item)
                 WorkList.notifyText(context, NOTE_ID, "Upload started: $name")
                 if (scheduled) armNextSlot(context)
             }
