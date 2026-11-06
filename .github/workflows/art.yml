@@ -3,7 +3,7 @@ name: Render Chhotu
 on:
   push:
     branches: [main]
-    paths: ["art/chhotu.py", "art/mode.txt"]
+    paths: ["art/chhotu.py", "art/mode.txt", ".github/workflows/art.yml"]
   workflow_dispatch:
 
 permissions:
@@ -40,7 +40,8 @@ jobs:
           rm -rf art/out
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add art/preview app/src/main/assets 2>/dev/null || true
+          git add art/preview 2>/dev/null || true
+          git add app/src/main/assets 2>/dev/null || true
           git commit -m "Render Chhotu art ($MODE)" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
