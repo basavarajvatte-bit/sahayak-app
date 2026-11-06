@@ -171,7 +171,7 @@ def eye_material():
     return m, cr
 
 eye_m, eye_ramp = eye_material()
-spark_m = mat("spark", (1, 1, 1), 0.4, emission=4.0)
+spark_m = mat("spark", (1, 1, 1), 0.4, emission=2.2)
 lid_m = mat("lid", srgb("7A3CE0"), 0.5, sss=0.3)
 
 # ---------- helpers ----------
@@ -411,7 +411,7 @@ for s in (-1, 1):
     e.rotation_euler = (0, 0, s * 0.16)
     gaze = empty("gaze", e)
     ball_o = ball("eyeball", eye_m, (0, 0, 0), R_EYE, gaze, 64)
-    for x, z, r in ((0.13, 0.17, 0.082), (-0.11, -0.12, 0.04)):
+    for x, z, r in ((0.12, 0.16, 0.05), (-0.11, -0.12, 0.024)):
         ball("catchlight", spark_m, (x, -math.sqrt(max(R_EYE ** 2 - x * x - z * z, 0)) * 1.005, z), (r, r * 0.16, r), e, 20)
     roll = empty("roll", e)
     up = empty("up", roll); low = empty("low", roll)
@@ -624,9 +624,9 @@ glint = ball("glint", shine_m, (0, -0.04, 0), (0.07, 0.01, 0.07), shades, 20)
 SHADE_LOCAL = Matrix.Translation((0, float(eye_c[1][1]) - R_EYE * 1.1, float(eye_c[1][2]) + 0.02))
 
 # ---------- camera and light ----------
-target = Vector((0, 0, -0.42))
+target = Vector((0, 0, -0.2))
 cam_data = bpy.data.cameras.new("cam")
-cam_data.lens = 70
+cam_data.lens = 76
 cam_data.dof.use_dof = True
 cam_data.dof.focus_distance = 10.2
 cam_data.dof.aperture_fstop = 8

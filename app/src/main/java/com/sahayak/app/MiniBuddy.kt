@@ -83,14 +83,14 @@ class MiniBuddy(context: Context) : View(context) {
     }
 
     companion object {
-        private const val FPS = 12
+        private const val FPS = 18
         private const val ONCE = "swag"
     }
 }
 
 /** Blender ke frames. Ek clip zaroorat par load, sirf aakhri teen yaad rehte hain. */
 object Frames {
-    private const val COUNT = 36
+    private const val COUNT = 54
     private const val KEEP = 5
     private val clips = Collections.synchronizedMap(object : LinkedHashMap<String, List<Bitmap>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Bitmap>>) = size > KEEP
