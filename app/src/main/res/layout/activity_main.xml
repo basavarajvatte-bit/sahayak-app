@@ -139,6 +139,14 @@
                     android:textAllCaps="false" />
             </LinearLayout>
 
+            <CheckBox
+                android:id="@+id/todoSpeak"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="Mini robot speaks my tasks on unlock"
+                android:textSize="16sp" />
+
             <LinearLayout
                 android:id="@+id/todoBox"
                 android:layout_width="match_parent"

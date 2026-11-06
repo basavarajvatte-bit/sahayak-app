@@ -11,8 +11,11 @@ import android.graphics.Path
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -21,6 +24,7 @@ import android.view.animation.AccelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.util.Locale
 
 /** Screen tootne jaisi daraarein. Sirf dikhane ke liye, koi touch nahi leta. */
 @SuppressLint("ViewConstructor")
@@ -95,6 +99,44 @@ class TodoPopup(private val service: AccessibilityService) {
     private val main = Handler(Looper.getMainLooper())
     private var box: LinearLayout? = null
     private var crack: CrackView? = null
+    private var buddy: MiniBuddy? = null
+    private var ttsReady = false
+    private val tts = TextToSpeech(service) { status ->
+        if (status == TextToSpeech.SUCCESS) {
+            speaker().language = Locale("en", "IN")
+            speaker().setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {
+                    main.post { buddy?.talking = true }
+                }
+
+                override fun onDone(utteranceId: String?) {
+                    main.post {
+                        buddy?.talking = false
+                        main.removeCallbacks(hideLater)
+                        main.postDelayed(hideLater, AFTER_SPEECH_MS)
+                    }
+                }
+
+                @Deprecated("Android API")
+                override fun onError(utteranceId: String?) {
+                    onDone(utteranceId)
+                }
+            })
+            ttsReady = true
+        }
+    }
+
+    private fun speaker() = tts
+
+    private fun speech(items: List<org.json.JSONObject>): String {
+        val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
+        val name = prefs.getString("name", "").orEmpty()
+        val tasks = items.take(MAX_SPOKEN).joinToString(". Also, ") { it.optString("text") }
+        return if (name.isEmpty()) tasks else "$name, $tasks"
+    }
+
+    private fun canSpeak(): Boolean = ttsReady &&
+        service.getSharedPreferences("sahayak", Context.MODE_PRIVATE).getBoolean("todo_speak", true)
     private val hideLater = Runnable { hide() }
 
     fun show() {
@@ -110,11 +152,17 @@ class TodoPopup(private val service: AccessibilityService) {
                 cornerRadius = 18 * density
             }
         }
-        card.addView(TextView(service).apply {
+        val top = LinearLayout(service).apply { gravity = Gravity.CENTER_VERTICAL }
+        val robot = MiniBuddy(service)
+        buddy = robot
+        top.addView(robot, LinearLayout.LayoutParams((84 * density).toInt(), (84 * density).toInt()))
+        top.addView(TextView(service).apply {
             text = "To-do: tap when done"
             textSize = 15f
             setTextColor(Color.rgb(32, 201, 151))
+            setPadding(pad, 0, 0, 0)
         })
+        card.addView(top)
         items.take(MAX_ROWS).forEach { item ->
             card.addView(TextView(service).apply {
                 text = "○  " + item.optString("text")
@@ -176,12 +224,26 @@ class TodoPopup(private val service: AccessibilityService) {
             duration = POP_MS + 120L
             start()
         }
-        main.postDelayed(hideLater, POP_MS + SHOW_MS)
+        if (canSpeak()) {
+            main.postDelayed({
+                tts.speak(speech(items), TextToSpeech.QUEUE_FLUSH, Bundle(), "todo")
+            }, POP_MS)
+            main.postDelayed(hideLater, MAX_SPEECH_MS)
+        } else {
+            main.postDelayed(hideLater, POP_MS + SHOW_MS)
+        }
+    }
+
+    fun shutdown() {
+        hide()
+        tts.shutdown()
     }
 
     /** Box tezi se bada hokar gayab hota hai. */
     fun hide() {
         main.removeCallbacks(hideLater)
+        if (ttsReady) tts.stop()
+        buddy = null
         val card = box
         val cracks = crack
         box = null
@@ -199,6 +261,9 @@ class TodoPopup(private val service: AccessibilityService) {
 
     companion object {
         private const val SHOW_MS = 1_000L
+        private const val AFTER_SPEECH_MS = 400L
+        private const val MAX_SPEECH_MS = 15_000L
+        private const val MAX_SPOKEN = 3
         private const val POP_MS = 420L
         private const val CRACK_MS = 260L
         private const val LEAVE_MS = 220L

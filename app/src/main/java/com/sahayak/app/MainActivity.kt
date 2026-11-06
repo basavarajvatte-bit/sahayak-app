@@ -67,6 +67,10 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        findViewById<CheckBox>(R.id.todoSpeak).apply {
+            isChecked = prefs.getBoolean("todo_speak", true)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("todo_speak", on).apply() }
+        }
         findViewById<Button>(R.id.todoAdd).setOnClickListener {
             val input = findViewById<EditText>(R.id.todoInput)
             Todos.add(this, input.text.toString())

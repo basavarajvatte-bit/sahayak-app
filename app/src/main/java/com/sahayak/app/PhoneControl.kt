@@ -70,7 +70,7 @@ class PhoneControl : AccessibilityService() {
     }
 
     private fun stopTodoWatch() {
-        todoPopup?.hide()
+        todoPopup?.shutdown()
         todoPopup = null
         runCatching { unregisterReceiver(unlockReceiver) }
     }
