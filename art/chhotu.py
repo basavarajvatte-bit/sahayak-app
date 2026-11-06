@@ -28,7 +28,7 @@ try:
     scene.view_settings.look = 'AgX - Punchy'
 except Exception:
     scene.view_settings.view_transform = 'Filmic'
-scene.view_settings.exposure = 0.45
+scene.view_settings.exposure = 0.25
 
 # ---------- materials ----------
 def srgb(h):
@@ -68,20 +68,25 @@ def fur(name, root, tip):
     ramp.color_ramp.elements[0].color = (*root, 1)
     ramp.color_ramp.elements[1].position = 0.75
     ramp.color_ramp.elements[1].color = (*tip, 1)
-    hair = t.nodes.new("ShaderNodeBsdfHairPrincipled")
-    hair.parametrization = 'COLOR'
-    put(hair, ["Roughness"], 0.42)
-    put(hair, ["Radial Roughness"], 0.65)
-    put(hair, ["Coat"], 0.08)
     t.links.new(info.outputs["Intercept"], ramp.inputs[0])
-    t.links.new(ramp.outputs[0], hair.inputs["Color"])
-    t.links.new(hair.outputs[0], out.inputs["Surface"])
+    soft = t.nodes.new("ShaderNodeBsdfPrincipled")
+    put(soft, ["Roughness"], 0.5)
+    put(soft, ["Specular IOR Level", "Specular"], 0.2)
+    put(soft, ["Sheen Weight", "Sheen"], 0.6)
+    t.links.new(ramp.outputs[0], soft.inputs["Base Color"])
+    glow = t.nodes.new("ShaderNodeBsdfTranslucent")
+    t.links.new(ramp.outputs[0], glow.inputs["Color"])
+    mix = t.nodes.new("ShaderNodeMixShader")
+    mix.inputs[0].default_value = 0.3
+    t.links.new(soft.outputs[0], mix.inputs[1])
+    t.links.new(glow.outputs[0], mix.inputs[2])
+    t.links.new(mix.outputs[0], out.inputs["Surface"])
     return m
 
 skin = mat("skin", srgb("6A50D8"), 0.6, sss=0.3)
 skin_light = mat("skin_light", srgb("C9BCFF"), 0.6, sss=0.3)
-fur_main = fur("fur_main", srgb("5A3AE8"), srgb("B49DFF"))
-fur_light = fur("fur_light", srgb("D0C4FF"), srgb("FAF7FF"))
+fur_main = fur("fur_main", srgb("3F1FD6"), srgb("8A63FF"))
+fur_light = fur("fur_light", srgb("B9A5FF"), srgb("EDE6FF"))
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
