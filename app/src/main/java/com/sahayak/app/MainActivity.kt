@@ -67,6 +67,12 @@ class MainActivity : Activity() {
         }
         batteryButton.setOnClickListener { askBattery() }
         findViewById<Button>(R.id.teachButton).setOnClickListener { askTeachName() }
+        findViewById<Button>(R.id.todoAdd).setOnClickListener {
+            val input = findViewById<EditText>(R.id.todoInput)
+            Todos.add(this, input.text.toString())
+            input.setText("")
+            renderTodos()
+        }
         findViewById<EditText>(R.id.videoChannel).setText(prefs.getString(PREF_CHANNEL, ""))
         findViewById<Button>(R.id.addVideosButton).setOnClickListener { pickVideos(REQUEST_VIDEOS, true) }
         findViewById<Button>(R.id.testUploadButton).setOnClickListener {
@@ -171,6 +177,7 @@ class MainActivity : Activity() {
         renderMemory()
         renderSkills()
         renderRatings()
+        renderTodos()
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
     }
 
@@ -339,6 +346,31 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(weight))
             box.addView(top)
             box.addView(bottom)
+        }
+    }
+
+    private fun renderTodos() {
+        val box = findViewById<LinearLayout>(R.id.todoBox)
+        box.removeAllViews()
+        Todos.all(this).sortedBy { it.optBoolean("done") }.forEach { item ->
+            val done = item.optBoolean("done")
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(TextView(this).apply {
+                text = (if (done) "✓ " else "") + item.optString("text")
+                textSize = 16f
+                setTextColor(if (done) 0xFF667085.toInt() else 0xFF1D2433.toInt())
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            if (!done) {
+                row.addView(smallButton("Done") {
+                    Todos.complete(this, item.optString("id"))
+                    renderTodos()
+                })
+            }
+            row.addView(smallButton("Remove") {
+                Todos.remove(this, item.optString("id"))
+                renderTodos()
+            })
+            box.addView(row)
         }
     }
 

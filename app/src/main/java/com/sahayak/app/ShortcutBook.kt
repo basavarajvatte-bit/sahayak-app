@@ -263,6 +263,7 @@ object ShortcutBook {
     private val TRANSLATE = Regex("^translate (.+?) (?:to|into) (hindi|marathi|english|gujarati|tamil|telugu|kannada|bengali|urdu|arabic|spanish|french|german)$", IC)
     private val WEATHER = Regex("^(?:what is the |what's the |show )?weather(?: in| at| for| today| tomorrow)?\\s*(.*)$", IC)
     private val NEWS = Regex("^(?:show |latest |today's )*news(?: about| on)? ?(.*)$", IC)
+    private val TODO = Regex("^(?:add|put)(?: to)?(?: my)? (?:to[- ]?do|task)(?: list)?(?: item)?:? (.+)$|^(?:add) (.+?) to (?:my )?(?:to[- ]?do|task)(?: list)?$", IC)
     private val COPY = Regex("^copy (.+)$", IC)
     private val TAP = Regex("^(?:tap|click|press) (?:on )?(.+)$", IC)
     private val TYPE = Regex("^(?:type|write|enter) (.+)$", IC)
@@ -382,6 +383,7 @@ object ShortcutBook {
         SMS.find(text)?.let { return Hit("sms", it.groupValues[1] + "|" + it.groupValues[2]) }
         EMAIL.find(text)?.let { return Hit("compose_email", it.groupValues[1] + "|" + it.groupValues[2]) }
         EVENT.find(text)?.let { return Hit("calendar", it.groupValues[1]) }
+        TODO.find(text)?.let { return Hit("todo_add", it.groupValues[1] + it.groupValues[2]) }
         REMEMBER.find(text)?.let { return Hit("note", it.groupValues[1]) }
         COPY.find(text)?.let { return Hit("copy", it.groupValues[1]) }
         if (lower.endsWith(" near me") || lower.endsWith(" nearby")) {

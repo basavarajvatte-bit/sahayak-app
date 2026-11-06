@@ -63,6 +63,11 @@ class ShortcutBookTest {
         assertEquals("calendar", action("add event Doctor visit"))
     }
 
+    @Test fun todo() {
+        assertEquals("Call supplier", ShortcutBook.match("add to do Call supplier")!!.value)
+        assertEquals("Buy milk", ShortcutBook.match("add Buy milk to my to-do list")!!.value)
+    }
+
     @Test fun repeatStaysSeparate() {
         assertEquals("", LocalCommands.repeatTarget("repeat"))
         assertEquals("Check weather", LocalCommands.repeatTarget("Check weather repeat"))

@@ -6,7 +6,10 @@ import android.accessibilityservice.GestureDescription
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Path
 import android.hardware.camera2.CameraAccessException
@@ -48,16 +51,38 @@ import java.util.concurrent.TimeUnit
 class PhoneControl : AccessibilityService() {
     private var elements: List<AccessibilityNodeInfo> = emptyList()
 
+    private var todoPopup: TodoPopup? = null
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            todoPopup?.show()
+        }
+    }
+
     override fun onServiceConnected() {
         instance = this
+        todoPopup = TodoPopup(this)
+        val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(unlockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(unlockReceiver, filter)
+        }
+    }
+
+    private fun stopTodoWatch() {
+        todoPopup?.hide()
+        todoPopup = null
+        runCatching { unregisterReceiver(unlockReceiver) }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        stopTodoWatch()
         instance = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        stopTodoWatch()
         instance = null
         super.onDestroy()
     }
@@ -592,6 +617,10 @@ class PhoneControl : AccessibilityService() {
             true
         }
         "note" -> Memory.add(this, value)
+        "todo_add" -> {
+            Todos.add(this, value)
+            true
+        }
         "reminder" -> {
             WorkList.add(this, "reminder", value.toLong(), extra.take(60), "", "", extra)
             true
