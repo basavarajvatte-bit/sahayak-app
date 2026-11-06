@@ -212,17 +212,6 @@ class TodoPopup(
         reveal(card, message)
     }
 
-    /** Chhotu ka mood: raat ko neend, kaam zyada ho to gussa ya soch. */
-    private fun todoMood(count: Int): String {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        return when {
-            hour >= NIGHT_HOUR || hour < MORNING_HOUR -> "sleepy"
-            count >= MANY_TASKS -> "grumpy"
-            count >= SOME_TASKS -> "thinking"
-            else -> "swag"
-        }
-    }
-
     private fun canSpeak(): Boolean = ttsReady &&
         service.getSharedPreferences("sahayak", Context.MODE_PRIVATE).getBoolean("todo_speak", true)
     private val hideLater = Runnable { hide() }
@@ -244,17 +233,16 @@ class TodoPopup(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        val start = todoMood(items.size)
-        val swag = start == "swag"
-        val robot = MiniBuddy(service).apply { mood = start }
+        // Har baar goggles swag, phir list
+        val robot = MiniBuddy(service).apply { mood = "swag" }
         buddy = robot
-        speakMood = if (swag) "swagtalk" else "talk"
-        endMood = if (swag) "swagidle" else "sad"
+        speakMood = "swagtalk"
+        endMood = "swagidle"
         Frames.prepare(service, speakMood)
         // Thodi dheemi aur bhaari awaaz, attitude ke saath
         if (ttsReady) {
-            tts.setPitch(if (swag) SWAG_PITCH else 1f)
-            tts.setSpeechRate(if (swag) SWAG_RATE else 1f)
+            tts.setPitch(SWAG_PITCH)
+            tts.setSpeechRate(SWAG_RATE)
         }
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
@@ -290,7 +278,7 @@ class TodoPopup(
                 setTextColor(Color.LTGRAY)
             })
         }
-        reveal(card, speech(items), if (swag) SWAG_MS else 0L)
+        reveal(card, speech(items), SWAG_MS)
     }
 
     private fun reveal(card: LinearLayout, words: String, waitMs: Long = 0L) {
@@ -375,10 +363,6 @@ class TodoPopup(
         private const val SWAG_MS = 3_000L
         private const val SWAG_PITCH = 0.82f
         private const val SWAG_RATE = 0.9f
-        private const val NIGHT_HOUR = 22
-        private const val MORNING_HOUR = 6
-        private const val MANY_TASKS = 5
-        private const val SOME_TASKS = 3
         private const val MAX_SPEECH_MS = 15_000L
         private const val MAX_SPOKEN = 3
         private const val POP_MS = 420L

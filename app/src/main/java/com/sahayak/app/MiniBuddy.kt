@@ -30,7 +30,7 @@ class MiniBuddy(context: Context) : View(context) {
     var mood = "idle"
         set(value) {
             field = value
-            moodStart = time
+            moodStart = -1f
             Frames.prepare(context, value)
         }
     private var moodStart = 0f
@@ -60,9 +60,13 @@ class MiniBuddy(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        Frames.get(mood)?.let { shown = it }
+        Frames.get(mood)?.let {
+            shown = it
+            // Clip load hone ke baad hi ghadi chalu, warna swag ka shuru ka hissa chhoot jata hai
+            if (moodStart < 0f) moodStart = time
+        }
         // Swag ek baar chalta hai, aakhri pose par rukta hai
-        val index = if (mood == ONCE) ((time - moodStart) * FPS).toInt().coerceAtMost(shown.size - 1)
+        val index = if (mood == ONCE) ((time - maxOf(moodStart, 0f)) * FPS).toInt().coerceAtMost(shown.size - 1)
         else (time * FPS).toInt() % maxOf(shown.size, 1)
         val frame = shown.getOrNull(index) ?: return
         val w = width.toFloat()
@@ -87,7 +91,7 @@ class MiniBuddy(context: Context) : View(context) {
 /** Blender ke frames. Ek clip zaroorat par load, sirf aakhri teen yaad rehte hain. */
 object Frames {
     private const val COUNT = 36
-    private const val KEEP = 3
+    private const val KEEP = 5
     private val clips = Collections.synchronizedMap(object : LinkedHashMap<String, List<Bitmap>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Bitmap>>) = size > KEEP
     })
@@ -113,5 +117,6 @@ object Frames {
         }.start()
     }
 
-    fun load(context: Context) = prepare(context, "idle")
+    /** Swag pehle se taiyar, taaki popup aate hi poora move chale. */
+    fun load(context: Context) = listOf("swag", "swagtalk", "swagidle").forEach { prepare(context, it) }
 }
