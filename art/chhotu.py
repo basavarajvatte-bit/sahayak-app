@@ -643,10 +643,10 @@ def clip(name, t):
     elif name == 'excited':
         jump = abs(math.sin(w * 2)) ** 0.7
         p.update(mw=0.32, mc=0.08, hu=0.05, hl=0.27, smile=1.0, ulid=58, llid=-62, bi=0.14, bo=0.14,
-                 tongue=1.0, z=jump * 0.5, sq=0.9 + jump * 0.14, pupil=0.36, spread=0.5, hx=-0.14,
+                 tongue=1.0, z=jump * 0.26, sq=0.92 + jump * 0.1, pupil=0.36, spread=0.5, hx=-0.14,
                  hz=math.sin(w * 2) * 0.1)
-        p["la"] = (-1.15, -0.3, 1.25 + jump * 0.15)
-        p["ra"] = (1.15, -0.3, 1.25 + jump * 0.15)
+        p["la"] = (-1.3, -0.3, 0.95 + jump * 0.15)
+        p["ra"] = (1.3, -0.3, 0.95 + jump * 0.15)
     elif name == 'talk':
         talk(p, t)
         p.update(bi=0.05 + math.sin(w * 2) * 0.04, bo=0.04, hz=math.sin(w) * 0.13, hx=math.sin(w * 2) * 0.05)

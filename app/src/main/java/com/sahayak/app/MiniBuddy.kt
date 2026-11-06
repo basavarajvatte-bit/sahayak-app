@@ -23,7 +23,6 @@ class MiniBuddy(context: Context) : View(context) {
     private val frameBox = RectF()
     private val framePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val shadowBox = RectF()
     private var time = 0f
     private var shown: List<Bitmap> = emptyList()
 
@@ -63,7 +62,6 @@ class MiniBuddy(context: Context) : View(context) {
         val frame = shown.getOrNull((time * FPS).toInt() % maxOf(shown.size, 1)) ?: return
         val w = width.toFloat()
         val h = height.toFloat()
-        shadowBox.set(w * 0.2f, h * 0.86f, w * 0.8f, h * 0.98f)
         shadowPaint.shader = RadialGradient(
             w / 2f, h * 0.92f, w * 0.3f, Color.argb(120, 0, 0, 0), Color.TRANSPARENT, Shader.TileMode.CLAMP
         )

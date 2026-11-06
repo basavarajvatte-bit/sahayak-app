@@ -25,6 +25,8 @@ jobs:
         run: |
           if [ "$(cat art/mode.txt)" = preview ]; then
             echo 'clips=["preview"]' >> "$GITHUB_OUTPUT"
+          elif [ "$(cat art/mode.txt)" != full ]; then
+            echo "clips=[\"$(cat art/mode.txt)\"]" >> "$GITHUB_OUTPUT"
           else
             echo 'clips=["idle","happy","excited","talk","mail","sad","surprised","sleepy","grumpy","thinking"]' >> "$GITHUB_OUTPUT"
           fi
@@ -79,7 +81,7 @@ jobs:
             cp art/got/*/*.png art/preview/
           else
             mkdir -p app/src/main/assets/chhotu
-            rm -f app/src/main/assets/chhotu/*
+            if [ "$MODE" = full ]; then rm -f app/src/main/assets/chhotu/*; fi
             for f in art/got/*/*.png; do
               cwebp -quiet -q 84 -alpha_q 90 "$f" -o "app/src/main/assets/chhotu/$(basename "${f%.png}").webp"
             done
