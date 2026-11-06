@@ -30,8 +30,10 @@ class MiniBuddy(context: Context) : View(context) {
     var mood = "idle"
         set(value) {
             field = value
+            moodStart = time
             Frames.prepare(context, value)
         }
+    private var moodStart = 0f
 
     init {
         Frames.prepare(context, mood)
@@ -59,7 +61,10 @@ class MiniBuddy(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         Frames.get(mood)?.let { shown = it }
-        val frame = shown.getOrNull((time * FPS).toInt() % maxOf(shown.size, 1)) ?: return
+        // Swag ek baar chalta hai, aakhri pose par rukta hai
+        val index = if (mood == ONCE) ((time - moodStart) * FPS).toInt().coerceAtMost(shown.size - 1)
+        else (time * FPS).toInt() % maxOf(shown.size, 1)
+        val frame = shown.getOrNull(index) ?: return
         val w = width.toFloat()
         val h = height.toFloat()
         shadowPaint.shader = RadialGradient(
@@ -75,12 +80,13 @@ class MiniBuddy(context: Context) : View(context) {
 
     companion object {
         private const val FPS = 12
+        private const val ONCE = "swag"
     }
 }
 
 /** Blender ke frames. Ek clip zaroorat par load, sirf aakhri teen yaad rehte hain. */
 object Frames {
-    private const val COUNT = 24
+    private const val COUNT = 36
     private const val KEEP = 3
     private val clips = Collections.synchronizedMap(object : LinkedHashMap<String, List<Bitmap>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Bitmap>>) = size > KEEP

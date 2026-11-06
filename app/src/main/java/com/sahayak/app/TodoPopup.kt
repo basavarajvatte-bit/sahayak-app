@@ -160,10 +160,11 @@ class TodoPopup(private val service: AccessibilityService) {
 
     private fun speaker(): TextToSpeech = tts
 
-    private fun speech(items: List<org.json.JSONObject>): String {
+    private fun speech(items: List<org.json.JSONObject>, swag: Boolean): String {
         val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
         val tasks = items.take(MAX_SPOKEN).joinToString(". Also, ") { it.optString("text") }
-        return hello(prefs) + ", your to do list. $tasks"
+        val line = if (swag) SWAG_LINES.random() else "your to do list."
+        return hello(prefs) + ", " + line + " $tasks"
     }
 
     private fun hello(prefs: android.content.SharedPreferences): String {
@@ -176,6 +177,10 @@ class TodoPopup(private val service: AccessibilityService) {
         hide()
         val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
         val message = hello(prefs) + ", you got a mail!"
+        if (ttsReady) {
+            tts.setPitch(1f)
+            tts.setSpeechRate(1f)
+        }
         val pad = (14 * density).toInt()
         val card = LinearLayout(service).apply {
             orientation = LinearLayout.VERTICAL
@@ -215,7 +220,7 @@ class TodoPopup(private val service: AccessibilityService) {
             hour >= NIGHT_HOUR || hour < MORNING_HOUR -> "sleepy"
             count >= MANY_TASKS -> "grumpy"
             count >= SOME_TASKS -> "thinking"
-            else -> "happy"
+            else -> "swag"
         }
     }
 
@@ -240,11 +245,18 @@ class TodoPopup(private val service: AccessibilityService) {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        val robot = MiniBuddy(service).apply { mood = todoMood(items.size) }
+        val start = todoMood(items.size)
+        val swag = start == "swag"
+        val robot = MiniBuddy(service).apply { mood = start }
         buddy = robot
-        speakMood = "talk"
-        endMood = "sad"
-        Frames.prepare(service, "talk")
+        speakMood = if (swag) "swagtalk" else "talk"
+        endMood = if (swag) "swagidle" else "sad"
+        Frames.prepare(service, speakMood)
+        // Thodi dheemi aur bhaari awaaz, attitude ke saath
+        if (ttsReady) {
+            tts.setPitch(if (swag) SWAG_PITCH else 1f)
+            tts.setSpeechRate(if (swag) SWAG_RATE else 1f)
+        }
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
             text = "To-do: tap when done"
@@ -279,10 +291,10 @@ class TodoPopup(private val service: AccessibilityService) {
                 setTextColor(Color.LTGRAY)
             })
         }
-        reveal(card, speech(items))
+        reveal(card, speech(items, swag), if (swag) SWAG_MS else 0L)
     }
 
-    private fun reveal(card: LinearLayout, words: String) {
+    private fun reveal(card: LinearLayout, words: String, waitMs: Long = 0L) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -325,10 +337,10 @@ class TodoPopup(private val service: AccessibilityService) {
         if (canSpeak()) {
             main.postDelayed({
                 tts.speak(words, TextToSpeech.QUEUE_FLUSH, Bundle(), "todo")
-            }, POP_MS)
-            main.postDelayed(hideLater, MAX_SPEECH_MS)
+            }, POP_MS + waitMs)
+            main.postDelayed(hideLater, MAX_SPEECH_MS + waitMs)
         } else {
-            main.postDelayed(hideLater, POP_MS + SHOW_MS)
+            main.postDelayed(hideLater, POP_MS + SHOW_MS + waitMs)
         }
     }
 
@@ -361,6 +373,15 @@ class TodoPopup(private val service: AccessibilityService) {
         private const val SHOW_MS = 1_000L
         private const val AFTER_SPEECH_MS = 1_800L
         private const val MAIL_SURPRISE_MS = 1_000L
+        private const val SWAG_MS = 3_000L
+        private const val SWAG_PITCH = 0.82f
+        private const val SWAG_RATE = 0.9f
+        private val SWAG_LINES = listOf(
+            "watch the style. Here is your work.",
+            "the boss has arrived. Now listen.",
+            "style first, then work. Here it comes.",
+            "one look, one list. Let us finish this."
+        )
         private const val NIGHT_HOUR = 22
         private const val MORNING_HOUR = 6
         private const val MANY_TASKS = 5

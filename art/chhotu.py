@@ -737,7 +737,7 @@ def clip(name, t):
                  hx=lerp(0.0, 0.02, k) + catch * 0.14 - float(smooth01((t - 0.3) / 0.2)) * (1 - k) * 0.2,
                  hz=lerp(0.12, -0.2, k), hy=lerp(-0.04, 0.09, k), spread=0.3, sf=float(np.clip((t - 0.28) / 0.34, 0, 1)),
                  glint=float(np.clip((t - 0.76) / 0.16, 0, 1)) if t > 0.76 else None)
-        hold = (1.42, -0.55, 0.62)
+        hold = (1.85, -0.55, 0.3)
         p["ra"] = wave(wave(hold, (1.5, -0.4, 1.25), float(smooth01((t - 0.24) / 0.1))), (1.1, -1.05, -0.2), k)
         p["la"] = (-1.32, -0.2, -0.82)
         p["spin"] = t * 9 * 2 * math.pi
@@ -824,7 +824,7 @@ def place_shades(p):
     on = head.matrix_world @ SHADE_LOCAL
     goal, turn, _ = on.decompose()
     grip = hands[1].matrix_world.translation + Vector((-0.12, -0.28, 0.2))
-    top = (grip + goal) / 2 + Vector((0.1, -0.2, 1.9))
+    top = (grip + goal) / 2 + Vector((0.1, -0.2, 1.25))
     if f <= 0:
         pos = grip
         rot = Quaternion((0, 0, 1), p.get("spin", 0.0))
@@ -837,7 +837,7 @@ def place_shades(p):
     if p["glint"] is not None:
         g = p["glint"]
         glint.location = (-0.85 + g * 1.7, -0.05, 0.1)
-        r = 0.12 * math.sin(g * math.pi)
+        r = 0.075 * math.sin(g * math.pi)
         glint.scale = (r, 0.01, r)
 
 def render(path, name, t):
