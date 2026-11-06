@@ -91,7 +91,7 @@ class MiniBuddy(context: Context) : View(context) {
 /** Blender ke frames. Ek clip zaroorat par load, sirf aakhri teen yaad rehte hain. */
 object Frames {
     private const val COUNT = 54
-    private const val KEEP = 5
+    private const val KEEP = 4
     private val clips = Collections.synchronizedMap(object : LinkedHashMap<String, List<Bitmap>>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Bitmap>>) = size > KEEP
     })
