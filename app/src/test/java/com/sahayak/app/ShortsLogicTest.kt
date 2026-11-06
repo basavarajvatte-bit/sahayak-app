@@ -64,6 +64,12 @@ class ShortsLogicTest {
         assertFalse(ShortsLogic.isGallery(details))
     }
 
+    @Test fun handleWorksWithoutAtSign() {
+        assertTrue(ShortsLogic.channelShown(listOf("baby 🤗", "@varshavatte"), "VarshaVatte"))
+        assertTrue(ShortsLogic.channelShown(listOf("baby 🤗 @varshavatte"), "VarshaVatte"))
+        assertFalse(ShortsLogic.channelShown(listOf("filmy doctor", "@trailerpecharcha-b6i"), "VarshaVatte"))
+    }
+
     @Test fun channelMatchIsStrict() {
         assertFalse(ShortsLogic.channelShown(listOf("baby songs"), "@baby"))
         assertFalse(ShortsLogic.channelShown(listOf("filmy doctor"), "@filmy"))

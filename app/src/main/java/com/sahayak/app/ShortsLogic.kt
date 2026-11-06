@@ -91,10 +91,10 @@ object ShortsLogic {
     fun channelShown(labels: List<String>, channel: String): Boolean {
         val wanted = norm(channelValue(channel))
         if (wanted.isEmpty()) return false
-        if (wanted.startsWith("@")) {
-            val handle = Regex("(^|[^a-z0-9_.@-])" + Regex.escape(wanted) + "($|[^a-z0-9_.-])")
-            return labels.any { handle.containsMatchIn(it) }
-        }
+        // @ ke saath ya bina likha ho, screen ka @handle dono se milna chahiye
+        val handle = Regex("(^|[^a-z0-9_.@-])@" + Regex.escape(wanted.removePrefix("@")) + "($|[^a-z0-9_.-])")
+        if (labels.any { handle.containsMatchIn(it) }) return true
+        if (wanted.startsWith("@")) return false
         return labels.any { label ->
             val rest = label.removePrefix(wanted)
             rest != label && (rest.isEmpty() || '@' in rest || rest.none { it.isLetterOrDigit() })

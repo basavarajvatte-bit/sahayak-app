@@ -474,7 +474,7 @@ class PhoneControl : AccessibilityService() {
         var lastGallery = ""
         var lastTap = ""
         val wantedCaption = ShortsLogic.norm(caption).take(SHORT_CAPTION_CHECK)
-        var channelOk = false
+        var channelOk = channelReady
         var channelMiss = 0
         var detailsSeen = false
         var visibilityDone = false
