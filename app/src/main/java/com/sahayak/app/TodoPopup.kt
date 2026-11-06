@@ -101,7 +101,7 @@ class TodoPopup(private val service: AccessibilityService) {
     private var crack: CrackView? = null
     private var buddy: MiniBuddy? = null
     private var ttsReady = false
-    private val tts = TextToSpeech(service) { status ->
+    private val tts: TextToSpeech = TextToSpeech(service) { status ->
         if (status == TextToSpeech.SUCCESS) {
             speaker().language = Locale("en", "IN")
             speaker().setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -126,7 +126,7 @@ class TodoPopup(private val service: AccessibilityService) {
         }
     }
 
-    private fun speaker() = tts
+    private fun speaker(): TextToSpeech = tts
 
     private fun speech(items: List<org.json.JSONObject>): String {
         val prefs = service.getSharedPreferences("sahayak", Context.MODE_PRIVATE)
