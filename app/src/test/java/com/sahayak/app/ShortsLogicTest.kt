@@ -64,6 +64,34 @@ class ShortsLogicTest {
         assertFalse(ShortsLogic.isGallery(details))
     }
 
+    @Test fun channelMatchIsStrict() {
+        assertFalse(ShortsLogic.channelShown(listOf("baby songs"), "@baby"))
+        assertFalse(ShortsLogic.channelShown(listOf("filmy doctor"), "@filmy"))
+        assertFalse(ShortsLogic.channelShown(listOf("baby dance fun"), "baby"))
+        assertFalse(ShortsLogic.channelShown(listOf("caption your short"), "short"))
+        assertTrue(ShortsLogic.channelShown(listOf("@varshavatte•view channel"), "@VarshaVatte"))
+        assertTrue(ShortsLogic.channelShown(listOf("varsha, @varshavatte, view channel"), "@VarshaVatte"))
+    }
+
+    @Test fun audienceMustBeReadBack() {
+        assertFalse(ShortsLogic.audienceRight(details, true))
+        assertFalse(ShortsLogic.audienceRight(listOf("add details", "upload short"), true))
+        assertTrue(ShortsLogic.audienceRight(listOf("made for kids"), true))
+        assertFalse(ShortsLogic.audienceRight(listOf("not made for kids"), true))
+        assertTrue(ShortsLogic.audienceRight(listOf("not made for kids"), false))
+    }
+
+    @Test fun confirmsUploadLeftTheScreen() {
+        assertFalse(ShortsLogic.leftUpload(details))
+        assertFalse(ShortsLogic.leftUpload(emptyList()))
+        assertTrue(ShortsLogic.leftUpload(listOf("home", "shorts", "create", "subscriptions")))
+    }
+
+    @Test fun feedTitleIsNotLimit() {
+        assertFalse(ShortsLogic.limitHit(listOf("youtube shorts daily limit explained")))
+        assertFalse(ShortsLogic.limitHit(listOf("home", "create", "you've reached your daily upload limit explained")))
+    }
+
     @Test fun readsAudiencePage() {
         val page = listOf(ShortsLogic.norm("Yes, it’s made for kids"), ShortsLogic.norm("No, it’s not made for kids"))
         assertTrue(ShortsLogic.isAudiencePage(page))

@@ -80,11 +80,11 @@ class YouTubeActivity : Activity() {
         })
 
         page.addView(heading("Audience"))
-        audience = radios(listOf("Made for kids", "Not made for kids"), if (set.kids) 0 else 1)
+        audience = radios(AUDIENCE_IDS, listOf("Made for kids", "Not made for kids"), if (set.kids) 0 else 1)
         page.addView(audience)
 
         page.addView(heading("Visibility"))
-        visibility = radios(VISIBILITY.map { it.replaceFirstChar(Char::uppercase) }, VISIBILITY.indexOf(set.visibility).coerceAtLeast(0))
+        visibility = radios(VISIBILITY_IDS, VISIBILITY.map { it.replaceFirstChar(Char::uppercase) }, VISIBILITY.indexOf(set.visibility).coerceAtLeast(0))
         page.addView(visibility)
 
         page.addView(heading("Daily schedule"))
@@ -106,6 +106,7 @@ class YouTubeActivity : Activity() {
         page.addView(button("Upload next video now") { uploadNow() })
         page.addView(button("Retry failed videos") {
             ShortsQueue.retryFailed(this)
+            ShortsQueue.rearm(this)
             render()
         })
         page.addView(button("Clear uploaded from list") {
@@ -154,23 +155,23 @@ class YouTubeActivity : Activity() {
         }
     }
 
-    private fun radios(names: List<String>, selected: Int) = RadioGroup(this).apply {
+    private fun radios(base: Int, names: List<String>, selected: Int) = RadioGroup(this).apply {
         names.forEachIndexed { index, name ->
             addView(RadioButton(context).apply {
-                id = index + 1
+                id = base + index
                 text = name
                 textSize = 16f
             })
         }
-        check(selected + 1)
+        check(base + selected)
     }
 
     private fun current(): ShortsQueue.Settings = ShortsQueue.settings(this).copy(
         channel = ShortsLogic.channelValue(channel.text.toString()),
         tags = tags.text.toString().trim(),
         useName = useName.isChecked,
-        kids = audience.checkedRadioButtonId == 1,
-        visibility = VISIBILITY[(visibility.checkedRadioButtonId - 1).coerceIn(0, VISIBILITY.lastIndex)],
+        kids = audience.checkedRadioButtonId == AUDIENCE_IDS,
+        visibility = VISIBILITY[(visibility.checkedRadioButtonId - VISIBILITY_IDS).coerceIn(0, VISIBILITY.lastIndex)],
         perDay = perDay.text.toString().toIntOrNull()?.coerceIn(1, MAX_PER_DAY) ?: DEFAULT_PER_DAY,
         from = from,
         to = to
@@ -352,6 +353,8 @@ class YouTubeActivity : Activity() {
         private const val MAX_PER_DAY = 50
         private const val DEFAULT_PER_DAY = 6
         private const val MAX_ROWS = 40
+        private const val AUDIENCE_IDS = 1_000
+        private const val VISIBILITY_IDS = 2_000
         private val VISIBILITY = listOf("public", "unlisted", "private")
     }
 }

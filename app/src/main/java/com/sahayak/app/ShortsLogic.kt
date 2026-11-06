@@ -7,6 +7,7 @@ object ShortsLogic {
     const val MAX_CAPTION = 100
     private val FINAL_BUTTONS = listOf("upload short", "upload video", "upload")
     private const val SHORT_LABEL = 40
+    private const val LIMIT_LABEL = 120
     private const val DAY_MINUTES = 1_440
 
     fun norm(text: String): String = text.lowercase()
@@ -49,14 +50,25 @@ object ShortsLogic {
             (if (kids) "not made for kids" in label else "not made for kids" !in label)
     }
 
+    /** Audience row par sahi jawab likha dikhe tabhi pakka maano. */
+    fun audienceRight(labels: List<String>, kids: Boolean): Boolean = labels.any { label ->
+        label.length <= SHORT_LABEL && !label.startsWith("what") && !label.endsWith("?") && madeForKids(label) &&
+            (if (kids) "not made for kids" !in label else "not made for kids" in label)
+    }
+
     fun visibilityShown(labels: List<String>, wanted: String) =
         labels.any { it == wanted || ("visibility" in it && wanted in it) }
 
     fun visibilityRow(labels: List<String>) = labels.any { "visibility" in it }
 
-    fun limitHit(labels: List<String>) = labels.any { label ->
-        "upload limit" in label || "daily limit" in label || ("too many" in label && "upload" in label)
+    /** Sirf chhoti line, aur home feed nahi: video ke title se kaam nahi rukna chahiye. */
+    fun limitHit(labels: List<String>): Boolean = !isHome(labels) && labels.any { label ->
+        label.length <= LIMIT_LABEL && "limit" in label && "upload" in label && ("reached" in label || "exceeded" in label)
     }
+
+    /** Upload dabne ke baad details ya uski koi screen bachi to upload pakka nahi. */
+    fun leftUpload(labels: List<String>) = labels.isNotEmpty() && "add details" !in labels &&
+        !isAudiencePage(labels) && !isVisibilityPage(labels)
 
     /** Link, @handle ya naam: tulna ke liye sirf pehchan wala hissa. */
     fun channelKey(channel: String): String {
@@ -77,10 +89,16 @@ object ShortsLogic {
 
     /** Poora shabd milna zaroori: channel "baby" ko caption #baby se match nahi hona chahiye. */
     fun channelShown(labels: List<String>, channel: String): Boolean {
-        val wanted = norm(channelKey(channel))
+        val wanted = norm(channelValue(channel))
         if (wanted.isEmpty()) return false
-        val pattern = Regex("(^|[\\s@])" + Regex.escape(wanted) + "($|\\s)")
-        return labels.any { '#' !in it && pattern.containsMatchIn(it) }
+        if (wanted.startsWith("@")) {
+            val handle = Regex("(^|[^a-z0-9_.@-])" + Regex.escape(wanted) + "($|[^a-z0-9_.-])")
+            return labels.any { handle.containsMatchIn(it) }
+        }
+        return labels.any { label ->
+            val rest = label.removePrefix(wanted)
+            rest != label && (rest.isEmpty() || '@' in rest || rest.none { it.isLetterOrDigit() })
+        }
     }
 
     /** 10_Robot_Dance se Robot Dance. */

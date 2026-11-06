@@ -13,7 +13,7 @@ import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
-enum class ShortOutcome { DONE, RETRY, NO_RETRY, LIMIT, STOPPED }
+enum class ShortOutcome { DONE, RETRY, NO_RETRY, LIMIT, STOPPED, CHANNEL }
 
 data class ShortResult(val outcome: ShortOutcome, val reason: String = "")
 
@@ -198,18 +198,23 @@ object ShortsQueue {
 
     /** Sabse pehli baaki video upload karo. */
     fun run(context: Context, scheduled: Boolean) {
-        if (!busy.compareAndSet(false, true)) return
+        if (!busy.compareAndSet(false, true)) {
+            if (scheduled) arm(context, System.currentTimeMillis() + FAIL_RETRY_MS)
+            return
+        }
         val power = context.getSystemService(PowerManager::class.java)
         @Suppress("DEPRECATION")
         val wake = power.newWakeLock(
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "sahayak:shorts"
         )
+        val keys = context.getSystemService(KeyguardManager::class.java)
         try {
-            wake.acquire(WAKE_MS)
+            // PIN laga ho to screen jalane ka fayda nahi
+            if (!(keys.isDeviceSecure && keys.isKeyguardLocked)) wake.acquire(WAKE_MS)
             uploadNext(context, scheduled)
         } catch (e: RuntimeException) {
             RunLog.add(context, "short crashed " + e.message)
-            if (scheduled) arm(context, System.currentTimeMillis() + FAIL_RETRY_MS)
+            if (scheduled) armNextSlot(context)
         } finally {
             if (wake.isHeld) wake.release()
             busy.set(false)
@@ -221,7 +226,10 @@ object ShortsQueue {
         if (scheduled && !set.auto) return
         val item = items(context).firstOrNull { it.optString("status") == WAITING }
         if (item == null) {
-            if (scheduled) WorkList.notifyText(context, NOTE_ID, "All videos are uploaded. Add more videos.")
+            if (scheduled) {
+                val failed = count(context, FAILED)
+                WorkList.notifyText(context, NOTE_ID, if (failed > 0) "$failed videos failed. Open YouTube Auto Upload." else "All videos are uploaded. Add more videos.")
+            }
             prefs(context).edit().putLong("next_at", 0L).apply()
             return
         }
@@ -230,10 +238,14 @@ object ShortsQueue {
         Thread.sleep(UNLOCK_WAIT_MS)
         val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
         if (control == null || locked) {
-            WorkList.notifyText(context, NOTE_ID, (if (locked) "Unlock the phone" else "Turn on phone control") + " to upload: " + item.optString("name"))
+            if (!prefs(context).getBoolean("told_locked", false)) {
+                WorkList.notifyText(context, NOTE_ID, (if (locked) "Unlock the phone" else "Turn on phone control") + " to upload: " + item.optString("name"))
+                prefs(context).edit().putBoolean("told_locked", true).apply()
+            }
             if (scheduled) arm(context, System.currentTimeMillis() + LOCKED_RETRY_MS)
             return
         }
+        prefs(context).edit().putBoolean("told_locked", false).apply()
         if (!canRead(context, item)) {
             item.put("status", FAILED).put("reason", "Video file not found")
             update(context, item)
@@ -241,7 +253,11 @@ object ShortsQueue {
             return
         }
         val caption = ShortsLogic.caption(item.optString("name"), set.tags, set.useName)
-        val result = control.uploadShort(item.optString("uri"), item.optString("name"), caption, set)
+        val result = control.uploadShort(item.optString("uri"), item.optString("name"), caption, set) {
+            // App beech mein band ho to bhi yeh video dobara upload nahi hogi
+            item.put("status", FAILED).put("reason", "Upload pressed, result unknown. Check YouTube")
+            update(context, item)
+        }
         RunLog.add(context, "short " + result.outcome + " " + item.optString("name") + " " + result.reason)
         finish(context, item, result, scheduled)
     }
@@ -256,8 +272,14 @@ object ShortsQueue {
                 if (scheduled) armNextSlot(context)
             }
             ShortOutcome.STOPPED -> if (scheduled) armNextSlot(context)
+            ShortOutcome.CHANNEL -> {
+                item.put("status", WAITING).put("reason", result.reason)
+                update(context, item)
+                WorkList.notifyText(context, NOTE_ID, "Automatic uploads paused: " + result.reason)
+                stop(context)
+            }
             ShortOutcome.LIMIT -> {
-                item.put("reason", "YouTube daily limit reached")
+                item.put("status", WAITING).put("reason", "YouTube daily limit reached")
                 update(context, item)
                 WorkList.notifyText(context, NOTE_ID, "YouTube daily limit reached. Uploads will continue tomorrow.")
                 if (scheduled) arm(context, System.currentTimeMillis() + LIMIT_WAIT_MS)

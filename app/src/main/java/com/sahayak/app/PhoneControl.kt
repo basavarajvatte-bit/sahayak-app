@@ -68,6 +68,7 @@ class PhoneControl : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        ShortsQueue.rearm(this)
         Frames.load(this)
         todoPopup = TodoPopup(this)
         val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
@@ -302,7 +303,7 @@ class PhoneControl : AccessibilityService() {
     }
 
     private fun ensureChannel(savedChannel: String): Boolean {
-        val channel = ShortsLogic.channelKey(savedChannel)
+        val channel = ShortsLogic.channelValue(savedChannel)
         val open = packageManager.getLaunchIntentForPackage(YOUTUBE)
             ?: return failed("YouTube app not found")
         startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
@@ -313,7 +314,14 @@ class PhoneControl : AccessibilityService() {
         val switched = retry { tapText("Switch account") || tapText("Switch channel") || tapText("Accounts") }
         if (!switched) return failed("Channel $channel not shown, and Switch account not found")
         Thread.sleep(UPLOAD_WAIT_MS)
-        if (!retry { tapText(channel) }) return failed("Channel $channel not found in the account list")
+        val found = retry {
+            val row = visibleNodes().firstOrNull { ShortsLogic.channelShown(listOf(ShortsLogic.norm(label(it))), channel) }
+            row != null && tapNode(row)
+        }
+        if (!found) {
+            RunLog.add(this, "short accounts: " + screenLabels().take(14).joinToString(" | ") { it.take(40) })
+            return failed("Channel $channel not found in the account list")
+        }
         Thread.sleep(UPLOAD_WAIT_MS * 2)
         if (!retry { tapText("You") }) return failed("You tab not found after switching")
         Thread.sleep(UPLOAD_WAIT_MS)
@@ -364,6 +372,8 @@ class PhoneControl : AccessibilityService() {
     }
 
     private fun leavePage() {
+        // Screen khud wapas aa gayi ho to details se bahar nahi nikalna
+        if (ShortsLogic.isDetailsPage(screenLabels())) return
         if (SHORT_LEAVE_WORDS.none { tapExact(it) }) performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
@@ -404,14 +414,18 @@ class PhoneControl : AccessibilityService() {
         return tapExact("paste")
     }
 
-    private fun pressFinal(button: String): ShortResult {
-        if (!tapExact(button)) return ShortResult(ShortOutcome.RETRY, "Could not press $button")
+    private fun pressFinal(button: String, onPress: () -> Unit): ShortResult {
+        onPress()
+        if (!tapExact(button)) return ShortResult(ShortOutcome.NO_RETRY, "Could not press $button. Check YouTube")
+        var clear = 0
         repeat(SHORT_CONFIRM_ROUNDS) {
             Thread.sleep(1_000L)
             val labels = screenLabels()
             if (ShortsLogic.limitHit(labels)) return ShortResult(ShortOutcome.LIMIT)
             if (labels.any { "upload failed" in it }) return ShortResult(ShortOutcome.NO_RETRY, "YouTube says upload failed")
-            if (labels.isNotEmpty() && button !in labels) return ShortResult(ShortOutcome.DONE)
+            val home = rootInActiveWindow?.packageName?.toString() == YOUTUBE && ShortsLogic.leftUpload(labels)
+            clear = if (home) clear + 1 else 0
+            if (clear >= 2) return ShortResult(ShortOutcome.DONE)
         }
         return ShortResult(ShortOutcome.NO_RETRY, "Pressed $button but the screen did not change. Check YouTube")
     }
@@ -434,22 +448,27 @@ class PhoneControl : AccessibilityService() {
      * Har round screen padhkar ek kaam: channel, visibility, audience, caption, phir Upload.
      * Teeno pakke hue bina Upload kabhi nahi dabta.
      */
-    fun uploadShort(uriText: String, fileName: String, caption: String, set: ShortsQueue.Settings): ShortResult {
+    fun uploadShort(
+        uriText: String, fileName: String, caption: String, set: ShortsQueue.Settings, onPress: () -> Unit = {}
+    ): ShortResult {
         abort = false
+        lastWorkError = ""
+        if (set.channel.isBlank()) return ShortResult(ShortOutcome.CHANNEL, "Type your channel in YouTube Auto Upload")
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
         // Sikhaya hua raasta: Create, Add, gallery. File name na ho tabhi seedha share.
         var shared = fileName.isBlank()
-        if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open")
+        if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, lastWorkError.ifEmpty { "YouTube did not open" })
         var picked = false
         var galleryStill = 0
         var lastGallery = ""
         var lastTap = ""
         val wantedCaption = ShortsLogic.norm(caption).take(SHORT_CAPTION_CHECK)
-        var channelOk = set.channel.isBlank()
+        var channelOk = false
         var channelMiss = 0
         var switched = false
         var visibilityDone = false
         var audienceDone = false
+        var audienceChosen = false
         var captionTries = 0
         var pageTries = 0
         var outside = 0
@@ -479,7 +498,7 @@ class PhoneControl : AccessibilityService() {
             if (ShortsLogic.isAudiencePage(labels)) {
                 RunLog.add(this, "short audience page: " + labels.take(10).joinToString(" | ") { it.take(40) })
                 pageTries++
-                tapWhere(pageTries > 1) { if (set.kids) ShortsLogic.yesOption(it) else ShortsLogic.noOption(it) }
+                audienceChosen = tapWhere(pageTries > 1) { if (set.kids) ShortsLogic.yesOption(it) else ShortsLogic.noOption(it) }
                 Thread.sleep(SHORT_TAP_WAIT_MS)
                 val after = screenLabels()
                 if (ShortsLogic.finalButton(after) != null) {
@@ -497,10 +516,12 @@ class PhoneControl : AccessibilityService() {
                 if (!channelOk) {
                     channelOk = ShortsLogic.channelShown(labels, set.channel)
                     if (!channelOk && ++channelMiss >= SHORT_CHANNEL_ROUNDS) {
-                        if (switched) return ShortResult(ShortOutcome.NO_RETRY, "Channel ${set.channel} not selected in YouTube")
+                        if (switched) return ShortResult(ShortOutcome.CHANNEL, "Channel ${set.channel} not selected in YouTube")
                         switched = true
                         channelMiss = 0
-                        if (!ensureChannel(set.channel)) return ShortResult(ShortOutcome.NO_RETRY, lastWorkError)
+                        val changed = ensureChannel(set.channel)
+                        if (abort) return ShortResult(ShortOutcome.STOPPED)
+                        if (!changed) return ShortResult(ShortOutcome.CHANNEL, lastWorkError)
                         picked = false
                         if (!beginUpload(shared, uriText, caption)) return ShortResult(ShortOutcome.RETRY, "YouTube did not open")
                     }
@@ -514,9 +535,6 @@ class PhoneControl : AccessibilityService() {
                         pageTries++
                         tapWhere(pageTries > 1) { "visibility" in it }
                         return@repeat
-                    } else if (final != null) {
-                        if (set.visibility != "public") return shortFail("Visibility option not found", labels)
-                        visibilityDone = true
                     }
                 }
                 if (!audienceDone) {
@@ -531,7 +549,7 @@ class PhoneControl : AccessibilityService() {
                             tapWhere(pageTries > 1) { it.length <= 40 && "made for kids" in it && !it.startsWith("what") }
                             return@repeat
                         }
-                        final != null -> audienceDone = true
+                        ShortsLogic.audienceRight(labels, set.kids) || audienceChosen -> audienceDone = true
                     }
                 }
                 if (wantedCaption.isNotEmpty() && labels.none { wantedCaption in it }) {
@@ -540,9 +558,10 @@ class PhoneControl : AccessibilityService() {
                     RunLog.add(this, "short caption " + captionTries + " typed " + typeCaption(caption))
                     return@repeat
                 }
-                if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final)
+                if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final, onPress)
             }
-            if (labels.any { "draft" in it } && SHORT_DRAFT_WORDS.any { tapExact(it) }) return@repeat
+            // Purana draft chalu ya delete nahi karna: usme doosri video ho sakti hai
+            if (labels.any { "draft" in it } && "continue" in labels) return shortFail("YouTube asks about an old draft. Finish or delete it", labels)
             if (!shared && !picked && ShortsLogic.isGallery(labels)) {
                 val video = visibleNodes().firstOrNull { ShortsLogic.sameVideo(ShortsLogic.norm(label(it)), fileName) }
                 if (video != null) {
@@ -1344,7 +1363,6 @@ class PhoneControl : AccessibilityService() {
         private val SHORT_LEAVE_WORDS = listOf("done", "save", "navigate up", "back")
         private val SHORT_CAPTION_WORDS = listOf("caption your short", "caption", "add a title", "create a title", "title")
         private val SHORT_NEXT_WORDS = listOf("next", "done", "continue")
-        private val SHORT_DRAFT_WORDS = listOf("start over", "start new", "discard")
         private val SHORT_POPUP_WORDS = listOf("got it", "not now", "no thanks", "skip", "dismiss", "ok", "allow", "while using the app")
         private const val UPLOAD_WAIT_MS = 2_000L
         private const val LAST_APP_MS = 200L
