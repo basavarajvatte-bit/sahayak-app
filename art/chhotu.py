@@ -16,6 +16,11 @@ scene.cycles.samples = 64 if MODE == 'preview' else 40
 scene.cycles.use_adaptive_sampling = True
 scene.cycles.adaptive_threshold = 0.03
 scene.cycles.use_denoising = True
+try:
+    scene.cycles.denoiser = 'OPENIMAGEDENOISE'
+    print("DENOISER", scene.cycles.denoiser)
+except Exception as e:
+    print("DENOISER failed", e)
 scene.cycles.max_bounces = 6
 scene.render.film_transparent = True
 SIZE = 512 if MODE == 'preview' else 384
@@ -24,10 +29,10 @@ scene.render.image_settings.file_format = 'PNG'
 scene.render.image_settings.color_mode = 'RGBA'
 try:
     scene.view_settings.view_transform = 'AgX'
-    scene.view_settings.look = 'AgX - Medium High Contrast'
+    scene.view_settings.look = 'AgX - Punchy'
 except Exception:
     scene.view_settings.view_transform = 'Filmic'
-scene.view_settings.exposure = 0.35
+scene.view_settings.exposure = 0.1
 
 # ---------- materials ----------
 def srgb(h):
@@ -80,7 +85,7 @@ def fur(name, root, tip):
 skin = mat("skin", srgb("4A30C8"), 0.6, sss=0.3)
 skin_light = mat("skin_light", srgb("A997FF"), 0.6, sss=0.3)
 fur_main = fur("fur_main", srgb("2C1A9A"), srgb("7A5CFF"))
-fur_light = fur("fur_light", srgb("7E6CE0"), srgb("E2DAFF"))
+fur_light = fur("fur_light", srgb("A796F0"), srgb("D9CEFF"))
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
@@ -212,17 +217,16 @@ def add_fur(o, name, material, parents, kids, length, group_d=None, group_l=None
     s.child_type = 'INTERPOLATED'
     s.child_percent = 2
     s.rendered_child_count = kids
-    s.clump_factor = 0.35
+    s.clump_factor = 0.5
     s.clump_shape = 0.2
-    s.roughness_1 = 0.012
-    s.roughness_endpoint = 0.02
-    s.roughness_2 = 0.02
-    s.tangent_factor = 0.012
-    s.normal_factor = length
-    s.object_align_factor = (0, 0, -droop)
+    s.roughness_1 = 0.006
+    s.roughness_endpoint = 0.012
+    s.roughness_2 = 0.01
+    s.tangent_factor = 0.0
+    s.object_align_factor = (0, 0, -droop * 0.08)
     s.root_radius = 1.0
-    s.tip_radius = 0.12
-    s.radius_scale = 0.0075
+    s.tip_radius = 0.22
+    s.radius_scale = 0.014
     s.use_close_tip = True
     if group_d:
         ps.vertex_group_density = group_d
@@ -302,7 +306,7 @@ def head_faces():
     idx = lambda r, t: r * NT + (t % NT)
     for r in range(NR - 1):
         for t in range(NT):
-            faces.append((idx(r, t), idx(r, t + 1), idx(r + 1, t + 1), idx(r + 1, t)))
+            faces.append((idx(r, t), idx(r + 1, t), idx(r + 1, t + 1), idx(r, t + 1)))
             mats.append(0)
     # mouth bag: rings stored after the outer rings
     for k in range(NB - 1):
@@ -318,7 +322,7 @@ def head_faces():
     for t in range(NT):
         faces.append((idx(NR + NB - 1, t), inner, idx(NR + NB - 1, t + 1)))
         mats.append(1)
-        faces.append((idx(NR - 1, t), idx(NR - 1, t + 1), back))
+        faces.append((idx(NR - 1, t), back, idx(NR - 1, t + 1)))
         mats.append(0)
     return faces, mats
 
@@ -327,7 +331,10 @@ root = empty("root")
 head = empty("head", root, (0, -0.1, 0.62))
 hv, _ = head_verts(REST)
 hf, hm = head_faces()
-face = new_mesh("face", hv, hf, head, [skin, mouth_in])
+face = new_mesh("face", hv, hf, head, [skin, mouth_in, skin_light])
+_u = hv / np.maximum(np.linalg.norm(hv, axis=1, keepdims=True), 1e-6)
+_m = gauss(_u, M, 0.47)
+hm = [2 if k == 0 and np.mean(_m[list(f)]) > 0.3 else k for f, k in zip(hf, hm)]
 face.data.polygons.foreach_set("material_index", hm)
 face.data.update()
 face_key = key_object(face)
@@ -345,8 +352,8 @@ short = 0.28 + 0.72 * smooth01((rho_v - 0.1) / 0.75)
 add_group(face, "main", keep * smooth01((0.72 - muzzle) / 0.5))
 add_group(face, "pale", keep * smooth01((muzzle - 0.28) / 0.4))
 add_group(face, "len", short)
-add_fur(face, "head_fur", fur_main, 9000, 12, 0.17, "main", "len", 2)
-add_fur(face, "muzzle_fur", fur_light, 3000, 12, 0.11, "pale", "len", 3, 0.0)
+add_fur(face, "head_fur", fur_main, 11000, 16, 0.15, "main", "len", 2)
+add_fur(face, "muzzle_fur", fur_light, 4000, 16, 0.10, "pale", "len", 3, 0.0)
 
 # ---------- eyes ----------
 eye_c = {}
@@ -461,15 +468,17 @@ def lathe_ellipsoid(a, b, c, nu=120, nv=90, pear=0.14):
             faces.append((p, q, r, t))
     return np.array(verts), faces
 
-bv, bf = lathe_ellipsoid(0.92, 0.82, 0.90)
-body_o = new_mesh("body", bv, bf, root, [skin])
+bv, bf = lathe_ellipsoid(0.80, 0.74, 0.86)
+body_o = new_mesh("body", bv, bf, root, [skin, skin_light])
 body_o.location = (0, 0, -0.85)
 ud = bv / np.linalg.norm(bv, axis=1, keepdims=True)
 pale = np.exp(-((1 - np.clip(ud @ (np.array([0, -1, -0.15]) / np.linalg.norm([0, -1, -0.15])), -1, 1)) * 2) / (0.75 ** 2))
+body_o.data.polygons.foreach_set("material_index", [1 if np.mean(pale[list(f)]) > 0.4 else 0 for f in bf])
+body_o.data.update()
 add_group(body_o, "main", smooth01((0.82 - pale) / 0.4))
 add_group(body_o, "pale", smooth01((pale - 0.40) / 0.3))
-add_fur(body_o, "body_fur", fur_main, 7000, 12, 0.17, "main", None, 4)
-add_fur(body_o, "belly_fur", fur_light, 2800, 12, 0.14, "pale", None, 5)
+add_fur(body_o, "body_fur", fur_main, 7000, 16, 0.15, "main", None, 4)
+add_fur(body_o, "belly_fur", fur_light, 3200, 16, 0.11, "pale", None, 5)
 
 NA, NC = 34, 22
 
@@ -541,11 +550,6 @@ sheet.data.materials.append(paper)
 stamp = ball("seal", seal, (0, 0.0, 0.05), (0.13, 0.13, 0.05), mail, 32)
 mail_parts = [sheet, stamp]
 
-# ground shadow
-bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, -2.11))
-ground = bpy.context.object
-ground.is_shadow_catcher = True
-
 # ---------- camera and light ----------
 target = Vector((0, 0, -0.42))
 cam_data = bpy.data.cameras.new("cam")
@@ -571,8 +575,8 @@ def area(loc, energy, size, color):
 
 area((4.5, -7, 6), 620, 5, (1, 0.93, 0.84))
 area((-6, -5, 1), 170, 7, (0.78, 0.86, 1))
-area((-4, 6, 5), 1100, 3, (0.62, 0.78, 1))
-area((5, 6, 0), 600, 3, (1, 0.72, 0.55))
+area((-4, 6, 5), 520, 3, (0.62, 0.78, 1))
+area((5, 6, 0), 280, 3, (1, 0.72, 0.55))
 area((0, -9, -3), 60, 8, (1, 0.9, 0.95))
 scene.world = bpy.data.worlds.new("w")
 scene.world.use_nodes = True
@@ -692,8 +696,8 @@ def apply(p, name):
         e = eyes[s]
         e["gaze"].rotation_euler = (p["gz"] * 3.2, 0, p["gx"] * 3.2)
         e["roll"].rotation_euler = (0, s * p["roll"], 0)
-        e["up"].rotation_euler = (math.radians(p["ulid"]), 0, 0)
-        e["low"].rotation_euler = (math.radians(p["llid"] + 62 - 62), 0, 0)
+        e["up"].rotation_euler = (math.radians(-p["ulid"]), 0, 0)
+        e["low"].rotation_euler = (math.radians(-p["llid"]), 0, 0)
         pts = brow_points(s, p["bi"], p["bo"])
         for pt, co in zip(brows[s].points, pts):
             pt.co = (*co, 1)
@@ -740,8 +744,7 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('idle', 0.2), ('happy', 0.25), ('excited', 0.25), ('talk', 0.05), ('mail', 0.2),
-              ('sad', 0.3), ('surprised', 0.1), ('sleepy', 0.5), ('grumpy', 0.1), ('thinking', 0.2)]
+    wanted = [('idle', 0.2), ('happy', 0.25), ('sad', 0.3), ('surprised', 0.1), ('grumpy', 0.1), ('talk', 0.05)]
     for name, t in wanted:
         render(f"{OUT}/{name}.png", name, t)
 else:
