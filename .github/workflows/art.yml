@@ -6,6 +6,10 @@ on:
     paths: ["art/chhotu.py", "art/mode.txt", ".github/workflows/art.yml"]
   workflow_dispatch:
 
+concurrency:
+  group: render-art
+  cancel-in-progress: true
+
 permissions:
   contents: write
   actions: write
@@ -17,9 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Blender
+        timeout-minutes: 12
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq blender webp
+          for try in 1 2 3; do
+            sudo timeout 180 apt-get install -y -qq blender webp && break
+            sudo dpkg --configure -a || true
+          done
           blender --version | head -1
       - name: Render
         run: |
