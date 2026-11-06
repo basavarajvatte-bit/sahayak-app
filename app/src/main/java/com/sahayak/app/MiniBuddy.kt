@@ -3,6 +3,8 @@ package com.sahayak.app
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -13,12 +15,15 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.view.View
 import android.view.animation.LinearInterpolator
+import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.sin
 
 /** Chhotu: Sahayak ka apna 3D jaisa cartoon. Kisi film ka character nahi. */
 @SuppressLint("ViewConstructor")
 class MiniBuddy(context: Context) : View(context) {
+    private val frameBox = RectF()
+    private val framePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val box = RectF()
     private var time = 0f
@@ -52,6 +57,17 @@ class MiniBuddy(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
+        val set = when {
+            holdingMail -> Frames.mail
+            talking -> Frames.talk
+            else -> Frames.idle
+        }
+        val frame = set.getOrNull((time * FPS).toInt() % maxOf(set.size, 1))
+        if (frame != null) {
+            frameBox.set(0f, 0f, width.toFloat(), height.toFloat())
+            canvas.drawBitmap(frame, null, frameBox, framePaint)
+            return
+        }
         val u = minOf(width, height) / 100f
         val cx = width / 2f
         val beat = sin(time * 7f)
@@ -153,5 +169,39 @@ class MiniBuddy(context: Context) : View(context) {
         paint.color = Color.rgb(230, 57, 70)
         canvas.drawCircle(x, y + 2f * u, 4.5f * u, paint)
         canvas.restore()
+    }
+
+    companion object {
+        private const val FPS = 12
+    }
+}
+
+/** Blender se render hue asli 3D frames. Ek baar load hote hain. */
+object Frames {
+    @Volatile var idle: List<Bitmap> = emptyList()
+    @Volatile var talk: List<Bitmap> = emptyList()
+    @Volatile var mail: List<Bitmap> = emptyList()
+    private var started = false
+
+    private fun read(context: Context, name: String): List<Bitmap> = (0 until 24).mapNotNull { i ->
+        try {
+            context.assets.open("chhotu/" + name + "_" + i.toString().padStart(2, '0') + ".webp").use {
+                BitmapFactory.decodeStream(it)
+            }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    @Synchronized
+    fun load(context: Context) {
+        if (started) return
+        started = true
+        val app = context.applicationContext
+        Thread {
+            idle = read(app, "idle")
+            talk = read(app, "talk")
+            mail = read(app, "mail")
+        }.start()
     }
 }

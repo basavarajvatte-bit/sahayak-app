@@ -158,13 +158,13 @@ teeth = ball("teeth", tooth_m, (0, -0.06, 0.1), (0.21, 0.05, 0.045), mouth)
 
 arms = []
 for s in (-1, 1):
-    a = empty("arm", root, (s * 1.0, -0.05, -0.3))
+    a = empty("arm", root, (s * 0.9, -0.05, -0.3))
     ball("limb", purple, (0, 0, -0.42), (0.25, 0.25, 0.56), a)
     ball("hand", orange, (0, -0.03, -0.98), 0.28, a)
     a.rotation_euler = (0.2, -s * 0.5, 0)
     arms.append(a)
 
-mail = empty("mail", root, (1.68, -0.42, 0.62))
+mail = empty("mail", root, (1.6, -0.42, 0.62))
 mail.rotation_euler = (math.radians(90), math.radians(-12), 0)
 bpy.ops.mesh.primitive_cube_add(size=1)
 sheet = bpy.context.object
@@ -182,7 +182,11 @@ flap.rotation_euler = (math.radians(180), 0, math.radians(45))
 flap.scale = (1, 1, 0.09)
 flap.data.materials.append(paper)
 ball("seal", seal, (0, 0.05, 0.12), (0.14, 0.14, 0.06), mail, 32)
-mail_parts = [sheet, flap] + [c for c in mail.children if c.name.startswith("seal")]
+flap.hide_render = True
+edge = mat("edge", srgb("A9B4C8"), 0.5)
+for x in (-1, 1):
+    rod("fold", edge, (x * 0.64, 0.41, 0.045), (0, -0.02, 0.045), 0.014, mail)
+mail_parts = [sheet] + [c for c in mail.children if c.name.startswith("seal") or c.name.startswith("fold")]
 
 cam_data = bpy.data.cameras.new("cam")
 cam_data.lens = 64

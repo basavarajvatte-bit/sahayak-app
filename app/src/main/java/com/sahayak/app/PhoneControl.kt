@@ -67,6 +67,7 @@ class PhoneControl : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        Frames.load(this)
         todoPopup = TodoPopup(this)
         val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
