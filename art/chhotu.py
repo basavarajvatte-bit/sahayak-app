@@ -84,9 +84,9 @@ def fur(name, root, tip):
     return m
 
 skin = mat("skin", srgb("7A3CE0"), 0.6, sss=0.3)
-skin_light = mat("skin_light", srgb("FFD8BC"), 0.6, sss=0.3)
+skin_light = mat("skin_light", srgb("FFEBDC"), 0.6, sss=0.3)
 fur_main = fur("fur_main", srgb("6A22E0"), srgb("B07CFF"))
-fur_light = fur("fur_light", srgb("FFC9A8"), srgb("FFF0DE"))
+fur_light = fur("fur_light", srgb("FFE9D8"), srgb("FFFAF4"))
 mouth_in = mat("mouth_in", srgb("6E1636"), 0.55, sss=0.2)
 tongue_m = mat("tongue", srgb("FF7C98"), 0.32, sss=0.6, coat=0.4)
 tooth_m = mat("tooth", srgb("FFFBF0"), 0.2, coat=0.8)
@@ -97,8 +97,8 @@ tip_m = mat("tip", srgb("FFA63D"), 0.25, sss=0.4, coat=0.7, emission=0.6)
 stalk_m = mat("stalk", srgb("FFA63D"), 0.4, sss=0.4)
 tear_m = mat("tear", srgb("9AD8FF"), 0.03, coat=1.0)
 put(tear_m.node_tree.nodes["Principled BSDF"], ["Transmission Weight", "Transmission"], 0.85)
-paper = mat("paper", srgb("FFFDF6"), 0.5, coat=0.15, emission=0.12)
-flap_m = mat("flap", srgb("FFE9C9"), 0.5, coat=0.1, emission=0.08)
+paper = mat("paper", srgb("FFFDF6"), 0.5, coat=0.15, emission=0.3)
+flap_m = mat("flap", srgb("FFE9C9"), 0.5, coat=0.1, emission=0.25)
 seal = mat("seal", srgb("E63946"), 0.2, coat=1.0)
 
 def eye_material():
@@ -655,7 +655,7 @@ def clip(name, t):
     elif name == 'mail':
         talk(p, t)
         p.update(mail=True, bi=0.12, bo=0.1, ulid=52, smile=0.8, hz=-0.12 + math.sin(w) * 0.05, gx=0.13, z=abs(math.sin(w * 2)) * 0.07)
-        p["ra"] = (1.45, -0.7, 0.45 + math.sin(w * 2) * 0.05)
+        p["ra"] = (1.72, -0.62, 0.22 + math.sin(w * 2) * 0.05)
         b = blink(t, 0.45)
     elif name == 'sad':
         sob = math.sin(w * 2)
