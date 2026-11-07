@@ -448,7 +448,13 @@ class PhoneControl : AccessibilityService() {
 
     private fun pressFinal(button: String, onPress: () -> Unit): ShortResult {
         onPress()
-        if (!tapExact(button)) return ShortResult(ShortOutcome.NO_RETRY, "Could not press $button. Check YouTube")
+        // Pehle seedha click, na chale to button par asli ungli jaisa tap
+        val pressed = tapExact(button) || tapWhere(true) { it == button || button in it }
+        if (!pressed) return ShortResult(ShortOutcome.NO_RETRY, "Could not press $button. Check YouTube")
+        Thread.sleep(SHORT_TAP_WAIT_MS)
+        if (button in screenLabels() && rootInActiveWindow?.packageName?.toString() == YOUTUBE) {
+            tapWhere(true) { it == button || button in it }
+        }
         var clear = 0
         repeat(SHORT_CONFIRM_ROUNDS) {
             Thread.sleep(1_000L)
@@ -507,6 +513,7 @@ class PhoneControl : AccessibilityService() {
         var audienceDone = false
         var audienceChosen = false
         var captionTries = 0
+        var captionTyped = false
         var pageTries = 0
         var outside = 0
         var logged = false
@@ -585,12 +592,17 @@ class PhoneControl : AccessibilityService() {
                         ShortsLogic.audienceRight(labels, set.kids) || audienceChosen -> audienceDone = true
                     }
                 }
-                if (wantedCaption.isNotEmpty() && labels.none { wantedCaption in it }) {
+                // YouTube kabhi likha hua caption padhne nahi deta, isliye ek baar sahi likha to aage badho
+                val captionSeen = labels.any { wantedCaption in it } ||
+                    visibleNodes().any { it.isEditable && ShortsLogic.norm(it.text?.toString().orEmpty()).contains(wantedCaption) }
+                if (wantedCaption.isNotEmpty() && !captionSeen && !captionTyped) {
                     captionTries++
                     if (captionTries > SHORT_CAPTION_TRIES) return shortFail("Could not type the caption", labels)
-                    RunLog.add(this, "short caption " + captionTries + " typed " + typeCaption(caption))
+                    captionTyped = typeCaption(caption)
+                    RunLog.add(this, "short caption " + captionTries + " typed " + captionTyped)
                     return@repeat
                 }
+                if (final != null) RunLog.add(this, "short ready: visibility $visibilityDone audience $audienceDone")
                 if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final, onPress)
             }
             // Add details ek baar khul gaya to dobara shuru nahi karna, idhar-udhar nahi jana
