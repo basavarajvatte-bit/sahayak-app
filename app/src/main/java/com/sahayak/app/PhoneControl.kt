@@ -475,6 +475,48 @@ class PhoneControl : AccessibilityService() {
         return waitFor(SHORT_PAGE_WAIT_MS) { ShortsLogic.isDetailsPage(it) && ShortsLogic.audienceRight(it, kids) }
     }
 
+    private fun nodeWith(test: (String) -> Boolean): AccessibilityNodeInfo? =
+        visibleNodes().firstOrNull { test(ShortsLogic.norm(label(it))) }
+
+    /**
+     * Aapka sikhaya raasta, seedha: Select audience dabao, Yes it's made for Kids dabao,
+     * wapas aao, Upload Short dabao. Har tap ungli jaisa.
+     */
+    private fun simpleFinish(button: String, kids: Boolean, onPress: () -> Unit): ShortResult {
+        val option: (String) -> Boolean = { if (kids) ShortsLogic.yesOption(it) else ShortsLogic.noOption(it) }
+        val row: (String) -> Boolean = { l ->
+            l.length <= 40 && ("select audience" in l || l == "audience" ||
+                ("made for kids" in l && !l.startsWith("what") && !l.startsWith("is this")))
+        }
+        for (attempt in 1..3) {
+            if (abort) return ShortResult(ShortOutcome.STOPPED)
+            if (ShortsLogic.audienceRight(screenLabels(), kids)) break
+            // 1. Select audience
+            val open = nodeWith(row)
+            if (open == null) {
+                RunLog.add(this, "short no audience row: " + screenLabels().take(12).joinToString(" | ") { it.take(40) })
+                Thread.sleep(SHORT_POLL_MS * 2)
+                continue
+            }
+            tapCentre(open)
+            if (!waitFor(SHORT_PAGE_WAIT_MS) { it.any(option) }) {
+                tapNode(open)
+                if (!waitFor(SHORT_PAGE_WAIT_MS) { it.any(option) }) continue
+            }
+            // 2. Yes, it's made for Kids
+            nodeWith(option)?.let { tapCentre(it) }
+            Thread.sleep(SHORT_TAP_WAIT_MS)
+            // 3. Wapas, agar page khud band na hua
+            val still = screenLabels()
+            if (still.any(option) && ShortsLogic.finalButton(still) == null) performGlobalAction(GLOBAL_ACTION_BACK)
+            waitFor(SHORT_PAGE_WAIT_MS) { ShortsLogic.finalButton(it) != null }
+            RunLog.add(this, "short audience try $attempt: " + screenLabels().take(10).joinToString(" | ") { it.take(40) })
+        }
+        if (!ShortsLogic.audienceRight(screenLabels(), kids)) return shortFail("Could not choose the audience", screenLabels())
+        // 4. Upload Short
+        return pressFinal(button, onPress)
+    }
+
     private fun pressFinal(button: String, onPress: () -> Unit): ShortResult {
         onPress()
         // Pehle seedha click, na chale to button par asli ungli jaisa tap
@@ -597,26 +639,15 @@ class PhoneControl : AccessibilityService() {
                     if (!channelOk) return@repeat
                 }
                 val final = ShortsLogic.finalButton(labels)
-                if (!visibilityDone) {
-                    if (ShortsLogic.visibilityShown(labels, set.visibility)) {
-                        visibilityDone = true
-                    } else if (ShortsLogic.visibilityRow(labels)) {
-                        pageTries++
-                        tapWhere(pageTries > 1) { "visibility" in it }
-                        return@repeat
-                    }
+                // Public pehle se hota hai, sirf doosri visibility ke liye row kholo
+                if (!visibilityDone && set.visibility != "public" && !ShortsLogic.visibilityShown(labels, set.visibility) &&
+                    ShortsLogic.visibilityRow(labels)
+                ) {
+                    pageTries++
+                    tapWhere(pageTries > 1) { "visibility" in it }
+                    return@repeat
                 }
-                if (!audienceDone) {
-                    when {
-                        ShortsLogic.audienceUnset(labels) || ShortsLogic.audienceWrong(labels, set.kids) -> {
-                            pageTries++
-                            audienceDone = setAudience(set.kids, pageTries > 1)
-                            RunLog.add(this, "short audience set " + audienceDone)
-                            return@repeat
-                        }
-                        ShortsLogic.audienceRight(labels, set.kids) || audienceChosen -> audienceDone = true
-                    }
-                }
+                visibilityDone = true
                 // YouTube kabhi likha hua caption padhne nahi deta, isliye ek baar sahi likha to aage badho
                 val captionSeen = labels.any { wantedCaption in it } ||
                     visibleNodes().any { it.isEditable && ShortsLogic.norm(it.text?.toString().orEmpty()).contains(wantedCaption) }
@@ -627,8 +658,7 @@ class PhoneControl : AccessibilityService() {
                     RunLog.add(this, "short caption " + captionTries + " typed " + captionTyped)
                     return@repeat
                 }
-                if (final != null) RunLog.add(this, "short ready: visibility $visibilityDone audience $audienceDone")
-                if (final != null && channelOk && visibilityDone && audienceDone) return pressFinal(final, onPress)
+                if (final != null) return simpleFinish(final, set.kids, onPress)
             }
             // Add details ek baar khul gaya to dobara shuru nahi karna, idhar-udhar nahi jana
             if (detailsSeen && !ShortsLogic.isDetailsPage(labels) &&
