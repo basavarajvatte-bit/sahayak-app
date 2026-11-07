@@ -488,7 +488,7 @@ class PhoneControl : AccessibilityService() {
             l.length <= 40 && ("select audience" in l || l == "audience" ||
                 ("made for kids" in l && !l.startsWith("what") && !l.startsWith("is this")))
         }
-        for (attempt in 1..3) {
+        for (attempt in 1..2) {
             if (abort) return ShortResult(ShortOutcome.STOPPED)
             if (ShortsLogic.audienceRight(screenLabels(), kids)) break
             // 1. Select audience
@@ -512,7 +512,10 @@ class PhoneControl : AccessibilityService() {
             waitFor(SHORT_PAGE_WAIT_MS) { ShortsLogic.finalButton(it) != null }
             RunLog.add(this, "short audience try $attempt: " + screenLabels().take(10).joinToString(" | ") { it.take(40) })
         }
-        if (!ShortsLogic.audienceRight(screenLabels(), kids)) return shortFail("Could not choose the audience", screenLabels())
+        // Audience na bhi lage to upload mat roko: aapke sikhaye steps mein seedha Upload Short hi tha
+        if (!ShortsLogic.audienceRight(screenLabels(), kids)) RunLog.add(this, "short audience not set, uploading anyway")
+        if (ShortsLogic.finalButton(screenLabels()) == null) performGlobalAction(GLOBAL_ACTION_BACK)
+        waitFor(SHORT_PAGE_WAIT_MS) { ShortsLogic.finalButton(it) != null }
         // 4. Upload Short
         return pressFinal(button, onPress)
     }
@@ -533,6 +536,7 @@ class PhoneControl : AccessibilityService() {
             if (it < 2) RunLog.add(this, "short after press: " + labels.take(10).joinToString(" | ") { word -> word.take(40) })
             if (ShortsLogic.limitHit(labels)) return ShortResult(ShortOutcome.LIMIT)
             if (labels.any { "upload failed" in it }) return ShortResult(ShortOutcome.NO_RETRY, "YouTube says upload failed")
+            if (labels.any { "uploaded to your channel" in it }) return ShortResult(ShortOutcome.DONE)
             val home = rootInActiveWindow?.packageName?.toString() == YOUTUBE && ShortsLogic.leftUpload(labels)
             clear = if (home) clear + 1 else 0
             if (clear >= 2) return ShortResult(ShortOutcome.DONE)
