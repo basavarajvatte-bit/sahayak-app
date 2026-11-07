@@ -251,11 +251,6 @@ class YouTubeActivity : Activity() {
     }
 
     private fun ready(): Boolean {
-        val saved = ShortsQueue.settings(this).channel
-        if (saved.isBlank() || ShortsLogic.channelValue(channel.text.toString()) != saved) {
-            status.text = "Press Save channel first."
-            return false
-        }
         if (PhoneControl.instance == null) {
             status.text = "Turn on phone control in Sahayak first."
             return false

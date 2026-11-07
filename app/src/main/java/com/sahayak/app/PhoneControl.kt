@@ -486,11 +486,10 @@ class PhoneControl : AccessibilityService() {
     ): ShortResult {
         abort = false
         lastWorkError = ""
-        if (set.channel.isBlank()) return ShortResult(ShortOutcome.CHANNEL, "Type your channel in YouTube Auto Upload")
         if (isFinance(rootInActiveWindow?.packageName?.toString().orEmpty())) performGlobalAction(GLOBAL_ACTION_HOME)
         // Channel pehle hi pakka karo: Add details ke beech nikalne se video draft ban jati hai
-        val channelReady = ensureChannel(set.channel)
-        RunLog.add(this, "short channel ready " + channelReady + " " + lastWorkError)
+        // Channel check nahi: YouTube mein jo channel chuna hai, upload wahin hoga
+        val channelReady = true
         lastWorkError = ""
         if (abort) return ShortResult(ShortOutcome.STOPPED)
         // Sikhaya hua raasta: Create, Add, gallery. File name na ho tabhi seedha share.
