@@ -130,6 +130,25 @@ object ShortsLogic {
         }
     }
 
+    /** Har line ek caption set. Baari-baari se lagta hai, taaki sab videos ek jaisi na dikhein. */
+    fun captionSets(tags: String): List<String> = tags.lines().map { it.trim() }.filter { it.isNotEmpty() }
+
+    fun pickTags(tags: String, turn: Int): String {
+        val sets = captionSets(tags)
+        return if (sets.isEmpty()) "" else sets[Math.floorMod(turn, sets.size)]
+    }
+
+    /** Aage ke upload samay: pehla [start], phir har agla slot. */
+    fun plan(start: Long, count: Int, perDay: Int, from: Int, to: Int): List<Long> {
+        val out = ArrayList<Long>()
+        var at = start
+        repeat(count) {
+            out.add(at)
+            at = nextSlot(at, perDay, from, to)
+        }
+        return out
+    }
+
     /** Din ke upload samay, minute mein, barabar doori par. */
     fun slots(perDay: Int, from: Int, to: Int): List<Int> {
         val start = from.coerceIn(0, DAY_MINUTES - 1)

@@ -104,6 +104,19 @@ class ShortsLogicTest {
         assertFalse(ShortsLogic.limitHit(listOf("home", "create", "you've reached your daily upload limit explained")))
     }
 
+    @Test fun rotatesCaptionSets() {
+        val tags = "#baby #babydance\n\n #kids #cute \n#dance"
+        assertEquals(listOf("#baby #babydance", "#kids #cute", "#dance"), ShortsLogic.captionSets(tags))
+        assertEquals("#baby #babydance", ShortsLogic.pickTags(tags, 0))
+        assertEquals("#kids #cute", ShortsLogic.pickTags(tags, 4))
+        assertEquals("", ShortsLogic.pickTags("  ", 2))
+    }
+
+    @Test fun plansUpcomingSlots() {
+        val start = at(9, 0)
+        assertEquals(listOf(at(9, 0), at(15, 0), at(21, 0), at(9, 0, 1)), ShortsLogic.plan(start, 4, 3, 540, 1260))
+    }
+
     @Test fun readsAudiencePage() {
         val page = listOf(ShortsLogic.norm("Yes, it’s made for kids"), ShortsLogic.norm("No, it’s not made for kids"))
         assertTrue(ShortsLogic.isAudiencePage(page))

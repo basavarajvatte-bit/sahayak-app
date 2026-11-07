@@ -26,9 +26,7 @@ import java.util.Locale
 /** YouTube Auto Upload ki alag screen. */
 class YouTubeActivity : Activity() {
     private lateinit var status: TextView
-    private lateinit var channel: EditText
-    private lateinit var channelSaved: TextView
-    private lateinit var channelList: LinearLayout
+    private lateinit var stats: TextView
     private lateinit var tags: EditText
     private lateinit var useName: CheckBox
     private lateinit var preview: TextView
@@ -58,19 +56,14 @@ class YouTubeActivity : Activity() {
         status = text("", 15f, false)
         page.addView(status)
 
-        page.addView(heading("Channel"))
-        channel = input("Channel handle, like @VarshaVatte", InputType.TYPE_CLASS_TEXT)
-        channel.setText(ShortsLogic.channelValue(set.channel))
-        page.addView(channel)
-        page.addView(button("Save channel") { saveChannel() })
-        channelSaved = text("", 15f, true)
-        page.addView(channelSaved)
-        page.addView(button("Find my channels") { findChannels() })
-        channelList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        page.addView(channelList)
+        stats = text("", 14f, false)
+        page.addView(stats)
+        page.addView(text("Videos go to the channel that is open in the YouTube app.", 14f, false))
 
         page.addView(heading("Caption"))
-        tags = input("#baby #babydance", InputType.TYPE_CLASS_TEXT)
+        page.addView(text("Write one caption set per line. Each video uses the next line, so captions are not all the same.", 14f, false))
+        tags = input("#baby #babydance", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE)
+        tags.minLines = 2
         tags.setText(set.tags)
         page.addView(tags)
         useName = CheckBox(this).apply {
@@ -111,7 +104,8 @@ class YouTubeActivity : Activity() {
         page.addView(heading("Videos"))
         page.addView(button("Add videos") { pickFiles() })
         page.addView(button("Add a folder of videos") { pickFolder() })
-        page.addView(button("Upload next video now") { uploadNow() })
+        page.addView(button("Upload next video now") { uploadNow(false) })
+        page.addView(button("Upload all waiting videos now") { uploadNow(true) })
         page.addView(button("Retry failed videos") {
             ShortsQueue.retryFailed(this)
             ShortsQueue.rearm(this)
@@ -186,50 +180,6 @@ class YouTubeActivity : Activity() {
 
     private fun saveAll() = ShortsQueue.saveSettings(this, current())
 
-    private fun findChannels() {
-        val control = PhoneControl.instance
-        if (control == null) {
-            status.text = "Turn on phone control in Sahayak first."
-            return
-        }
-        if (ShortsQueue.isBusy()) {
-            status.text = "An upload is running. Try after it finishes."
-            return
-        }
-        val app = applicationContext
-        moveTaskToBack(true)
-        Thread {
-            val found = control.readChannels()
-            ShortsQueue.saveChannels(app, found)
-            RunLog.add(app, "channels found " + found.size)
-            control.openAutoUpload()
-        }.start()
-    }
-
-    private fun renderChannels(saved: String) {
-        channelList.removeAllViews()
-        val found = ShortsQueue.channels(this)
-        if (found.isNotEmpty()) channelList.addView(text("Tap your channel:", 15f, false))
-        found.forEach { name ->
-            channelList.addView(button((if (name.equals(saved, ignoreCase = true)) "✓ " else "") + name) {
-                channel.setText(name)
-                saveChannel()
-            })
-        }
-    }
-
-    private fun saveChannel() {
-        val value = ShortsLogic.channelValue(channel.text.toString())
-        if (value.isEmpty()) {
-            status.text = "Type your channel name first."
-            return
-        }
-        ShortsQueue.saveSettings(this, current().copy(channel = value))
-        channel.setText(value)
-        render()
-        status.text = "Channel saved: $value"
-    }
-
     private fun timeLabel(minute: Int): String {
         val hour = (minute / 60).let { if (it % 12 == 0) 12 else it % 12 }
         return String.format(Locale.ENGLISH, "%d:%02d %s", hour, minute % 60, if (minute < 720) "AM" else "PM")
@@ -247,7 +197,11 @@ class YouTubeActivity : Activity() {
 
     private fun showPreview() {
         val sample = ShortsQueue.items(this).firstOrNull { it.optString("status") == ShortsQueue.WAITING }?.optString("name") ?: "10_Robot_Dance"
-        preview.text = "Caption: " + ShortsLogic.caption(sample, tags.text.toString(), useName.isChecked)
+        val turn = ShortsQueue.turn(this)
+        val sets = ShortsLogic.captionSets(tags.text.toString()).size.coerceAtLeast(1)
+        preview.text = (0 until minOf(sets, 3)).joinToString("\n") {
+            "Video " + (it + 1) + ": " + ShortsLogic.caption(sample, ShortsLogic.pickTags(tags.text.toString(), turn + it), useName.isChecked)
+        }
     }
 
     private fun ready(): Boolean {
@@ -267,7 +221,7 @@ class YouTubeActivity : Activity() {
         render()
     }
 
-    private fun uploadNow() {
+    private fun uploadNow(all: Boolean) {
         if (!ready()) return
         if (ShortsQueue.count(this, ShortsQueue.WAITING) == 0) {
             status.text = "No videos waiting. Press Add videos."
@@ -275,7 +229,7 @@ class YouTubeActivity : Activity() {
         }
         val app = applicationContext
         moveTaskToBack(true)
-        Thread { ShortsQueue.run(app, false) }.start()
+        Thread { if (all) ShortsQueue.runAll(app) else ShortsQueue.run(app, false) }.start()
     }
 
     private fun pickFiles() {
@@ -351,8 +305,11 @@ class YouTubeActivity : Activity() {
 
     private fun render() {
         val set = ShortsQueue.settings(this)
-        channelSaved.text = if (set.channel.isBlank()) "No channel saved" else "Uploads go to: " + set.channel
-        renderChannels(set.channel)
+        val today = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+        }.timeInMillis
+        stats.text = "Uploaded today: " + ShortsQueue.uploadedSince(this, today) + "   Total: " + ShortsQueue.totalUploaded(this) +
+            "   Failed: " + ShortsQueue.count(this, ShortsQueue.FAILED)
         fromButton.text = "From " + timeLabel(from)
         toButton.text = "To " + timeLabel(to)
         autoButton.text = if (set.auto) "Stop automatic uploads" else "Start automatic uploads"
@@ -370,24 +327,51 @@ class YouTubeActivity : Activity() {
     private fun renderList() {
         listBox.removeAllViews()
         val items = ShortsQueue.items(this).sortedBy { order(it.optString("status")) }
+        val plan = ShortsQueue.planned(this)
+        val set = ShortsQueue.settings(this)
+        val turn = ShortsQueue.turn(this)
+        var waitingIndex = 0
         items.take(MAX_ROWS).forEach { item ->
-            val row = LinearLayout(this).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(6), 0, dp(6))
-            }
+            val id = item.optString("id")
+            val state = item.optString("status")
             val reason = item.optString("reason")
-            row.addView(
-                text(item.optString("name") + "\n" + item.optString("status").replaceFirstChar(Char::uppercase) +
-                    (if (reason.isEmpty()) "" else ": $reason"), 14f, false),
-                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            )
-            row.addView(button("Remove") {
-                ShortsQueue.remove(this, item.optString("id"))
+            val caption = if (state == ShortsQueue.WAITING) ShortsQueue.captionFor(this, item, set, turn + waitingIndex++) else ""
+            val whenText = plan[id]?.let { "  ·  " + shown.format(Date(it)) } ?: ""
+            val doneText = item.optLong("at").takeIf { it > 0 }?.let { "  ·  " + shown.format(Date(it)) } ?: ""
+            listBox.addView(text(
+                item.optString("name") + "\n" + state.replaceFirstChar(Char::uppercase) + whenText + doneText +
+                    (if (reason.isEmpty()) "" else ": $reason") + (if (caption.isEmpty()) "" else "\n" + caption), 14f, false
+            ).apply { setPadding(0, dp(10), 0, dp(2)) })
+            val actions = LinearLayout(this)
+            if (state == ShortsQueue.WAITING) {
+                actions.addView(button("Caption") { editCaption(item) })
+                actions.addView(button("Top") {
+                    ShortsQueue.moveFirst(this, id)
+                    render()
+                })
+            }
+            actions.addView(button("Remove") {
+                ShortsQueue.remove(this, id)
                 render()
             })
-            listBox.addView(row)
+            listBox.addView(actions)
         }
         if (items.size > MAX_ROWS) listBox.addView(text("And " + (items.size - MAX_ROWS) + " more videos", 14f, false))
+    }
+
+    /** Sirf is video ka caption. Khali chhodo to upar wala caption set lagega. */
+    private fun editCaption(item: org.json.JSONObject) {
+        val box = input("Leave empty to use the caption sets", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE)
+        box.setText(item.optString("caption"))
+        android.app.AlertDialog.Builder(this)
+            .setTitle(item.optString("name"))
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                ShortsQueue.setCaption(this, item.optString("id"), box.text.toString().take(ShortsLogic.MAX_CAPTION))
+                render()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun order(state: String) = when (state) {

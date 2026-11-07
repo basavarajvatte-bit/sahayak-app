@@ -29,6 +29,12 @@ object ShortsQueue {
     private const val WAKE_MS = 300_000L
     private const val UNLOCK_WAIT_MS = 1_000L
     private const val NOTE_ID = 7_701
+    private const val BUSY_WAIT_MS = 600_000L
+    private const val MAX_BUSY_WAITS = 6
+    private const val BATCH_GAP_MS = 5_000L
+    private const val MAX_BATCH = 20
+    private const val DAY_MS = 86_400_000L
+    private const val YOUTUBE = "com.google.android.youtube"
     const val ACTION_RUN = "com.sahayak.app.RUN_SHORT"
     const val WAITING = "waiting"
     const val UPLOADED = "uploaded"
@@ -131,6 +137,64 @@ object ShortsQueue {
     }
 
     @Synchronized
+    fun setCaption(context: Context, id: String, caption: String) {
+        save(context, load(context).onEach { if (it.optString("id") == id) it.put("caption", caption.trim()) })
+    }
+
+    /** Video ko list mein sabse upar le jao, taaki agli wahi jaye. */
+    @Synchronized
+    fun moveFirst(context: Context, id: String) {
+        val items = load(context)
+        val item = items.firstOrNull { it.optString("id") == id } ?: return
+        items.remove(item)
+        items.add(0, item)
+        save(context, items)
+    }
+
+    fun turn(context: Context): Int = prefs(context).getInt("caption_turn", 0)
+
+    fun captionFor(context: Context, item: JSONObject, set: Settings = settings(context), turn: Int = turn(context)): String =
+        item.optString("caption").ifBlank { ShortsLogic.caption(item.optString("name"), ShortsLogic.pickTags(set.tags, turn), set.useName) }
+
+    fun uploadedSince(context: Context, since: Long): Int =
+        items(context).count { it.optString("status") == UPLOADED && it.optLong("at") >= since }
+
+    fun totalUploaded(context: Context): Int = prefs(context).getInt("total_uploaded", 0)
+
+    /** Har baaki video ka andaze se upload samay. */
+    fun planned(context: Context): Map<String, Long> {
+        val set = settings(context)
+        if (!set.auto) return emptyMap()
+        val waiting = items(context).filter { it.optString("status") == WAITING }
+        val now = System.currentTimeMillis()
+        val start = nextAt(context).takeIf { it > now } ?: ShortsLogic.nextSlot(now, set.perDay, set.from, set.to)
+        val times = ShortsLogic.plan(start, waiting.size, set.perDay, set.from, set.to)
+        return waiting.map { it.optString("id") }.zip(times).toMap()
+    }
+
+    /** Aap phone chala rahe ho? Home screen, YouTube ya Sahayak par ho to nahi. */
+    private fun phoneInUse(context: Context): Boolean {
+        if (!context.getSystemService(PowerManager::class.java).isInteractive) return false
+        if (context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
+        val pkg = PhoneControl.instance?.rootInActiveWindow?.packageName?.toString() ?: return false
+        val home = context.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
+        )?.activityInfo?.packageName
+        return pkg != home && pkg != YOUTUBE && pkg != context.packageName && "launcher" !in pkg && pkg != "com.android.systemui"
+    }
+
+    /** Saari baaki videos ek ke baad ek. Koi atke to ruk jao. */
+    fun runAll(context: Context) {
+        repeat(MAX_BATCH) {
+            if (count(context, WAITING) == 0) return
+            val before = totalUploaded(context)
+            run(context, false)
+            if (totalUploaded(context) == before) return
+            Thread.sleep(BATCH_GAP_MS)
+        }
+    }
+
+    @Synchronized
     fun retryFailed(context: Context) {
         val items = load(context)
         items.filter { it.optString("status") == FAILED }.forEach {
@@ -219,7 +283,17 @@ object ShortsQueue {
             PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "sahayak:shorts"
         )
         val keys = context.getSystemService(KeyguardManager::class.java)
+        // Screen jalane se pehle dekho, warna khula hua purana app "chalu" lagega
+        val inUse = scheduled && phoneInUse(context)
         try {
+            if (inUse && prefs(context).getInt("busy_waits", 0) < MAX_BUSY_WAITS) {
+                val waits = prefs(context).getInt("busy_waits", 0) + 1
+                prefs(context).edit().putInt("busy_waits", waits).apply()
+                if (waits == 1) WorkList.notifyText(context, NOTE_ID, "You are using the phone. The next upload will wait.")
+                arm(context, System.currentTimeMillis() + BUSY_WAIT_MS)
+                return
+            }
+            prefs(context).edit().putInt("busy_waits", 0).apply()
             // PIN laga ho to screen jalane ka fayda nahi
             if (!(keys.isDeviceSecure && keys.isKeyguardLocked)) wake.acquire(WAKE_MS)
             uploadNext(context, scheduled)
@@ -263,7 +337,7 @@ object ShortsQueue {
             if (scheduled) armNextSlot(context)
             return
         }
-        val caption = ShortsLogic.caption(item.optString("name"), set.tags, set.useName)
+        val caption = captionFor(context, item, set)
         val result = control.uploadShort(item.optString("uri"), item.optString("name"), caption, set) {
             // App beech mein band ho to bhi yeh video dobara upload nahi hogi
             item.put("status", FAILED).put("reason", "Upload pressed, result unknown. Check YouTube")
@@ -277,8 +351,10 @@ object ShortsQueue {
         val name = item.optString("name")
         when (result.outcome) {
             ShortOutcome.DONE -> {
-                item.put("status", UPLOADED).put("reason", "")
+                item.put("status", UPLOADED).put("reason", "").put("at", System.currentTimeMillis())
                 update(context, item)
+                prefs(context).edit().putInt("caption_turn", turn(context) + 1)
+                    .putInt("total_uploaded", totalUploaded(context) + 1).apply()
                 History.add(context, "youtube", "uploaded $name")
                 WorkList.notifyText(context, NOTE_ID, "Upload started: $name")
                 if (scheduled) armNextSlot(context)
