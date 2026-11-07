@@ -195,7 +195,7 @@ class TodoPopup(
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(pad, pad, pad, pad)
             background = GradientDrawable().apply {
-                setColor(Color.argb(242, 20, 24, 33))
+                setColor(Color.TRANSPARENT)
                 cornerRadius = 18 * density
             }
             setOnClickListener {
@@ -216,6 +216,7 @@ class TodoPopup(
             text = message
             textSize = 22f
             setTextColor(Color.WHITE)
+                setShadowLayer(8f, 0f, 2f, Color.BLACK)
             gravity = Gravity.CENTER
         })
         reveal(card, message)
@@ -234,7 +235,7 @@ class TodoPopup(
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
             background = GradientDrawable().apply {
-                setColor(Color.argb(242, 20, 24, 33))
+                setColor(Color.TRANSPARENT)
                 cornerRadius = 18 * density
             }
         }
@@ -254,6 +255,7 @@ class TodoPopup(
             text = "To-do: tap when done"
             textSize = 15f
             setTextColor(Color.rgb(32, 201, 151))
+                setShadowLayer(8f, 0f, 2f, Color.BLACK)
             gravity = Gravity.CENTER
         })
         card.addView(top)
@@ -262,6 +264,7 @@ class TodoPopup(
                 text = "○  " + item.optString("text")
                 textSize = 18f
                 setTextColor(Color.WHITE)
+                setShadowLayer(8f, 0f, 2f, Color.BLACK)
                 setPadding(0, pad / 2, 0, pad / 2)
                 setOnClickListener {
                     Todos.complete(service, item.optString("id"))
@@ -281,6 +284,7 @@ class TodoPopup(
                 text = "+" + (items.size - MAX_ROWS) + " more in Sahayak"
                 textSize = 14f
                 setTextColor(Color.LTGRAY)
+                setShadowLayer(8f, 0f, 2f, Color.BLACK)
             })
         }
         reveal(card, speech(items), SWAG_MS)
