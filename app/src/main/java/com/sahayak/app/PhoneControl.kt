@@ -563,7 +563,7 @@ class PhoneControl : AccessibilityService() {
      * Teeno pakke hue bina Upload kabhi nahi dabta.
      */
     fun uploadShort(
-        uriText: String, fileName: String, caption: String, set: ShortsQueue.Settings, onPress: () -> Unit = {}
+        uriText: String, fileName: String, caption: String, set: UploadQueue.Settings, onPress: () -> Unit = {}
     ): ShortResult {
         abort = false
         lastWorkError = ""
@@ -709,6 +709,97 @@ class PhoneControl : AccessibilityService() {
             SHORT_POPUP_WORDS.any { tapExact(it) }
         }
         return shortFail("YouTube upload screen not reached", screenLabels())
+    }
+
+    /**
+     * Instagram Reel: video share karo, Reels chuno, Next dabate jao,
+     * caption likho, phir Share. Story ya chat par kabhi nahi bhejna.
+     */
+    fun uploadReel(uriText: String, caption: String, onPress: () -> Unit = {}): ShortResult {
+        abort = false
+        if (packageManager.getLaunchIntentForPackage(INSTAGRAM) == null) return ShortResult(ShortOutcome.NO_RETRY, "Instagram app not found")
+        try {
+            grantUriPermission(INSTAGRAM, Uri.parse(uriText), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: SecurityException) {
+            return ShortResult(ShortOutcome.NO_RETRY, "Video permission lost. Add the video again")
+        }
+        val send = Intent(Intent.ACTION_SEND).setType("video/*")
+            .putExtra(Intent.EXTRA_STREAM, Uri.parse(uriText))
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        if (!launch(send, INSTAGRAM)) return ShortResult(ShortOutcome.RETRY, "Instagram did not open the video")
+        val reelWords = listOf("reel", "reels", "share to reels", "new reel", "reels.")
+        var typed = false
+        var typeTries = 0
+        var outside = 0
+        var lastTap = ""
+        repeat(REEL_ROUNDS) {
+            if (abort) return ShortResult(ShortOutcome.STOPPED)
+            Thread.sleep(SHORT_ROUND_MS)
+            if (rootInActiveWindow?.packageName?.toString() != INSTAGRAM) {
+                outside++
+                if (outside > SHORT_OUTSIDE_ROUNDS) return ShortResult(ShortOutcome.RETRY, "Instagram closed during upload")
+                return@repeat
+            }
+            outside = 0
+            val labels = screenLabels()
+            if (labels.any { "story" in it && "your story" == it } && labels.none { it in reelWords }) {
+                // Story ki screen: galti se Story mein nahi daalna
+                return shortFail("Instagram opened Story instead of Reels", labels)
+            }
+            val box = visibleNodes().firstOrNull { node ->
+                node.isEditable && "caption" in ShortsLogic.norm((node.hintText ?: label(node)).toString())
+            }
+            if (box != null) {
+                if (!typed) {
+                    typeTries++
+                    if (typeTries > SHORT_CAPTION_TRIES) return shortFail("Could not type the caption", labels)
+                    box.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    typed = caption.isBlank() || typeInto(box, caption)
+                    RunLog.add(this, "reel caption typed $typed")
+                    return@repeat
+                }
+                if ("share" in labels) {
+                    // Keyboard Share button ko dhak sakta hai, pehle use band karo
+                    if (!isKeyboardShown()) return pressReel(onPress)
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    return@repeat
+                }
+            }
+            val reel = reelWords.firstOrNull { it in labels }
+            if (reel != null && box == null) {
+                tapWhere(false) { it == reel }
+                Thread.sleep(SHORT_TAP_WAIT_MS)
+                return@repeat
+            }
+            if ("next" in labels) {
+                val screenNow = labels.joinToString("|")
+                tapWhere(screenNow == lastTap) { it == "next" }
+                lastTap = screenNow
+                Thread.sleep(SHORT_TAP_WAIT_MS)
+                return@repeat
+            }
+            REEL_POPUP_WORDS.any { tapExact(it) }
+        }
+        return shortFail("Instagram share screen not reached", screenLabels())
+    }
+
+    private fun isKeyboardShown(): Boolean =
+        windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+
+    private fun pressReel(onPress: () -> Unit): ShortResult {
+        onPress()
+        if (!(tapExact("share") || tapWhere(true) { it == "share" })) return ShortResult(ShortOutcome.NO_RETRY, "Could not press Share. Check Instagram")
+        var clear = 0
+        repeat(SHORT_CONFIRM_ROUNDS) {
+            Thread.sleep(1_000L)
+            val labels = screenLabels()
+            if (it < 2) RunLog.add(this, "reel after share: " + labels.take(10).joinToString(" | ") { w -> w.take(40) })
+            if (labels.any { "couldn't" in it || "could not" in it || "try again" in it }) return ShortResult(ShortOutcome.NO_RETRY, "Instagram says it could not share")
+            val gone = labels.isNotEmpty() && "share" !in labels && labels.none { "caption" in it }
+            clear = if (gone) clear + 1 else 0
+            if (clear >= 2) return ShortResult(ShortOutcome.DONE)
+        }
+        return ShortResult(ShortOutcome.NO_RETRY, "Pressed Share but the screen did not change. Check Instagram")
     }
 
     /** Tay samay wala kaam, bina AI ke. */
@@ -1488,6 +1579,9 @@ class PhoneControl : AccessibilityService() {
         private const val REPLAY_WAIT_MS = 2_000L
         private const val SCREEN_WAIT_MS = 6_000L
         private const val YOUTUBE = "com.google.android.youtube"
+        private const val INSTAGRAM = "com.instagram.android"
+        private const val REEL_ROUNDS = 200
+        private val REEL_POPUP_WORDS = listOf("ok", "got it", "not now", "continue", "allow", "skip", "dismiss", "while using the app")
         private val OPEN_STEP = Regex("^open app (.+)$")
         private val QUOTED_TAP = Regex("^tap \"(.+)\"$")
         private val POINT_TAP = Regex("^tap the icon at x=(\\d+) y=(\\d+)$")

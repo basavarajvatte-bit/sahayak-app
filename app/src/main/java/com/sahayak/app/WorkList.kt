@@ -181,10 +181,11 @@ object WorkList {
 
 class WorkReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == ShortsQueue.ACTION_RUN) {
+        val queue = listOf(ShortsQueue, ReelsQueue).firstOrNull { it.actionRun == intent.action }
+        if (queue != null) {
             // Upload do minute tak chalta hai, phone control ka service app ko zinda rakhta hai
             val app = context.applicationContext
-            Thread { ShortsQueue.run(app, true) }.start()
+            Thread { queue.run(app, true) }.start()
             return
         }
         val result = goAsync()
@@ -195,6 +196,7 @@ class WorkReceiver : BroadcastReceiver() {
                 } else {
                     WorkList.rearm(context)
                     ShortsQueue.rearm(context)
+                    ReelsQueue.rearm(context)
                 }
             } finally {
                 result.finish()

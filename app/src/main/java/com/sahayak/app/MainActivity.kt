@@ -82,7 +82,10 @@ class MainActivity : Activity() {
             renderTodos()
         }
         findViewById<Button>(R.id.youtubeButton).setOnClickListener {
-            startActivity(Intent(this, YouTubeActivity::class.java))
+            startActivity(YouTubeActivity.open(this, false))
+        }
+        findViewById<Button>(R.id.instagramButton).setOnClickListener {
+            startActivity(YouTubeActivity.open(this, true))
         }
         val learnBox = findViewById<CheckBox>(R.id.learnBox)
         learnBox.isChecked = DailyLearning.isEnabled(this)

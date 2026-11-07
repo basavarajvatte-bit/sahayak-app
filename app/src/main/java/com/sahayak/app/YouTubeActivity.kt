@@ -25,6 +25,7 @@ import java.util.Locale
 
 /** YouTube Auto Upload ki alag screen. */
 class YouTubeActivity : Activity() {
+    private val queue: UploadQueue by lazy { if (intent.getBooleanExtra(EXTRA_INSTAGRAM, false)) ReelsQueue else ShortsQueue }
     private lateinit var status: TextView
     private lateinit var stats: TextView
     private lateinit var tags: EditText
@@ -49,16 +50,16 @@ class YouTubeActivity : Activity() {
             setPadding(dp(16), dp(20), dp(16), dp(32))
         }
         setContentView(ScrollView(this).apply { addView(page) })
-        val set = ShortsQueue.settings(this)
+        val set = queue.settings(this)
         from = set.from
         to = set.to
-        page.addView(text("YouTube Auto Upload", 24f, true))
+        page.addView(text(queue.label + " Auto Upload", 24f, true))
         status = text("", 15f, false)
         page.addView(status)
 
         stats = text("", 14f, false)
         page.addView(stats)
-        page.addView(text("Videos go to the channel that is open in the YouTube app.", 14f, false))
+        page.addView(text(if (queue.instagram) "Reels go to the account that is open in the Instagram app." else "Videos go to the channel that is open in the YouTube app.", 14f, false))
 
         page.addView(heading("Caption"))
         page.addView(text("Write one caption set per line. Each video uses the next line, so captions are not all the same.", 14f, false))
@@ -80,13 +81,14 @@ class YouTubeActivity : Activity() {
             override fun afterTextChanged(s: Editable?) = showPreview()
         })
 
-        page.addView(heading("Audience"))
         audience = radios(AUDIENCE_IDS, listOf("Made for kids", "Not made for kids"), if (set.kids) 0 else 1)
-        page.addView(audience)
-
-        page.addView(heading("Visibility"))
         visibility = radios(VISIBILITY_IDS, VISIBILITY.map { it.replaceFirstChar(Char::uppercase) }, VISIBILITY.indexOf(set.visibility).coerceAtLeast(0))
-        page.addView(visibility)
+        if (!queue.instagram) {
+            page.addView(heading("Audience"))
+            page.addView(audience)
+            page.addView(heading("Visibility"))
+            page.addView(visibility)
+        }
 
         page.addView(heading("Daily schedule"))
         perDay = input("Videos per day", InputType.TYPE_CLASS_NUMBER)
@@ -107,12 +109,12 @@ class YouTubeActivity : Activity() {
         page.addView(button("Upload next video now") { uploadNow(false) })
         page.addView(button("Upload all waiting videos now") { uploadNow(true) })
         page.addView(button("Retry failed videos") {
-            ShortsQueue.retryFailed(this)
-            ShortsQueue.rearm(this)
+            queue.retryFailed(this)
+            queue.rearm(this)
             render()
         })
         page.addView(button("Clear uploaded from list") {
-            ShortsQueue.clearUploaded(this)
+            queue.clearUploaded(this)
             render()
         })
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -121,7 +123,7 @@ class YouTubeActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        ShortsQueue.rearm(this)
+        queue.rearm(this)
         render()
     }
 
@@ -168,7 +170,7 @@ class YouTubeActivity : Activity() {
         check(base + selected)
     }
 
-    private fun current(): ShortsQueue.Settings = ShortsQueue.settings(this).copy(
+    private fun current(): UploadQueue.Settings = queue.settings(this).copy(
         tags = tags.text.toString().trim(),
         useName = useName.isChecked,
         kids = audience.checkedRadioButtonId == AUDIENCE_IDS,
@@ -178,7 +180,7 @@ class YouTubeActivity : Activity() {
         to = to
     )
 
-    private fun saveAll() = ShortsQueue.saveSettings(this, current())
+    private fun saveAll() = queue.saveSettings(this, current())
 
     private fun timeLabel(minute: Int): String {
         val hour = (minute / 60).let { if (it % 12 == 0) 12 else it % 12 }
@@ -190,14 +192,14 @@ class YouTubeActivity : Activity() {
         TimePickerDialog(this, { _, hour, minute ->
             if (first) from = hour * 60 + minute else to = hour * 60 + minute
             saveAll()
-            if (ShortsQueue.settings(this).auto) ShortsQueue.start(this)
+            if (queue.settings(this).auto) queue.start(this)
             render()
         }, value / 60, value % 60, false).show()
     }
 
     private fun showPreview() {
-        val sample = ShortsQueue.items(this).firstOrNull { it.optString("status") == ShortsQueue.WAITING }?.optString("name") ?: "10_Robot_Dance"
-        val turn = ShortsQueue.turn(this)
+        val sample = queue.items(this).firstOrNull { it.optString("status") == queue.WAITING }?.optString("name") ?: "10_Robot_Dance"
+        val turn = queue.turn(this)
         val sets = ShortsLogic.captionSets(tags.text.toString()).size.coerceAtLeast(1)
         preview.text = (0 until minOf(sets, 3)).joinToString("\n") {
             "Video " + (it + 1) + ": " + ShortsLogic.caption(sample, ShortsLogic.pickTags(tags.text.toString(), turn + it), useName.isChecked)
@@ -213,23 +215,23 @@ class YouTubeActivity : Activity() {
     }
 
     private fun toggleAuto() {
-        if (ShortsQueue.settings(this).auto) {
-            ShortsQueue.stop(this)
+        if (queue.settings(this).auto) {
+            queue.stop(this)
         } else if (ready()) {
-            ShortsQueue.start(this)
+            queue.start(this)
         }
         render()
     }
 
     private fun uploadNow(all: Boolean) {
         if (!ready()) return
-        if (ShortsQueue.count(this, ShortsQueue.WAITING) == 0) {
+        if (queue.count(this, queue.WAITING) == 0) {
             status.text = "No videos waiting. Press Add videos."
             return
         }
         val app = applicationContext
         moveTaskToBack(true)
-        Thread { if (all) ShortsQueue.runAll(app) else ShortsQueue.run(app, false) }.start()
+        Thread { if (all) queue.runAll(app) else queue.run(app, false) }.start()
     }
 
     private fun pickFiles() {
@@ -266,7 +268,7 @@ class YouTubeActivity : Activity() {
         uris.map { describe(it) }.sortedBy { it.name.lowercase() }.forEach { video ->
             try {
                 contentResolver.takePersistableUriPermission(video.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                if (ShortsQueue.add(this, video.uri, video.name, video.size, false)) added++
+                if (queue.add(this, video.uri, video.name, video.size, false)) added++
             } catch (e: SecurityException) {
                 kept = false
             }
@@ -289,7 +291,7 @@ class YouTubeActivity : Activity() {
                 }
             }
         }
-        val added = videos.sortedBy { it.name.lowercase() }.count { ShortsQueue.add(this, it.uri, it.name, it.size, true) }
+        val added = videos.sortedBy { it.name.lowercase() }.count { queue.add(this, it.uri, it.name, it.size, true) }
         status.text = added.toString() + " videos added from the folder."
     }
 
@@ -299,22 +301,22 @@ class YouTubeActivity : Activity() {
         if (resultCode != RESULT_OK || data == null) return
         if (requestCode == REQUEST_FILES) addFiles(data)
         if (requestCode == REQUEST_FOLDER) data.data?.let { addFolder(it) }
-        ShortsQueue.rearm(this)
+        queue.rearm(this)
         renderList()
     }
 
     private fun render() {
-        val set = ShortsQueue.settings(this)
+        val set = queue.settings(this)
         val today = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
         }.timeInMillis
-        stats.text = "Uploaded today: " + ShortsQueue.uploadedSince(this, today) + "   Total: " + ShortsQueue.totalUploaded(this) +
-            "   Failed: " + ShortsQueue.count(this, ShortsQueue.FAILED)
+        stats.text = "Uploaded today: " + queue.uploadedSince(this, today) + "   Total: " + queue.totalUploaded(this) +
+            "   Failed: " + queue.count(this, queue.FAILED)
         fromButton.text = "From " + timeLabel(from)
         toButton.text = "To " + timeLabel(to)
         autoButton.text = if (set.auto) "Stop automatic uploads" else "Start automatic uploads"
-        val waiting = ShortsQueue.count(this, ShortsQueue.WAITING)
-        val next = ShortsQueue.nextAt(this)
+        val waiting = queue.count(this, queue.WAITING)
+        val next = queue.nextAt(this)
         status.text = when {
             PhoneControl.instance == null -> "Turn on phone control in Sahayak first."
             set.auto && next > 0 -> "$waiting videos waiting. Next upload: " + shown.format(Date(next))
@@ -326,16 +328,16 @@ class YouTubeActivity : Activity() {
 
     private fun renderList() {
         listBox.removeAllViews()
-        val items = ShortsQueue.items(this).sortedBy { order(it.optString("status")) }
-        val plan = ShortsQueue.planned(this)
-        val set = ShortsQueue.settings(this)
-        val turn = ShortsQueue.turn(this)
+        val items = queue.items(this).sortedBy { order(it.optString("status")) }
+        val plan = queue.planned(this)
+        val set = queue.settings(this)
+        val turn = queue.turn(this)
         var waitingIndex = 0
         items.take(MAX_ROWS).forEach { item ->
             val id = item.optString("id")
             val state = item.optString("status")
             val reason = item.optString("reason")
-            val caption = if (state == ShortsQueue.WAITING) ShortsQueue.captionFor(this, item, set, turn + waitingIndex++) else ""
+            val caption = if (state == queue.WAITING) queue.captionFor(this, item, set, turn + waitingIndex++) else ""
             val whenText = plan[id]?.let { "  ·  " + shown.format(Date(it)) } ?: ""
             val doneText = item.optLong("at").takeIf { it > 0 }?.let { "  ·  " + shown.format(Date(it)) } ?: ""
             listBox.addView(text(
@@ -343,15 +345,15 @@ class YouTubeActivity : Activity() {
                     (if (reason.isEmpty()) "" else ": $reason") + (if (caption.isEmpty()) "" else "\n" + caption), 14f, false
             ).apply { setPadding(0, dp(10), 0, dp(2)) })
             val actions = LinearLayout(this)
-            if (state == ShortsQueue.WAITING) {
+            if (state == queue.WAITING) {
                 actions.addView(button("Caption") { editCaption(item) })
                 actions.addView(button("Top") {
-                    ShortsQueue.moveFirst(this, id)
+                    queue.moveFirst(this, id)
                     render()
                 })
             }
             actions.addView(button("Remove") {
-                ShortsQueue.remove(this, id)
+                queue.remove(this, id)
                 render()
             })
             listBox.addView(actions)
@@ -367,7 +369,7 @@ class YouTubeActivity : Activity() {
             .setTitle(item.optString("name"))
             .setView(box)
             .setPositiveButton("Save") { _, _ ->
-                ShortsQueue.setCaption(this, item.optString("id"), box.text.toString().take(ShortsLogic.MAX_CAPTION))
+                queue.setCaption(this, item.optString("id"), box.text.toString().take(ShortsLogic.MAX_CAPTION))
                 render()
             }
             .setNegativeButton("Cancel", null)
@@ -375,8 +377,8 @@ class YouTubeActivity : Activity() {
     }
 
     private fun order(state: String) = when (state) {
-        ShortsQueue.FAILED -> 0
-        ShortsQueue.WAITING -> 1
+        queue.FAILED -> 0
+        queue.WAITING -> 1
         else -> 2
     }
 
@@ -389,5 +391,9 @@ class YouTubeActivity : Activity() {
         private const val AUDIENCE_IDS = 1_000
         private const val VISIBILITY_IDS = 2_000
         private val VISIBILITY = listOf("public", "unlisted", "private")
+        private const val EXTRA_INSTAGRAM = "instagram"
+
+        fun open(context: android.content.Context, instagram: Boolean): Intent =
+            Intent(context, YouTubeActivity::class.java).putExtra(EXTRA_INSTAGRAM, instagram)
     }
 }

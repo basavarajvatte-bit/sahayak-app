@@ -17,28 +17,42 @@ enum class ShortOutcome { DONE, RETRY, NO_RETRY, LIMIT, STOPPED, CHANNEL }
 
 data class ShortResult(val outcome: ShortOutcome, val reason: String = "")
 
-/** YouTube Auto Upload ki video list, settings aur roz ka samay. */
-object ShortsQueue {
-    private const val PREFS = "sahayak_shorts"
-    private const val ITEMS = "items"
-    private const val SEEN = "seen"
-    private const val MAX_TRIES = 3
-    private const val LOCKED_RETRY_MS = 180_000L
-    private const val FAIL_RETRY_MS = 300_000L
-    private const val LIMIT_WAIT_MS = 86_400_000L
-    private const val WAKE_MS = 300_000L
-    private const val UNLOCK_WAIT_MS = 1_000L
-    private const val NOTE_ID = 7_701
-    private const val BUSY_WAIT_MS = 600_000L
-    private const val MAX_BUSY_WAITS = 6
-    private const val BATCH_GAP_MS = 5_000L
-    private const val MAX_BATCH = 20
-    private const val DAY_MS = 86_400_000L
-    private const val YOUTUBE = "com.google.android.youtube"
-    const val ACTION_RUN = "com.sahayak.app.RUN_SHORT"
-    const val WAITING = "waiting"
-    const val UPLOADED = "uploaded"
-    const val FAILED = "failed"
+/** YouTube Shorts ki list. */
+object ShortsQueue : UploadQueue("sahayak_shorts", 7_701, "com.sahayak.app.RUN_SHORT", "YouTube", false) {
+    override fun upload(control: PhoneControl, item: JSONObject, caption: String, set: Settings, onPress: () -> Unit) =
+        control.uploadShort(item.optString("uri"), item.optString("name"), caption, set, onPress)
+}
+
+/** Instagram Reels ki list. Audience aur visibility nahi hoti. */
+object ReelsQueue : UploadQueue("sahayak_reels", 7_702, "com.sahayak.app.RUN_REEL", "Instagram", true) {
+    override fun upload(control: PhoneControl, item: JSONObject, caption: String, set: Settings, onPress: () -> Unit) =
+        control.uploadReel(item.optString("uri"), caption, onPress)
+}
+
+/** Auto Upload ki video list, settings aur roz ka samay. YouTube aur Instagram dono ke liye. */
+abstract class UploadQueue(
+    private val prefsName: String,
+    private val noteId: Int,
+    val actionRun: String,
+    val label: String,
+    val instagram: Boolean
+) {
+    private val ITEMS = "items"
+    private val SEEN = "seen"
+    private val MAX_TRIES = 3
+    private val LOCKED_RETRY_MS = 180_000L
+    private val FAIL_RETRY_MS = 300_000L
+    private val LIMIT_WAIT_MS = 86_400_000L
+    private val WAKE_MS = 300_000L
+    private val UNLOCK_WAIT_MS = 1_000L
+    private val NOTE_ID get() = noteId
+    private val BUSY_WAIT_MS = 600_000L
+    private val MAX_BUSY_WAITS = 6
+    private val BATCH_GAP_MS = 5_000L
+    private val MAX_BATCH = 20
+    val WAITING = "waiting"
+    val UPLOADED = "uploaded"
+    val FAILED = "failed"
     private val busy = AtomicBoolean(false)
 
     data class Settings(
@@ -46,7 +60,9 @@ object ShortsQueue {
         val visibility: String, val perDay: Int, val from: Int, val to: Int, val auto: Boolean
     )
 
-    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    abstract fun upload(control: PhoneControl, item: JSONObject, caption: String, set: Settings, onPress: () -> Unit): ShortResult
+
+    private fun prefs(context: Context) = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 
     fun settings(context: Context): Settings {
         val saved = prefs(context)
@@ -180,7 +196,7 @@ object ShortsQueue {
         val home = context.packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
         )?.activityInfo?.packageName
-        return pkg != home && pkg != YOUTUBE && pkg != context.packageName && "launcher" !in pkg && pkg != "com.android.systemui"
+        return pkg != home && pkg != YOUTUBE && pkg != INSTAGRAM && pkg != context.packageName && "launcher" !in pkg && pkg != "com.android.systemui"
     }
 
     /** Saari baaki videos ek ke baad ek. Koi atke to ruk jao. */
@@ -219,7 +235,7 @@ object ShortsQueue {
 
     private fun alarmIntent(context: Context) = PendingIntent.getBroadcast(
         context, NOTE_ID,
-        Intent(context, WorkReceiver::class.java).setAction(ACTION_RUN),
+        Intent(context, WorkReceiver::class.java).setAction(actionRun),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 
@@ -229,7 +245,7 @@ object ShortsQueue {
         val exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()
         if (exact) {
             val show = PendingIntent.getActivity(
-                context, NOTE_ID, Intent(context, YouTubeActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+                context, NOTE_ID, YouTubeActivity.open(context, instagram), PendingIntent.FLAG_IMMUTABLE
             )
             manager.setAlarmClock(AlarmManager.AlarmClockInfo(at, show), alarmIntent(context))
         } else {
@@ -280,7 +296,7 @@ object ShortsQueue {
         val power = context.getSystemService(PowerManager::class.java)
         @Suppress("DEPRECATION")
         val wake = power.newWakeLock(
-            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "sahayak:shorts"
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "sahayak:" + prefsName
         )
         val keys = context.getSystemService(KeyguardManager::class.java)
         // Screen jalane se pehle dekho, warna khula hua purana app "chalu" lagega
@@ -313,7 +329,7 @@ object ShortsQueue {
         if (item == null) {
             if (scheduled) {
                 val failed = count(context, FAILED)
-                WorkList.notifyText(context, NOTE_ID, if (failed > 0) "$failed videos failed. Open YouTube Auto Upload." else "All videos are uploaded. Add more videos.")
+                WorkList.notifyText(context, NOTE_ID, if (failed > 0) "$failed videos failed. Open $label Auto Upload." else "All videos are uploaded. Add more videos.")
             }
             prefs(context).edit().putLong("next_at", 0L).apply()
             return
@@ -338,12 +354,12 @@ object ShortsQueue {
             return
         }
         val caption = captionFor(context, item, set)
-        val result = control.uploadShort(item.optString("uri"), item.optString("name"), caption, set) {
+        val result = upload(control, item, caption, set) {
             // App beech mein band ho to bhi yeh video dobara upload nahi hogi
             item.put("status", FAILED).put("reason", "Upload pressed, result unknown. Check YouTube")
             update(context, item)
         }
-        RunLog.add(context, "short " + result.outcome + " " + item.optString("name") + " " + result.reason)
+        RunLog.add(context, label + " " + result.outcome + " " + item.optString("name") + " " + result.reason)
         finish(context, item, result, scheduled)
     }
 
@@ -355,7 +371,7 @@ object ShortsQueue {
                 update(context, item)
                 prefs(context).edit().putInt("caption_turn", turn(context) + 1)
                     .putInt("total_uploaded", totalUploaded(context) + 1).apply()
-                History.add(context, "youtube", "uploaded $name")
+                History.add(context, label.lowercase(), "uploaded $name")
                 WorkList.notifyText(context, NOTE_ID, "Upload started: $name")
                 if (scheduled) armNextSlot(context)
             }
@@ -367,9 +383,9 @@ object ShortsQueue {
                 stop(context)
             }
             ShortOutcome.LIMIT -> {
-                item.put("status", WAITING).put("reason", "YouTube daily limit reached")
+                item.put("status", WAITING).put("reason", "$label daily limit reached")
                 update(context, item)
-                WorkList.notifyText(context, NOTE_ID, "YouTube daily limit reached. Uploads will continue tomorrow.")
+                WorkList.notifyText(context, NOTE_ID, "$label daily limit reached. Uploads will continue tomorrow.")
                 if (scheduled) arm(context, System.currentTimeMillis() + LIMIT_WAIT_MS)
             }
             ShortOutcome.NO_RETRY -> fail(context, item, result.reason, scheduled)
@@ -393,3 +409,6 @@ object ShortsQueue {
         if (scheduled) armNextSlot(context)
     }
 }
+
+private const val YOUTUBE = "com.google.android.youtube"
+private const val INSTAGRAM = "com.instagram.android"
