@@ -148,6 +148,7 @@ class TodoPopup(
                 }
 
                 override fun onDone(utteranceId: String?) {
+                    if (utteranceId == "punch") return
                     main.post {
                         buddy?.mood = endMood
                         main.removeCallbacks(hideLater)
@@ -211,6 +212,7 @@ class TodoPopup(
         endMood = "happy"
         Frames.prepare(service, "mail")
         main.postDelayed({ if (buddy === robot) robot.mood = "mail" }, MAIL_SURPRISE_MS)
+        punchable(robot)
         card.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         card.addView(TextView(service).apply {
             text = message
@@ -250,6 +252,7 @@ class TodoPopup(
         endMood = "swagidle"
         Frames.prepare(service, speakMood)
         Frames.prepare(service, "dance")
+        punchable(robot)
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
             text = "To-do: tap when done"
@@ -340,6 +343,27 @@ class TodoPopup(
         }
     }
 
+    /**
+     * Pet par mukka: Chhotu "Oof!" bolkar dabakta hai, ghoomta hua chhota hokar ud jata hai,
+     * aur popup turant band. To-do waise hi rehte hain.
+     */
+    private fun punchable(robot: MiniBuddy) {
+        robot.setOnClickListener {
+            if (buddy !== robot) return@setOnClickListener
+            buddy = null
+            main.removeCallbacks(hideLater)
+            robot.mood = "surprised"
+            if (ttsReady) tts.speak("Oof!", TextToSpeech.QUEUE_FLUSH, Bundle(), "punch")
+            val density = service.resources.displayMetrics.density
+            robot.animate().scaleX(1.2f).scaleY(0.78f).translationY(8 * density).setDuration(PUNCH_MS)
+                .withEndAction {
+                    robot.animate().scaleX(0.05f).scaleY(0.05f).translationY(-260 * density).rotation(540f)
+                        .alpha(0f).setDuration(FLY_MS).setInterpolator(AccelerateInterpolator())
+                        .withEndAction { hide() }.start()
+                }.start()
+        }
+    }
+
     fun shutdown() {
         hide()
         tts.shutdown()
@@ -367,6 +391,8 @@ class TodoPopup(
 
     companion object {
         private const val SHOW_MS = 1_000L
+        private const val PUNCH_MS = 110L
+        private const val FLY_MS = 420L
         private const val AFTER_SPEECH_MS = 1_800L
         private const val MAIL_SURPRISE_MS = 1_000L
         private const val SWAG_MS = 3_000L
