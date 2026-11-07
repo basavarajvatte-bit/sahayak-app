@@ -446,6 +446,35 @@ class PhoneControl : AccessibilityService() {
         return tapExact("paste")
     }
 
+    private fun waitFor(ms: Long, test: (List<String>) -> Boolean): Boolean {
+        var waited = 0L
+        while (waited < ms && !abort) {
+            if (test(screenLabels())) return true
+            Thread.sleep(SHORT_POLL_MS)
+            waited += SHORT_POLL_MS
+        }
+        return test(screenLabels())
+    }
+
+    /** Sikhaya hua raasta: Select audience, Yes it's made for Kids, wapas, aur check. */
+    private fun setAudience(kids: Boolean, firm: Boolean): Boolean {
+        val row: (String) -> Boolean = { it.length <= 40 && ("select audience" in it || it == "audience" || ("made for kids" in it && !it.startsWith("what"))) }
+        val option: (String) -> Boolean = { if (kids) ShortsLogic.yesOption(it) else ShortsLogic.noOption(it) }
+        if (!tapWhere(firm, row)) return false
+        if (!waitFor(SHORT_PAGE_WAIT_MS) { labels -> labels.any(option) }) {
+            RunLog.add(this, "short audience page: " + screenLabels().take(10).joinToString(" | ") { it.take(40) })
+            return false
+        }
+        tapWhere(false, option)
+        Thread.sleep(SHORT_POLL_MS)
+        // Kuch phones par pehla click nahi lagta, to asli tap bhi
+        if (!waitFor(SHORT_POLL_MS * 2) { ShortsLogic.isDetailsPage(it) }) tapWhere(true, option)
+        if (!waitFor(SHORT_POLL_MS * 3) { ShortsLogic.isDetailsPage(it) }) {
+            leavePage { labels -> labels.any(option) }
+        }
+        return waitFor(SHORT_PAGE_WAIT_MS) { ShortsLogic.isDetailsPage(it) && ShortsLogic.audienceRight(it, kids) }
+    }
+
     private fun pressFinal(button: String, onPress: () -> Unit): ShortResult {
         onPress()
         // Pehle seedha click, na chale to button par asli ungli jaisa tap
@@ -579,14 +608,10 @@ class PhoneControl : AccessibilityService() {
                 }
                 if (!audienceDone) {
                     when {
-                        ShortsLogic.audienceUnset(labels) -> {
+                        ShortsLogic.audienceUnset(labels) || ShortsLogic.audienceWrong(labels, set.kids) -> {
                             pageTries++
-                            tapWhere(pageTries > 1) { "select audience" in it }
-                            return@repeat
-                        }
-                        ShortsLogic.audienceWrong(labels, set.kids) -> {
-                            pageTries++
-                            tapWhere(pageTries > 1) { it.length <= 40 && "made for kids" in it && !it.startsWith("what") }
+                            audienceDone = setAudience(set.kids, pageTries > 1)
+                            RunLog.add(this, "short audience set " + audienceDone)
                             return@repeat
                         }
                         ShortsLogic.audienceRight(labels, set.kids) || audienceChosen -> audienceDone = true
@@ -1400,9 +1425,11 @@ class PhoneControl : AccessibilityService() {
         private const val MAX_ELEMENTS = 40
         private const val MAX_READ = 6_000
         private const val MAIL_GAP_MS = 30_000L
-        private const val SHORT_ROUNDS = 150
-        private const val SHORT_ROUND_MS = 1_200L
-        private const val SHORT_TAP_WAIT_MS = 1_200L
+        private const val SHORT_ROUNDS = 240
+        private const val SHORT_ROUND_MS = 700L
+        private const val SHORT_TAP_WAIT_MS = 800L
+        private const val SHORT_POLL_MS = 300L
+        private const val SHORT_PAGE_WAIT_MS = 3_000L
         private const val SHORT_HOLD_MS = 800L
         private const val SHORT_CONFIRM_ROUNDS = 30
         private const val SHORT_OUTSIDE_ROUNDS = 12
