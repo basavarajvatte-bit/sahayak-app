@@ -724,18 +724,18 @@ for x in (-1.0, 1.0):
 chair_m = mat("chair", srgb("7CCBC2"), 0.45, coat=0.3)
 tray_m = mat("tray", srgb("FFFDF7"), 0.35, coat=0.4)
 bib_m = mat("bib", srgb("FF9EBB"), 0.6, sss=0.1)
-mango_m = mat("mango", srgb("FFB21E"), 0.3, sss=0.5, coat=0.6)
+mango_m = mat("mango", srgb("FF9A0A"), 0.25, sss=0.6, coat=0.8)
 mango_skin = mat("mango_skin", srgb("8BC34A"), 0.45)
 juice_m = mat("juice", srgb("FFB21E"), 0.08, coat=1.0)
 feast_parts = [
     box("chair_back", chair_m, (0, 0.75, -0.3), (2.3, 0.3, 2.6), root, 0.35),
-    box("chair_base", chair_m, (0, 0.1, -1.95), (2.2, 1.6, 0.9), root, 0.3),
+    box("chair_base", chair_m, (0, -0.2, -1.95), (2.2, 2.0, 0.95), root, 0.3),
     box("tray", tray_m, (0, -1.05, -1.2), (3.0, 1.0, 0.16), root, 0.06),
     ball("bib", bib_m, (0, -0.62, -0.42), (0.62, 0.2, 0.5), root, 32),
 ]
 mango = empty("mango_at", root, (0, -1.2, -0.98))
-feast_parts += [ball("mango", mango_m, (0, 0, 0.04), (0.5, 0.36, 0.16), mango, 32),
-                ball("mango_peel", mango_skin, (0, 0, -0.03), (0.53, 0.38, 0.13), mango, 32)]
+feast_parts += [ball("mango", mango_m, (0, 0, 0.05), (0.62, 0.42, 0.2), mango, 32),
+                ball("mango_peel", mango_skin, (0, 0, -0.06), (0.6, 0.4, 0.09), mango, 32)]
 drips = [ball("drip", juice_m, (x, -1.12, z), (0.045, 0.04, 0.065), head, 16) for x, z in ((-0.12, -0.55), (0.1, -0.6), (0.02, -0.68))]
 
 # ---------- camera and light ----------
@@ -933,8 +933,8 @@ def clip(name, t):
         chew = (t > 0.45) * abs(math.sin(w * 7))
         bite = float(np.exp(-(((t - 0.36) / 0.05) ** 2)))
         joy = float(smooth01((t - 0.42) / 0.1))
-        p.update(mw=0.24, mc=0.1 + joy * 0.04, hu=0.02 + bite * 0.1 + chew * 0.02, hl=0.03 + bite * 0.17 + chew * 0.06, smile=0.6 + joy * 0.4,
-                 puff=chew * 0.5, ulid=lerp(40, -4, joy), llid=lerp(-40, -16, joy), bi=0.08 + joy * 0.06, bo=0.04,
+        p.update(mw=0.24 + joy * 0.06, mc=0.1 + joy * 0.06, hu=0.02 + bite * 0.1 + chew * 0.02, hl=0.03 + bite * 0.17 + chew * 0.08, smile=0.6 + joy * 0.4,
+                 puff=chew * 0.5, ulid=lerp(40, 12, joy), llid=lerp(-40, 2, joy), bi=0.08 + joy * 0.06, bo=0.04,
                  pupil=0.3, gz=-0.12 * (1 - joy), hx=0.08 - lift * 0.1, hz=math.sin(w) * 0.06, z=-0.25, feast=True, drip=joy)
         p["la"] = wave((-0.55, -1.05, -0.8), (-0.32, -1.3, -0.15), lift)
         p["ra"] = wave((0.55, -1.05, -0.8), (0.32, -1.3, -0.15), lift)
