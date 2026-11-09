@@ -115,8 +115,16 @@ class VideoActivity : Activity() {
         val app = applicationContext
         Thread {
             val result = try {
-                val answer = Planner(GeminiLive.newClient(), key, STORY_TIMEOUT_S).storyboard(words, character, seconds)
-                val built = answer?.let { StoryLogic.parse(it, character) } ?: throw IllegalStateException("Could not write the story. Try again")
+                val planner = Planner(GeminiLive.newClient(), key, STORY_TIMEOUT_S)
+                var built: Story? = null
+                for (attempt in 1..STORY_TRIES) {
+                    val answer = planner.storyboard(words, character, seconds)
+                    built = answer?.let { StoryLogic.parse(it, character) }
+                    if (built != null) break
+                    RunLog.add(app, "story try $attempt failed: " + planner.lastError + " " + answer?.take(200))
+                    runOnUiThread { status.text = "Writing the story again" }
+                }
+                if (built == null) throw IllegalStateException("Could not write the story. " + planner.lastError.ifEmpty { "Try again" })
                 runOnUiThread { showScript(built) }
                 val uri = VideoMaker(app).make(built) { line -> runOnUiThread { status.text = line } }
                 RunLog.add(app, "idea video made " + built.title)
@@ -180,6 +188,7 @@ class VideoActivity : Activity() {
     companion object {
         private const val WHO_IDS = 3_000
         private const val LENGTH_IDS = 4_000
-        private const val STORY_TIMEOUT_S = 60L
+        private const val STORY_TIMEOUT_S = 90L
+        private const val STORY_TRIES = 3
     }
 }

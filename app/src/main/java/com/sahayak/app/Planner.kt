@@ -51,7 +51,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
         val who = if (character == "baby") "a cute original toddler character named Baby" else "Chhotu, a cute original purple furry creature with antennae"
         val text = "Character: $who\nAllowed actions: " + StoryLogic.actionsFor(character).joinToString(", ") +
             "\nAllowed places: " + StoryLogic.PLACES.joinToString(", ") + "\nTarget length: about $seconds seconds\nIdea: $idea"
-        return ask(STORY_RULES, JSONArray().put(JSONObject().put("text", text)), 0.8, 2500)
+        return ask(STORY_RULES, JSONArray().put(JSONObject().put("text", text)), 0.8, STORY_TOKENS, json = true)
     }
 
     /** Lambe safal kaam se dobara kaam aane wala tareeka banata ya sudharta hai. */
@@ -96,12 +96,19 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
         return lines.takeIf { it.isNotEmpty() && it.size <= 40 }
     }
 
-    private fun ask(system: String, parts: JSONArray, temperature: Double, maxTokens: Int): String? {
+    /** Pichhli koshish kyun fail hui, user ko batane ke liye. */
+    var lastError = ""
+        private set
+
+    private fun ask(system: String, parts: JSONArray, temperature: Double, maxTokens: Int, json: Boolean = false): String? {
+        val config = JSONObject().put("temperature", temperature).put("maxOutputTokens", maxTokens)
+        if (json) config.put("responseMimeType", "application/json")
         val body = JSONObject()
             .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
             .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
-            .put("generationConfig", JSONObject().put("temperature", temperature).put("maxOutputTokens", maxTokens))
+            .put("generationConfig", config)
             .toString().toRequestBody("application/json".toMediaType())
+        lastError = ""
         for (model in MODELS) {
             val request = Request.Builder()
                 .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
@@ -109,14 +116,25 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
             try {
                 client.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
-                        val reply = JSONObject(response.body?.string().orEmpty()).optJSONArray("candidates")
-                            ?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+                        val first = JSONObject(response.body?.string().orEmpty()).optJSONArray("candidates")?.optJSONObject(0)
+                        val reply = first?.optJSONObject("content")?.optJSONArray("parts")
                         val text = StringBuilder()
-                        for (i in 0 until (reply?.length() ?: 0)) text.append(reply?.optJSONObject(i)?.optString("text"))
+                        for (i in 0 until (reply?.length() ?: 0)) {
+                            val part = reply?.optJSONObject(i) ?: continue
+                            if (!part.optBoolean("thought")) text.append(part.optString("text"))
+                        }
                         if (text.isNotBlank()) return text.toString().trim()
+                        lastError = "Gemini gave no answer (" + first?.optString("finishReason").orEmpty() + ")"
+                    } else {
+                        lastError = when (response.code) {
+                            429 -> "Gemini free limit reached. Try after some time"
+                            400, 403 -> "Gemini key problem (" + response.code + ")"
+                            else -> "Gemini error " + response.code
+                        }
                     }
                 }
             } catch (e: IOException) {
+                lastError = "No internet"
                 return null
             }
         }
@@ -125,6 +143,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
 
     companion object {
         private const val TIMEOUT_SECONDS = 6L
+        private const val STORY_TOKENS = 8_192
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
         private const val RECOVER_RULES = """An AI agent operating an Android phone got stuck on one step of a known task. Look at the screen and reply in at most 6 short lines:
 WHY: what is blocking it.

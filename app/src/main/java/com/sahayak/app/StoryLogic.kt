@@ -21,8 +21,13 @@ object StoryLogic {
     fun actionsFor(character: String) = if (character == "chhotu") ACTIONS + SWAG else ACTIONS
 
     fun parse(json: String, character: String): Story? {
+        // Jawab ke aage-peeche kuch likha ho to bhi sirf { } wala hissa lo
+        val clean = BrainLogic.cleanJson(json)
+        val start = clean.indexOf('{')
+        val end = clean.lastIndexOf('}')
+        if (start < 0 || end <= start) return null
         val root = try {
-            JSONObject(BrainLogic.cleanJson(json))
+            JSONObject(clean.substring(start, end + 1))
         } catch (e: JSONException) {
             return null
         }
