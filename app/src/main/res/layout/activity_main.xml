@@ -210,6 +210,15 @@
                 android:text="Instagram Auto Upload"
                 android:textAllCaps="false"
                 android:textSize="17sp" />
+
+            <Button
+                android:id="@+id/ideaVideoButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="8dp"
+                android:text="Idea Video"
+                android:textAllCaps="false"
+                android:textSize="17sp" />
         </LinearLayout>
 
         <LinearLayout
