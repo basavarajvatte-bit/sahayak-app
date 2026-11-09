@@ -188,6 +188,8 @@ def eye_material():
 eye_m, eye_ramp = eye_material()
 spark_m = mat("spark", (1, 1, 1), 0.4, emission=2.2)
 lid_m = mat("lid", srgb("7A3CE0"), 0.5, sss=0.3)
+if BABY:
+    lid_m = skin
 
 # ---------- helpers ----------
 def empty(name, parent=None, loc=(0, 0, 0)):
@@ -505,9 +507,18 @@ if BABY:
         ball("ear_in", nose_m, (s_ * 1.4, -0.02, 0.05), (0.09, 0.06, 0.15), head)
         bd = CHEEK[s_]
         ball("blush", blush_m, tuple(surface(bd[None, :])[0] + bd * 0.01), (0.2, 0.06, 0.13), head, 24).rotation_euler = (0.3, 0, s_ * 0.6)
-    for i, (x, y, z, r) in enumerate([(0, -0.2, 1.14, 0.2), (-0.25, -0.1, 1.1, 0.17), (0.25, -0.1, 1.1, 0.17), (0.1, 0.15, 1.15, 0.18),
-                                       (-0.12, 0.12, 1.16, 0.16), (0, -0.48, 1.05, 0.14), (0.45, 0.05, 1.0, 0.13), (-0.45, 0.05, 1.0, 0.13)]):
-        ball("curl", hair_m, (x, y, z), r, head, 24)
+    import random
+    rnd = random.Random(7)
+    for i in range(46):
+        # ghungrale baal: sir ke upar aur peeche chhote gole
+        a = rnd.uniform(0, 2 * math.pi)
+        up = rnd.uniform(0.62, 1.0)
+        d = np.array([math.cos(a) * math.sqrt(1 - up * up), math.sin(a) * math.sqrt(1 - up * up) * 0.9 + 0.08, up])
+        d = d / np.linalg.norm(d)
+        if d[1] < -0.55 and d[2] < 0.8:
+            continue
+        p = surface(d[None, :])[0] + d * 0.05
+        ball("curl", hair_m, tuple(p), rnd.uniform(0.11, 0.16), head, 20)
 
 tears = {s: ball("tear", tear_m, (0, 0, 0), (0.075, 0.06, 0.105), head, 24) for s in (-1, 1)}
 
