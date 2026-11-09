@@ -24,6 +24,7 @@ class VideoActivity : Activity() {
     private lateinit var placeBox: android.widget.Spinner
     private lateinit var who: RadioGroup
     private lateinit var length: RadioGroup
+    private lateinit var music: android.widget.CheckBox
     private lateinit var status: TextView
     private lateinit var script: TextView
     private lateinit var player: VideoView
@@ -72,9 +73,9 @@ class VideoActivity : Activity() {
         }
         page.addView(idea)
         page.addView(text("My script (optional)", 16f, true))
-        page.addView(text("Write your own story, one scene per line. Start with an action and a colon. Leave empty and Sahayak writes the story.\nBaby actions: dance, hop, eat, drive, swing, happy, excited, sad, surprised, sleepy, grumpy, thinking", 13f))
+        page.addView(text("Write your own story, one scene per line. Start with an action and a colon. Leave empty and Sahayak writes the story.\nBaby actions: feast, dance, hop, eat, drive, swing, happy, excited, sad, surprised, sleepy, grumpy, thinking\nAdd in curly brackets: {Yum!} big word, {hearts} {sparkles} {stars} {bubbles} effects, {close} close-up", 13f))
         myScript = EditText(this).apply {
-            hint = "drive: Vroom vroom, here I go!\neat: Yummy apple!\nswing: Up and down!\ndance:"
+            hint = "feast: {sparkles}\nfeast: Mmm mango! {close}\nfeast: {Yum!} {hearts}\ndance: Happy baby!"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             minLines = 4
         }
@@ -89,8 +90,10 @@ class VideoActivity : Activity() {
         who = radios(listOf("Baby", "Chhotu"), WHO_IDS)
         page.addView(who)
         page.addView(text("Length", 16f, true))
-        length = radios(listOf("15 sec", "30 sec", "60 sec"), LENGTH_IDS)
+        length = radios(listOf("10 sec", "15 sec", "30 sec", "60 sec"), LENGTH_IDS)
         page.addView(length)
+        music = android.widget.CheckBox(this).apply { text = "Background music"; isChecked = true; textSize = 16f }
+        page.addView(music)
         makeButton = button("Make video") { make() }
         page.addView(makeButton)
         status = text("", 15f, true)
@@ -119,7 +122,8 @@ class VideoActivity : Activity() {
         val key = SecureStore(getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
         val chosenPlace = StoryLogic.PLACES.getOrNull(placeBox.selectedItemPosition - 1)
         val character = if (who.checkedRadioButtonId == WHO_IDS) "baby" else "chhotu"
-        val seconds = listOf(15, 30, 60)[(length.checkedRadioButtonId - LENGTH_IDS).coerceIn(0, 2)]
+        val seconds = listOf(10, 15, 30, 60)[(length.checkedRadioButtonId - LENGTH_IDS).coerceIn(0, 3)]
+        val withMusic = music.isChecked
         working = true
         makeButton.isEnabled = false
         after.visibility = android.view.View.GONE
@@ -149,6 +153,7 @@ class VideoActivity : Activity() {
                     runOnUiThread { status.text = note }
                 }
                 val story = built!!.let { s -> if (chosenPlace == null) s else s.copy(scenes = s.scenes.map { it.copy(place = chosenPlace) }) }
+                    .copy(music = withMusic)
                 runOnUiThread {
                     showScript(story)
                     if (note.isNotEmpty()) script.append("\n\n" + note)

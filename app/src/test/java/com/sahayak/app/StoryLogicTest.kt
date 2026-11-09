@@ -46,12 +46,28 @@ class StoryLogicTest {
 
     @Test fun readsMyScript() {
         val story = StoryLogic.fromScript("drive: Vroom vroom!\n\nYummy food here\ndance:\nfly: up up", "baby", "park", "Fun day")!!
-        assertEquals(listOf("drive", "eat", "dance", "happy"), story.scenes.map { it.action })
+        assertEquals(listOf("drive", "feast", "dance", "happy"), story.scenes.map { it.action })
         assertEquals("Vroom vroom!", story.scenes[0].line)
         assertEquals("", story.scenes[2].line)
         assertEquals("fly: up up", story.scenes[3].line)
         assertEquals("park", story.scenes[1].place)
         assertNull(StoryLogic.fromScript("  \n ", "baby", "park", ""))
+    }
+
+    @Test fun readsTagsInScript() {
+        val story = StoryLogic.fromScript("feast: Mmm mango! {close}\nfeast: {Yum!} {hearts}", "baby", "sweet", "Mango")!!
+        assertEquals(true, story.scenes[0].close)
+        assertEquals("Mmm mango!", story.scenes[0].line)
+        assertEquals("Yum!", story.scenes[1].pop)
+        assertEquals("hearts", story.scenes[1].effect)
+        assertEquals("", story.scenes[1].line)
+    }
+
+    @Test fun musicHasRightLengthAndFades() {
+        val music = Music.make(2.0, 8_000, 1)
+        assertEquals(16_000, music.size)
+        assertEquals(0, music[0].toInt())
+        assertTrue(music.any { kotlin.math.abs(it.toInt()) > 1_000 })
     }
 
     @Test fun makesSafeFileName() {

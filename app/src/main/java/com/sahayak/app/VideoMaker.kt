@@ -54,7 +54,8 @@ class VideoMaker(private val context: Context) {
             val talk = voices[i]?.let { it.samples.size.toDouble() / it.rate } ?: 0.0
             max(scene.seconds, talk + SPEECH_PAD + LEAD_IN)
         }
-        val audio = mixAudio(voices, sceneSeconds, rate)
+        val voice = mixAudio(voices, sceneSeconds, rate)
+        val audio = Music.mix(voice, if (story.music) Music.make(sceneSeconds.sum(), rate, story.title.hashCode()) else null, rate)
         val stamp = SimpleDateFormat("MMdd_HHmm", Locale.ENGLISH).format(Date())
         val name = StoryLogic.fileName(story.title, stamp)
         val temp = File(context.cacheDir, "render.mp4")
@@ -187,18 +188,25 @@ class VideoMaker(private val context: Context) {
 
     private fun drawFrame(canvas: Canvas, story: Story, scene: Scene, frame: Int, inScene: Double, talking: Boolean) {
         canvas.drawBitmap(background(scene.place), 0f, 0f, null)
-        val clip = if (talking) (if (story.character == "chhotu" && scene.action.startsWith("swag")) "swagtalk" else "talk") else scene.action
+        // Props wali activity mein muh clip ke andar hi chalta hai
+        val propAction = scene.action in StoryLogic.ACTIVITIES
+        val clip = if (talking && !propAction) (if (story.character == "chhotu" && scene.action.startsWith("swag")) "swagtalk" else "talk") else scene.action
         val list = frames(story.character, clip).ifEmpty { frames(story.character, "idle") }
-        val size = CHARACTER_SIZE
+        val close = scene.close || scene.action == "feast"
+        val size = if (close) CLOSE_SIZE else CHARACTER_SIZE
         val left = (WIDTH - size) / 2f
-        val top = HEIGHT * 0.33f
-        shadow.shader = RadialGradient(WIDTH / 2f, top + size * 0.93f, size * 0.32f, Color.argb(110, 0, 0, 0), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        canvas.save()
-        canvas.scale(1f, 0.22f, WIDTH / 2f, top + size * 0.93f)
-        canvas.drawCircle(WIDTH / 2f, top + size * 0.93f, size * 0.32f, shadow)
-        canvas.restore()
+        val top = if (close) HEIGHT * 0.1f else HEIGHT * 0.33f
+        if (!close) {
+            shadow.shader = RadialGradient(WIDTH / 2f, top + size * 0.93f, size * 0.32f, Color.argb(110, 0, 0, 0), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            canvas.save()
+            canvas.scale(1f, 0.22f, WIDTH / 2f, top + size * 0.93f)
+            canvas.drawCircle(WIDTH / 2f, top + size * 0.93f, size * 0.32f, shadow)
+            canvas.restore()
+        }
         list.getOrNull(frame % max(list.size, 1))?.let { canvas.drawBitmap(it, null, RectF(left, top, left + size, top + size), drawPaint) }
-        canvas.drawText(story.title, WIDTH / 2f, 120f, titlePaint)
+        Effects.draw(canvas, scene.effect, inScene, frame, WIDTH, HEIGHT)
+        if (scene.pop.isNotBlank()) Effects.pop(canvas, scene.pop, inScene, WIDTH)
+        else if (frame < FPS * TITLE_SECONDS) canvas.drawText(story.title, WIDTH / 2f, 120f, titlePaint)
         if (scene.line.isNotBlank() && inScene >= LEAD_IN * 0.5) {
             val lines = StoryLogic.wrap(scene.line, SUB_CHARS)
             var y = HEIGHT - 190f - (lines.size - 1) * 64f
@@ -381,6 +389,8 @@ class VideoMaker(private val context: Context) {
         const val HEIGHT = 1280
         const val FPS = 18
         private const val CHARACTER_SIZE = 640f
+        private const val CLOSE_SIZE = 1180f
+        private const val TITLE_SECONDS = 3
         private const val KEEP_CLIPS = 3
         private const val MAX_FRAMES = 54
         private const val VIDEO_BITRATE = 4_000_000
@@ -455,6 +465,29 @@ object Backdrops {
                 c.drawRect(w * 0.88f, 0f, w.toFloat(), h.toFloat(), p)
                 ground(Color.rgb(120, 70, 40), h * 0.74f)
             }
+            "sweet" -> {
+                // garam peach rang, dhundhle gol ujale
+                sky(Color.rgb(255, 226, 170), Color.rgb(255, 170, 150))
+                repeat(26) {
+                    val x = rnd.nextFloat() * w
+                    val y = rnd.nextFloat() * h * 0.7f
+                    val r = 20f + rnd.nextFloat() * 60f
+                    p.shader = RadialGradient(x, y, r, Color.argb(120, 255, 255, 240), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+                    c.drawCircle(x, y, r, p)
+                }
+                p.shader = null
+            }
+            "kitchen" -> {
+                sky(Color.rgb(255, 245, 225), Color.rgb(250, 230, 200))
+                p.color = Color.rgb(200, 235, 230)
+                for (row in 0 until 6) for (col in 0 until 6) {
+                    if ((row + col) % 2 == 0) c.drawRect(col * w / 6f, h * 0.3f + row * 60f, (col + 1) * w / 6f, h * 0.3f + (row + 1) * 60f, p)
+                }
+                p.color = Color.rgb(240, 240, 240)
+                c.drawRect(0f, h * 0.68f, w.toFloat(), h * 0.72f, p)
+                p.color = Color.rgb(120, 200, 190)
+                c.drawRect(0f, h * 0.72f, w.toFloat(), h.toFloat(), p)
+            }
             "room" -> {
                 sky(Color.rgb(255, 236, 210), Color.rgb(250, 210, 180))
                 p.color = Color.rgb(170, 220, 255)
@@ -485,5 +518,84 @@ object Backdrops {
             }
         }
         return bmp
+    }
+}
+
+/** Video ke upar ki chamak: dil, sitare, bulbule aur uchhalte shabd. */
+object Effects {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val popPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = 120f
+    }
+    private val heart = android.graphics.Path()
+
+    private fun heartAt(canvas: Canvas, x: Float, y: Float, r: Float, color: Int) {
+        heart.reset()
+        heart.moveTo(x, y + r * 0.9f)
+        heart.cubicTo(x - r * 1.6f, y - r * 0.2f, x - r * 0.6f, y - r * 1.3f, x, y - r * 0.4f)
+        heart.cubicTo(x + r * 0.6f, y - r * 1.3f, x + r * 1.6f, y - r * 0.2f, x, y + r * 0.9f)
+        paint.color = color
+        canvas.drawPath(heart, paint)
+    }
+
+    private fun sparkle(canvas: Canvas, x: Float, y: Float, r: Float, color: Int) {
+        paint.color = color
+        heart.reset()
+        heart.moveTo(x, y - r)
+        heart.quadTo(x, y, x + r, y)
+        heart.quadTo(x, y, x, y + r)
+        heart.quadTo(x, y, x - r, y)
+        heart.quadTo(x, y, x, y - r)
+        canvas.drawPath(heart, paint)
+    }
+
+    fun draw(canvas: Canvas, effect: String, time: Double, frame: Int, w: Int, h: Int) {
+        if (effect.isEmpty()) return
+        val rnd = java.util.Random(effect.hashCode().toLong())
+        repeat(14) { i ->
+            val baseX = rnd.nextFloat() * w
+            val speed = 0.15f + rnd.nextFloat() * 0.2f
+            val offset = rnd.nextFloat()
+            val twinkle = (kotlin.math.sin(frame * 0.5 + i) * 0.5 + 0.5).toFloat()
+            when (effect) {
+                "hearts" -> {
+                    val life = ((time * speed + offset) % 1.0).toFloat()
+                    val y = h * (0.85f - life * 0.7f)
+                    val x = baseX + kotlin.math.sin(life * 12 + i).toFloat() * 20f
+                    heartAt(canvas, x, y, 18f + rnd.nextFloat() * 14f, Color.argb((255 * (1 - life)).toInt(), 255, 90, 130))
+                }
+                "bubbles" -> {
+                    val life = ((time * speed + offset) % 1.0).toFloat()
+                    paint.color = Color.argb((140 * (1 - life)).toInt(), 200, 235, 255)
+                    canvas.drawCircle(baseX, h * (0.95f - life * 0.9f), 14f + rnd.nextFloat() * 22f, paint)
+                }
+                else -> {
+                    val y = rnd.nextFloat() * h * 0.75f
+                    val color = if (effect == "stars") Color.argb((255 * twinkle).toInt(), 255, 215, 60) else Color.argb((255 * twinkle).toInt(), 255, 255, 230)
+                    sparkle(canvas, baseX, y, 10f + 18f * twinkle, color)
+                }
+            }
+        }
+    }
+
+    /** Bada shabd jo uchhal kar aata hai, jaise Yum! */
+    fun pop(canvas: Canvas, word: String, time: Double, w: Int) {
+        val t = ((time - 0.3) / 0.35).coerceIn(0.0, 1.0)
+        if (t <= 0.0) return
+        val scale = (if (t < 0.7) t / 0.7 * 1.2 else 1.2 - (t - 0.7) / 0.3 * 0.2).toFloat()
+        canvas.save()
+        canvas.translate(w / 2f, 230f)
+        canvas.rotate(kotlin.math.sin(time * 6).toFloat() * 4f)
+        canvas.scale(scale, scale)
+        popPaint.style = Paint.Style.STROKE
+        popPaint.strokeWidth = 16f
+        popPaint.color = Color.WHITE
+        canvas.drawText(word, 0f, 40f, popPaint)
+        popPaint.style = Paint.Style.FILL
+        popPaint.color = Color.rgb(255, 100, 20)
+        canvas.drawText(word, 0f, 40f, popPaint)
+        canvas.restore()
     }
 }

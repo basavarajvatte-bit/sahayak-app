@@ -3,16 +3,22 @@ package com.sahayak.app
 import org.json.JSONException
 import org.json.JSONObject
 
-data class Scene(val action: String, val place: String, val line: String, val seconds: Double)
+data class Scene(
+    val action: String, val place: String, val line: String, val seconds: Double,
+    val pop: String = "", val effect: String = "", val close: Boolean = false
+)
 
-data class Story(val title: String, val caption: String, val character: String, val scenes: List<Scene>)
+data class Story(val title: String, val caption: String, val character: String, val scenes: List<Scene>, val music: Boolean = true)
 
 /** Idea se bani kahani ko jaanchna. AI galat naam de to bhi video bane. */
 object StoryLogic {
     val ACTIONS = listOf("idle", "happy", "excited", "sad", "surprised", "sleepy", "grumpy", "thinking", "dance")
     val SWAG = listOf("swag", "swagidle")
-    val ACTIVITIES = listOf("hop", "eat", "drive", "swing")
-    val PLACES = listOf("jungle", "beach", "night", "stage", "room", "park", "space", "snow")
+    val ACTIVITIES = listOf("hop", "eat", "drive", "swing", "feast")
+    val EFFECTS = listOf("hearts", "sparkles", "stars", "bubbles")
+    private const val MAX_POP = 16
+    private val TAG = Regex("\\{([^}]*)\\}")
+    val PLACES = listOf("jungle", "beach", "night", "stage", "room", "park", "space", "snow", "sweet", "kitchen")
     private const val MIN_SECONDS = 2.0
     private const val MAX_SECONDS = 8.0
     private const val MAX_SCENES = 12
@@ -24,7 +30,8 @@ object StoryLogic {
     /** Idea ke shabdon se activity: car se drive, khana se eat. */
     private fun activityFor(lower: String): String? = when {
         listOf("car", "drive", "driving").any { it in lower } -> "drive"
-        listOf("eat", "food", "apple", "lunch", "khana").any { it in lower } -> "eat"
+        listOf("mango", "high chair", "feed", "eat", "food", "lunch", "khana", "yum").any { it in lower } -> "feast"
+        "apple" in lower -> "eat"
         listOf("hop", "jump", "bunny").any { it in lower } -> "hop"
         listOf("swing", "jhoola").any { it in lower } -> "swing"
         "dance" in lower -> "dance"
@@ -38,11 +45,16 @@ object StoryLogic {
     fun fromScript(script: String, character: String, place: String, title: String): Story? {
         val allowed = actionsFor(character)
         val scenes = script.lines().map { it.trim() }.filter { it.isNotEmpty() }.take(MAX_SCENES).map { row ->
-            val head = row.substringBefore(':', "").trim().lowercase()
+            val tags = TAG.findAll(row).map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.toList()
+            val plain = TAG.replace(row, "").trim()
+            val head = plain.substringBefore(':', "").trim().lowercase()
             val known = head.isNotEmpty() && head in allowed
-            val line = (if (known) row.substringAfter(':') else row).trim().take(MAX_LINE)
+            val line = (if (known) plain.substringAfter(':') else plain).trim().take(MAX_LINE)
             val action = if (known) head else activityFor(line.lowercase()) ?: "happy"
-            Scene(action, place, line, if (line.isEmpty()) 4.0 else 3.0)
+            val effect = tags.firstOrNull { it.lowercase() in EFFECTS }?.lowercase().orEmpty()
+            val close = tags.any { it.equals("close", ignoreCase = true) }
+            val pop = tags.firstOrNull { it.lowercase() !in EFFECTS && !it.equals("close", ignoreCase = true) }.orEmpty().take(MAX_POP)
+            Scene(action, place, line, if (line.isEmpty()) 4.0 else 3.0, pop, effect, close)
         }
         if (scenes.isEmpty()) return null
         return Story(title.ifBlank { "My Short" }.take(60), "#kids #cartoon #shorts", character, scenes)
@@ -71,7 +83,8 @@ object StoryLogic {
             val seconds = o.optDouble("seconds", 3.0).let { if (it.isNaN()) 3.0 else it }.coerceIn(MIN_SECONDS, MAX_SECONDS)
             if (total + seconds > MAX_TOTAL) break
             total += seconds
-            scenes.add(Scene(action, place, line, seconds))
+            val effect = o.optString("effect").lowercase().trim().let { if (it in EFFECTS) it else "" }
+            scenes.add(Scene(action, place, line, seconds, o.optString("pop").trim().take(MAX_POP), effect, o.optBoolean("close")))
         }
         if (scenes.isEmpty()) return null
         val title = root.optString("title").trim().ifEmpty { "My Short" }.take(60)
@@ -93,6 +106,24 @@ object StoryLogic {
         }
         val who = if (character == "baby") "Baby" else "Chhotu"
         val doing = activityFor(lower)?.takeIf { it in actionsFor(character) } ?: "dance"
+        if (doing == "feast") {
+            // Khane wali reel: bina bole, close-up, chamak, Yum! aur dil
+            val spot = PLACES.firstOrNull { it in lower } ?: "sweet"
+            val reel = listOf(
+                Scene("feast", spot, "", 3.0, effect = "sparkles"),
+                Scene("feast", spot, "", 3.0, close = true),
+                Scene("feast", spot, "", 3.0, pop = "Yum!", effect = "hearts", close = true),
+                Scene("happy", spot, "", 3.0, pop = "Yummy!", effect = "hearts"),
+                Scene("feast", spot, "", 3.0, effect = "stars", close = true)
+            )
+            val fit = ArrayList<Scene>()
+            var used = 0.0
+            while (used + 3.0 <= seconds.coerceAtLeast(6)) {
+                fit.add(reel[fit.size % reel.size])
+                used += 3.0
+            }
+            return Story(idea.trim().replaceFirstChar { it.uppercase() }.take(40).ifEmpty { "Yummy" }, "#baby #yummy #shorts", character, fit)
+        }
         val beats = listOf(
             Scene("happy", place, "Hello friends! I am $who!", 3.0),
             Scene(doing, place, idea.trim().replaceFirstChar { it.uppercase() }.take(MAX_LINE), 4.0),
