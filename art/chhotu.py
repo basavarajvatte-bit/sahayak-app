@@ -665,6 +665,61 @@ shade_parts.append(bridge)
 glint = ball("glint", shine_m, (0, -0.04, 0), (0.07, 0.01, 0.07), shades, 20)
 SHADE_LOCAL = Matrix.Translation((0, float(eye_c[1][1]) - R_EYE * 1.1, float(eye_c[1][2]) + 0.02))
 
+# ---------- props for activities: toy car, apple, swing ----------
+def box(name, material, loc, scale, parent, bevel=0.25):
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    o = bpy.context.object
+    o.name = name
+    o.parent = parent
+    o.location = loc
+    o.scale = scale
+    b = o.modifiers.new("b", 'BEVEL'); b.width = bevel; b.segments = 6; b.limit_method = 'NONE'
+    o.data.materials.append(material)
+    bpy.ops.object.shade_smooth()
+    return o
+
+car_red = mat("car_red", srgb("E8323C"), 0.25, coat=1.0)
+car_black = mat("car_black", srgb("1A1A1E"), 0.6)
+car_light = mat("car_light", srgb("FFE680"), 0.2, emission=3.0)
+apple_m = mat("apple", srgb("D9232E"), 0.25, sss=0.2, coat=0.8)
+leaf_m = mat("leaf", srgb("3FAF3A"), 0.5)
+wood_m = mat("wood", srgb("A0683A"), 0.6)
+rope_m = mat("rope", srgb("D9C08A"), 0.8)
+
+car_parts = [
+    box("car_body", car_red, (0, -0.15, -1.55), (2.3, 2.0, 0.75), root, 0.3),
+    box("car_hood", car_red, (0, -1.15, -1.35), (1.9, 0.6, 0.45), root, 0.2),
+    ball("lamp", car_light, (-0.6, -1.47, -1.3), (0.14, 0.05, 0.12), root, 20),
+    ball("lamp", car_light, (0.6, -1.47, -1.3), (0.14, 0.05, 0.12), root, 20),
+]
+for x in (-1.15, 1.15):
+    for y in (-0.9, 0.6):
+        bpy.ops.mesh.primitive_cylinder_add(radius=0.36, depth=0.28, location=(x, y, -1.88), rotation=(0, math.pi / 2, 0))
+        wheel = bpy.context.object
+        wheel.parent = root
+        wheel.data.materials.append(car_black)
+        bpy.ops.object.shade_smooth()
+        car_parts.append(wheel)
+bpy.ops.mesh.primitive_torus_add(major_radius=0.32, minor_radius=0.05, location=(0, -1.0, -0.62), rotation=(math.radians(70), 0, 0))
+steer = bpy.context.object
+steer.parent = root
+steer.data.materials.append(car_black)
+bpy.ops.object.shade_smooth()
+car_parts.append(steer)
+
+food = empty("food", hands[1], (0, -0.18, 0.2))
+apple = ball("apple", apple_m, (0, 0, 0), 0.22, food, 32)
+leaf = ball("leaf", leaf_m, (0.06, 0, 0.24), (0.09, 0.03, 0.05), food, 16)
+food_parts = [apple, leaf]
+
+swing_parts = [box("seat", wood_m, (0, -0.25, -2.2), (2.3, 0.75, 0.12), root, 0.04)]
+for x in (-1.0, 1.0):
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.035, depth=7.2, location=(x, -0.25, 1.4))
+    rope = bpy.context.object
+    rope.parent = root
+    rope.data.materials.append(rope_m)
+    swing_parts.append(rope)
+
 # ---------- camera and light ----------
 target = Vector((0, 0, -0.2))
 cam_data = bpy.data.cameras.new("cam")
@@ -822,6 +877,38 @@ def clip(name, t):
         p["ra"] = wave(right, (1.72 + wav, -0.55, 0.95), mix)
         p["la"] = wave(left, (-1.72 + wav, -0.55, 0.95), mix)
         b = blink(t, 0.7)
+    elif name == 'hop':
+        hop = abs(math.sin(w * 3))
+        land = 1 - hop
+        p.update(mw=0.3, mc=0.1, hu=0.03, hl=0.16, smile=1.0, llid=-24, ulid=32, bi=0.06, bo=0.08, tongue=0.5, pupil=0.32,
+                 z=hop * 0.34, sq=1 - land ** 4 * 0.12, x=math.sin(w) * 0.3, hx=-0.06 + land * 0.08, hz=math.sin(w) * 0.15, spread=0.3)
+        p["la"] = (-1.45, -0.3, -0.5 + hop * 0.9)
+        p["ra"] = (1.45, -0.3, -0.5 + hop * 0.9)
+    elif name == 'eat':
+        reach = float(smooth01((t - 0.12) / 0.16)) * (1 - float(smooth01((t - 0.48) / 0.14)))
+        chew = (t > 0.42) * abs(math.sin(w * 7))
+        bite = float(np.exp(-(((t - 0.36) / 0.05) ** 2)))
+        p.update(mw=lerp(0.22, 0.18, chew), mc=0.08, hu=0.02 + bite * 0.08, hl=0.02 + bite * 0.16 + chew * 0.05, smile=0.7,
+                 puff=chew * 0.6, llid=-30 + chew * 10, ulid=lerp(40, 26, chew), bi=0.04, bo=0.06, pupil=0.3,
+                 hx=-0.05 + reach * 0.06, hz=0.05, gz=-0.05 + reach * 0.12, food=True)
+        p["ra"] = wave((1.3, -0.65, -0.45), (0.3, -1.45, 0.0), reach)
+        p["la"] = (-1.15, -0.4, -0.85)
+        b = blink(t, 0.8)
+    elif name == 'drive':
+        bump = abs(math.sin(w * 4))
+        turn = math.sin(w) * 0.25
+        p.update(mw=0.26, mc=0.09, hu=0.03 + bump * 0.03, hl=0.1 + bump * 0.05, smile=0.9, llid=-28, ulid=36, bo=0.08, bi=0.04,
+                 pupil=0.3, z=0.25 + bump * 0.05, hz=turn * 0.6, hy=-turn * 0.2, gx=turn * 0.3, spread=0.2, car=True)
+        p["la"] = (-0.32 + turn * 0.1, -1.0, -0.55 - turn * 0.12)
+        p["ra"] = (0.32 + turn * 0.1, -1.0, -0.55 + turn * 0.12)
+        b = blink(t, 0.6)
+    elif name == 'swing':
+        a = 0.22 * math.sin(w)
+        p.update(mw=0.28, mc=0.1, hu=0.03, hl=0.12 + abs(math.sin(w)) * 0.05, smile=1.0, llid=-24, ulid=34, bi=0.05, bo=0.08,
+                 pupil=0.3, tilt=a, x=-5 * math.sin(a), z=5 * (1 - math.cos(a)), hz=-a * 0.5, swing=True)
+        p["la"] = (-1.0, -0.3, -0.25)
+        p["ra"] = (1.0, -0.3, -0.25)
+        b = blink(t, 0.7)
     elif name in ('swagidle', 'swagtalk'):
         beat = math.sin(w * 2)
         if name == 'swagtalk':
@@ -887,6 +974,9 @@ def apply(p, name):
     for s, tooth in teeth:
         tooth.location = tuple(center + V * (p["my"] + p["hu"] - 0.05) + U * s * 0.058 + inside * 0.08)
         tooth.hide_render = p["hu"] < 0.025 or opening < 0.08
+    for group, flag in ((car_parts, "car"), (food_parts, "food"), (swing_parts, "swing")):
+        for part in group:
+            part.hide_render = not p.get(flag, False)
     for part in mail_parts:
         part.hide_render = not p["mail"]
     mail.location = (p["ra"][0] - 0.08, p["ra"][1] - 0.32, p["ra"][2] + 0.42)
@@ -933,10 +1023,10 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('idle', 0.2), ('happy', 0.25), ('talk', 0.05), ('dance', 0.27)]
+    wanted = [('hop', 0.17), ('eat', 0.3), ('drive', 0.2), ('swing', 0.25)]
     for i, (name, t) in enumerate(wanted):
         render(f"{OUT}/{i}_{name}.png", name, t)
 else:
-    N = 54 if MODE in ('swag', 'dance') else 36
+    N = 54 if MODE in ('swag', 'dance', 'swing') else 36
     for i in range(N):
         render(f"{OUT}/{MODE}_{i:02d}.png", MODE, i / N)
