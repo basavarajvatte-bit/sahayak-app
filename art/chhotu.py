@@ -743,8 +743,9 @@ guitar_wood = mat("guitar_wood", srgb("D9822B"), 0.3, coat=0.9)
 guitar_dark = mat("guitar_dark", srgb("5A3214"), 0.4, coat=0.5)
 string_m = mat("string", srgb("F2F2F2"), 0.2)
 hole_m = mat("hole", srgb("1A0E06"), 0.8)
-guitar = empty("guitar", root, (0.3, -1.05, -0.8))
-guitar.rotation_euler = (0, 0.64, 0)
+guitar = empty("guitar", root, (0.38, -1.15, -1.0))
+guitar.rotation_euler = (0, 0.45, 0)
+guitar.scale = (1.5, 1.5, 1.5)
 guitar_parts = [
     ball("g_body", guitar_wood, (0, 0, 0), (0.4, 0.12, 0.33), guitar, 32),
     ball("g_top", guitar_wood, (-0.36, 0, 0), (0.29, 0.11, 0.25), guitar, 32),
@@ -962,8 +963,8 @@ def clip(name, t):
         p.update(mw=0.28, mc=0.1, hu=0.03 + beat * 0.03, hl=0.12 + beat * 0.07, smile=1.0, llid=-24, ulid=30, bi=0.06, bo=0.1,
                  pupil=0.3, z=beat * 0.08, sq=1 - (1 - beat) * 0.03, x=sway * 0.15, tilt=-sway * 0.1, turn=sway * 0.15,
                  hz=-sway * 0.2, hx=-0.04 + beat * 0.06, hy=sway * 0.1, spread=0.3, guitar=True)
-        p["ra"] = (0.28, -1.25, -0.72 + strum * 0.12)
-        p["la"] = (-0.5, -1.15, -0.22 + beat * 0.03)
+        p["ra"] = (0.42, -1.45, -0.92 + strum * 0.14)
+        p["la"] = (-0.98, -1.3, -0.36 + beat * 0.03)
         b = blink(t, 0.7)
     elif name in ('swagidle', 'swagtalk'):
         beat = math.sin(w * 2)
