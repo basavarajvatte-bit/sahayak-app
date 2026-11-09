@@ -720,6 +720,24 @@ for x in (-1.0, 1.0):
     rope.data.materials.append(rope_m)
     swing_parts.append(rope)
 
+# high chair, bib, aam aur tapakta ras (feast)
+chair_m = mat("chair", srgb("7CCBC2"), 0.45, coat=0.3)
+tray_m = mat("tray", srgb("FFFDF7"), 0.35, coat=0.4)
+bib_m = mat("bib", srgb("FF9EBB"), 0.6, sss=0.1)
+mango_m = mat("mango", srgb("FFB21E"), 0.3, sss=0.5, coat=0.6)
+mango_skin = mat("mango_skin", srgb("8BC34A"), 0.45)
+juice_m = mat("juice", srgb("FFB21E"), 0.08, coat=1.0)
+feast_parts = [
+    box("chair_back", chair_m, (0, 0.75, -0.3), (2.3, 0.3, 2.6), root, 0.35),
+    box("chair_base", chair_m, (0, 0.1, -1.95), (2.2, 1.6, 0.9), root, 0.3),
+    box("tray", tray_m, (0, -1.05, -1.2), (3.0, 1.0, 0.16), root, 0.06),
+    ball("bib", bib_m, (0, -0.62, -0.42), (0.62, 0.2, 0.5), root, 32),
+]
+mango = empty("mango_at", root, (0, -1.2, -0.98))
+feast_parts += [ball("mango", mango_m, (0, 0, 0.04), (0.5, 0.36, 0.16), mango, 32),
+                ball("mango_peel", mango_skin, (0, 0, -0.03), (0.53, 0.38, 0.13), mango, 32)]
+drips = [ball("drip", juice_m, (x, -1.12, z), (0.045, 0.04, 0.065), head, 16) for x, z in ((-0.12, -0.55), (0.1, -0.6), (0.02, -0.68))]
+
 # ---------- camera and light ----------
 target = Vector((0, 0, -0.2))
 cam_data = bpy.data.cameras.new("cam")
@@ -909,6 +927,18 @@ def clip(name, t):
         p["la"] = (-1.0, -0.3, -0.25)
         p["ra"] = (1.0, -0.3, -0.25)
         b = blink(t, 0.7)
+    elif name == 'feast':
+        # aam uthao, khao, aankhein band karke maze se chabao
+        lift = float(smooth01((t - 0.15) / 0.15)) * (1 - float(smooth01((t - 0.5) / 0.15)))
+        chew = (t > 0.45) * abs(math.sin(w * 7))
+        bite = float(np.exp(-(((t - 0.36) / 0.05) ** 2)))
+        joy = float(smooth01((t - 0.42) / 0.1))
+        p.update(mw=0.24, mc=0.1 + joy * 0.04, hu=0.02 + bite * 0.1 + chew * 0.02, hl=0.03 + bite * 0.17 + chew * 0.06, smile=0.6 + joy * 0.4,
+                 puff=chew * 0.5, ulid=lerp(40, -4, joy), llid=lerp(-40, -16, joy), bi=0.08 + joy * 0.06, bo=0.04,
+                 pupil=0.3, gz=-0.12 * (1 - joy), hx=0.08 - lift * 0.1, hz=math.sin(w) * 0.06, z=-0.25, feast=True, drip=joy)
+        p["la"] = wave((-0.55, -1.05, -0.8), (-0.32, -1.3, -0.15), lift)
+        p["ra"] = wave((0.55, -1.05, -0.8), (0.32, -1.3, -0.15), lift)
+        p["mango"] = wave((0, -1.2, -0.98), (0, -1.45, -0.12), lift)
     elif name in ('swagidle', 'swagtalk'):
         beat = math.sin(w * 2)
         if name == 'swagtalk':
@@ -974,7 +1004,11 @@ def apply(p, name):
     for s, tooth in teeth:
         tooth.location = tuple(center + V * (p["my"] + p["hu"] - 0.05) + U * s * 0.058 + inside * 0.08)
         tooth.hide_render = p["hu"] < 0.025 or opening < 0.08
-    for group, flag in ((car_parts, "car"), (food_parts, "food"), (swing_parts, "swing")):
+    mango.location = p.get("mango", (0, -1.2, -0.98))
+    for k, d in enumerate(drips):
+        d.hide_render = not p.get("feast", False) or p.get("drip", 0) < 0.3 + k * 0.2
+        d.location.z = (-0.55, -0.6, -0.68)[k] - p.get("drip", 0) * 0.08 * (k + 1)
+    for group, flag in ((car_parts, "car"), (food_parts, "food"), (swing_parts, "swing"), (feast_parts, "feast")):
         for part in group:
             part.hide_render = not p.get(flag, False)
     for part in mail_parts:
@@ -1023,10 +1057,10 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('hop', 0.17), ('eat', 0.3), ('drive', 0.2), ('swing', 0.25)]
+    wanted = [('feast', 0.1), ('feast', 0.36), ('feast', 0.7), ('feast', 0.9)]
     for i, (name, t) in enumerate(wanted):
         render(f"{OUT}/{i}_{name}.png", name, t)
 else:
-    N = 54 if MODE in ('swag', 'dance', 'swing') else 36
+    N = 54 if MODE in ('swag', 'dance', 'swing', 'feast') else 36
     for i in range(N):
         render(f"{OUT}/{MODE}_{i:02d}.png", MODE, i / N)
