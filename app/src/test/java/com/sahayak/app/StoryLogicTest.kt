@@ -36,6 +36,14 @@ class StoryLogicTest {
         assertNull(StoryLogic.parse("""{"scenes":[]}""", "baby"))
     }
 
+    @Test fun offlineStoryFitsLength() {
+        val story = StoryLogic.offline("baby dances in the jungle", "baby", 15)
+        assertEquals("jungle", story.scenes[0].place)
+        assertTrue(story.scenes.sumOf { it.seconds } <= 15.0)
+        assertEquals("Bye bye! See you soon!", story.scenes.last().line)
+        assertTrue(StoryLogic.offline("x", "chhotu", 60).scenes.size >= 8)
+    }
+
     @Test fun makesSafeFileName() {
         assertEquals("Jungle_Fun_1109_1400.mp4", StoryLogic.fileName("Jungle  Fun!", "1109_1400"))
     }

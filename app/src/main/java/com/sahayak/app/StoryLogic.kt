@@ -51,6 +51,43 @@ object StoryLogic {
         return Story(title, caption, character, scenes)
     }
 
+    /** Gemini na chale to bhi video bane: idea se saadi kahani. */
+    fun offline(idea: String, character: String, seconds: Int): Story {
+        val lower = idea.lowercase()
+        val place = PLACES.firstOrNull { it in lower } ?: when {
+            "sea" in lower || "sand" in lower -> "beach"
+            "moon" in lower || "star" in lower || "sleep" in lower -> "night"
+            "song" in lower || "sing" in lower || "show" in lower -> "stage"
+            "home" in lower || "house" in lower -> "room"
+            "rocket" in lower || "planet" in lower -> "space"
+            "ice" in lower || "winter" in lower -> "snow"
+            else -> "park"
+        }
+        val who = if (character == "baby") "Baby" else "Chhotu"
+        val beats = listOf(
+            Scene("happy", place, "Hello friends! I am $who!", 3.0),
+            Scene("excited", place, "Today is a fun day in the $place!", 3.0),
+            Scene("dance", place, "Let us dance together!", 4.0),
+            Scene("surprised", place, "Wow! Did you see that?", 3.0),
+            Scene("dance", place, "Dance, dance, dance!", 4.0),
+            Scene("thinking", place, "What shall we do next?", 3.0),
+            Scene("happy", place, "Clap your hands with me!", 3.0),
+            Scene("dance", place, "", 4.0),
+            Scene("excited", place, "That was so much fun!", 3.0),
+            Scene("happy", place, "Bye bye! See you soon!", 3.0)
+        )
+        val picked = ArrayList<Scene>()
+        var total = 0.0
+        for (scene in beats.dropLast(1)) {
+            if (total + scene.seconds + beats.last().seconds > seconds) break
+            picked.add(scene)
+            total += scene.seconds
+        }
+        picked.add(beats.last())
+        val title = idea.trim().replaceFirstChar { it.uppercase() }.take(40).ifEmpty { "Fun Time" }
+        return Story(title, "#kids #cartoon #shorts", character, picked)
+    }
+
     /** File naam: sirf akshar aur ank. */
     fun fileName(title: String, stamp: String): String {
         val clean = title.replace(Regex("[^A-Za-z0-9 ]"), "").trim().replace(Regex("\\s+"), "_").take(40).ifEmpty { "Short" }

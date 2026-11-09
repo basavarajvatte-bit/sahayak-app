@@ -124,11 +124,17 @@ class VideoActivity : Activity() {
                     RunLog.add(app, "story try $attempt failed: " + planner.lastError + " " + answer?.take(200))
                     runOnUiThread { status.text = "Writing the story again" }
                 }
-                if (built == null) throw IllegalStateException("Could not write the story. " + planner.lastError.ifEmpty { "Try again" })
-                runOnUiThread { showScript(built) }
-                val uri = VideoMaker(app).make(built) { line -> runOnUiThread { status.text = line } }
-                RunLog.add(app, "idea video made " + built.title)
-                built to uri
+                if (built == null) {
+                    RunLog.add(app, "story offline: " + planner.lastError)
+                    built = StoryLogic.offline(words, character, seconds)
+                    val why = planner.lastError
+                    runOnUiThread { status.text = "Gemini did not answer ($why). Using a simple story." }
+                }
+                val story = built!!
+                runOnUiThread { showScript(story) }
+                val uri = VideoMaker(app).make(story) { line -> runOnUiThread { status.text = line } }
+                RunLog.add(app, "idea video made " + story.title)
+                story to uri
             } catch (e: Exception) {
                 RunLog.add(app, "idea video failed " + e.message)
                 runOnUiThread { status.text = "Video not made: " + (e.message ?: "unknown problem") }
@@ -189,6 +195,6 @@ class VideoActivity : Activity() {
         private const val WHO_IDS = 3_000
         private const val LENGTH_IDS = 4_000
         private const val STORY_TIMEOUT_S = 90L
-        private const val STORY_TRIES = 3
+        private const val STORY_TRIES = 2
     }
 }

@@ -51,7 +51,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
         val who = if (character == "baby") "a cute original toddler character named Baby" else "Chhotu, a cute original purple furry creature with antennae"
         val text = "Character: $who\nAllowed actions: " + StoryLogic.actionsFor(character).joinToString(", ") +
             "\nAllowed places: " + StoryLogic.PLACES.joinToString(", ") + "\nTarget length: about $seconds seconds\nIdea: $idea"
-        return ask(STORY_RULES, JSONArray().put(JSONObject().put("text", text)), 0.8, STORY_TOKENS, json = true)
+        return ask(STORY_RULES, JSONArray().put(JSONObject().put("text", text)), 0.8, STORY_TOKENS, json = true, models = STORY_MODELS)
     }
 
     /** Lambe safal kaam se dobara kaam aane wala tareeka banata ya sudharta hai. */
@@ -100,7 +100,9 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
     var lastError = ""
         private set
 
-    private fun ask(system: String, parts: JSONArray, temperature: Double, maxTokens: Int, json: Boolean = false): String? {
+    private fun ask(
+        system: String, parts: JSONArray, temperature: Double, maxTokens: Int, json: Boolean = false, models: List<String> = MODELS
+    ): String? {
         val config = JSONObject().put("temperature", temperature).put("maxOutputTokens", maxTokens)
         if (json) config.put("responseMimeType", "application/json")
         val body = JSONObject()
@@ -109,7 +111,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
             .put("generationConfig", config)
             .toString().toRequestBody("application/json".toMediaType())
         lastError = ""
-        for (model in MODELS) {
+        for (model in models) {
             val request = Request.Builder()
                 .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
                 .header("x-goog-api-key", apiKey).post(body).build()
@@ -134,8 +136,8 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
                     }
                 }
             } catch (e: IOException) {
-                lastError = "No internet"
-                return null
+                // Ek model atka to agla try karo
+                lastError = if (e is java.net.UnknownHostException) "No internet" else "Gemini took too long"
             }
         }
         return null
@@ -143,7 +145,9 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
 
     companion object {
         private const val TIMEOUT_SECONDS = 6L
-        private const val STORY_TOKENS = 8_192
+        private const val STORY_TOKENS = 4_096
+        // Kahani ke liye pehle tez model, jo sochne mein samay nahi lagata
+        private val STORY_MODELS = listOf("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-flash-latest")
         private val MODELS = listOf("gemini-flash-latest", "gemini-2.5-flash")
         private const val RECOVER_RULES = """An AI agent operating an Android phone got stuck on one step of a known task. Look at the screen and reply in at most 6 short lines:
 WHY: what is blocking it.
