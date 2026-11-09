@@ -707,9 +707,9 @@ steer.data.materials.append(car_black)
 bpy.ops.object.shade_smooth()
 car_parts.append(steer)
 
-food = empty("food", hands[1], (0, -0.18, 0.2))
-apple = ball("apple", apple_m, (0, 0, 0), 0.22, food, 32)
-leaf = ball("leaf", leaf_m, (0.06, 0, 0.24), (0.09, 0.03, 0.05), food, 16)
+food = empty("food", hands[1], (-0.05, -0.36, 0.3))
+apple = ball("apple", apple_m, (0, 0, 0), 0.28, food, 32)
+leaf = ball("leaf", leaf_m, (0.08, 0, 0.3), (0.11, 0.035, 0.06), food, 16)
 food_parts = [apple, leaf]
 
 swing_parts = [box("seat", wood_m, (0, -0.25, -2.2), (2.3, 0.75, 0.12), root, 0.04)]
