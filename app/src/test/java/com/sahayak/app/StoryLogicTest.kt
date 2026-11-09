@@ -70,6 +70,12 @@ class StoryLogicTest {
         assertTrue(music.any { kotlin.math.abs(it.toInt()) > 1_000 })
     }
 
+    @Test fun guitarFromScript() {
+        val story = StoryLogic.fromScript("guitar: La la la! {stars}\nI love my guitar", "baby", "stage", "Guitar")!!
+        assertEquals(listOf("guitar", "guitar"), story.scenes.map { it.action })
+        assertEquals("stars", story.scenes[0].effect)
+    }
+
     @Test fun makesSafeFileName() {
         assertEquals("Jungle_Fun_1109_1400.mp4", StoryLogic.fileName("Jungle  Fun!", "1109_1400"))
     }

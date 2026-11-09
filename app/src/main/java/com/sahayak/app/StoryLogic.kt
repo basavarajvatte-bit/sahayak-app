@@ -14,7 +14,7 @@ data class Story(val title: String, val caption: String, val character: String, 
 object StoryLogic {
     val ACTIONS = listOf("idle", "happy", "excited", "sad", "surprised", "sleepy", "grumpy", "thinking", "dance")
     val SWAG = listOf("swag", "swagidle")
-    val ACTIVITIES = listOf("hop", "eat", "drive", "swing", "feast")
+    val ACTIVITIES = listOf("hop", "eat", "drive", "swing", "feast", "guitar")
     val EFFECTS = listOf("hearts", "sparkles", "stars", "bubbles")
     private const val MAX_POP = 16
     private val TAG = Regex("\\{([^}]*)\\}")
@@ -29,6 +29,7 @@ object StoryLogic {
 
     /** Idea ke shabdon se activity: car se drive, khana se eat. */
     private fun activityFor(lower: String): String? = when {
+        listOf("guitar", "sing", "song", "music").any { it in lower } -> "guitar"
         listOf("car", "drive", "driving").any { it in lower } -> "drive"
         listOf("mango", "high chair", "feed", "eat", "food", "lunch", "khana", "yum").any { it in lower } -> "feast"
         "apple" in lower -> "eat"

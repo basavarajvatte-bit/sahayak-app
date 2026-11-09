@@ -73,7 +73,7 @@ class VideoActivity : Activity() {
         }
         page.addView(idea)
         page.addView(text("My script (optional)", 16f, true))
-        page.addView(text("Write your own story, one scene per line. Start with an action and a colon. Leave empty and Sahayak writes the story.\nBaby actions: feast, dance, hop, eat, drive, swing, happy, excited, sad, surprised, sleepy, grumpy, thinking\nAdd in curly brackets: {Yum!} big word, {hearts} {sparkles} {stars} {bubbles} effects, {close} close-up", 13f))
+        page.addView(text("Write your own story, one scene per line. Start with an action and a colon. Leave empty and Sahayak writes the story.\nBaby actions: feast, guitar, dance, hop, eat, drive, swing, happy, excited, sad, surprised, sleepy, grumpy, thinking\nAdd in curly brackets: {Yum!} big word, {hearts} {sparkles} {stars} {bubbles} effects, {close} close-up", 13f))
         myScript = EditText(this).apply {
             hint = "feast: {sparkles}\nfeast: Mmm mango! {close}\nfeast: {Yum!} {hearts}\ndance: Happy baby!"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
