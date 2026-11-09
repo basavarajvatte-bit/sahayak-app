@@ -235,12 +235,20 @@ class YouTubeActivity : Activity() {
     }
 
     private fun pickFiles() {
-        startActivityForResult(
-            Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*")
-                .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                .addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION),
-            REQUEST_FILES
-        )
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            .addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivityForResult(pick, REQUEST_FILES)
+        } catch (e: android.content.ActivityNotFoundException) {
+            tell("This phone cannot open the file picker. Use Add a folder of videos.")
+        }
+    }
+
+    /** Message hamesha dikhe, chahe page neeche scroll ho. */
+    private fun tell(words: String) {
+        status.text = words
+        android.widget.Toast.makeText(this, words, android.widget.Toast.LENGTH_LONG).show()
     }
 
     private fun pickFolder() {
@@ -273,7 +281,10 @@ class YouTubeActivity : Activity() {
                 kept = false
             }
         }
-        status.text = added.toString() + " videos added." + if (kept) "" else " Too many single videos. Use Add a folder of videos."
+        val old = uris.size - added
+        tell(added.toString() + " videos added." +
+            (if (old > 0 && kept) " $old were already in the list or uploaded before." else "") +
+            (if (kept) "" else " Too many single videos. Use Add a folder of videos."))
     }
 
     private fun addFolder(tree: Uri) {
@@ -292,13 +303,20 @@ class YouTubeActivity : Activity() {
             }
         }
         val added = videos.sortedBy { it.name.lowercase() }.count { queue.add(this, it.uri, it.name, it.size, true) }
-        status.text = added.toString() + " videos added from the folder."
+        val old = videos.size - added
+        tell(
+            if (videos.isEmpty()) "No videos found in this folder."
+            else added.toString() + " videos added from the folder." + (if (old > 0) " $old were already in the list or uploaded before." else "")
+        )
     }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK || data == null) return
+        if (resultCode != RESULT_OK || data == null) {
+            tell("No video chosen.")
+            return
+        }
         if (requestCode == REQUEST_FILES) addFiles(data)
         if (requestCode == REQUEST_FOLDER) data.data?.let { addFolder(it) }
         queue.rearm(this)
