@@ -311,8 +311,16 @@ abstract class UploadQueue(
             }
             prefs(context).edit().putInt("busy_waits", 0).apply()
             // PIN laga ho to screen jalane ka fayda nahi
-            if (!(keys.isDeviceSecure && keys.isKeyguardLocked)) wake.acquire(WAKE_MS)
+            // PIN se band phone par screen jalane ka fayda nahi; Smart Lock wala phone khul sakta hai
+            val wasLocked = keys.isKeyguardLocked
+            if (!keys.isDeviceLocked) wake.acquire(WAKE_MS)
             uploadNext(context, scheduled)
+            // Humne phone khola tha to kaam ke baad wapas lock
+            if (wasLocked && scheduled) PhoneControl.instance?.let {
+                it.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+                Thread.sleep(UNLOCK_WAIT_MS)
+                it.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+            }
         } catch (e: RuntimeException) {
             RunLog.add(context, "short crashed " + e.message)
             if (scheduled) armNextSlot(context)
@@ -338,9 +346,10 @@ abstract class UploadQueue(
         control?.swipeUnlock()
         Thread.sleep(UNLOCK_WAIT_MS)
         val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        RunLog.add(context, label + " unlock: locked=" + locked)
         if (control == null || locked) {
             if (!prefs(context).getBoolean("told_locked", false)) {
-                WorkList.notifyText(context, NOTE_ID, (if (locked) "Unlock the phone" else "Turn on phone control") + " to upload: " + item.optString("name"))
+                WorkList.notifyText(context, NOTE_ID, (if (locked) "Phone is locked with PIN. Turn on Smart Lock or unlock" else "Turn on phone control") + " to upload: " + item.optString("name"))
                 prefs(context).edit().putBoolean("told_locked", true).apply()
             }
             if (scheduled) arm(context, System.currentTimeMillis() + LOCKED_RETRY_MS)

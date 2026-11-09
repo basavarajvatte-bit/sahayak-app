@@ -552,7 +552,11 @@ class PhoneControl : AccessibilityService() {
     /** Lock screen sirf swipe wali ho to khol do. PIN ya pattern phone ke maalik ka kaam hai. */
     fun swipeUnlock() {
         val keys = getSystemService(KeyguardManager::class.java)
-        if (!keys.isKeyguardLocked || keys.isDeviceSecure) return
+        // isDeviceLocked false = swipe lock ya Smart Lock ne phone trusted rakha hai
+        if (!keys.isKeyguardLocked || keys.isDeviceLocked) return
+        startActivity(Intent(this, UnlockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        Thread.sleep(UNLOCK_SETTLE_MS)
+        if (!keys.isKeyguardLocked) return
         val metrics = resources.displayMetrics
         val x = metrics.widthPixels / 2f
         gesture(x, metrics.heightPixels * 0.85f, x, metrics.heightPixels * 0.2f, 300)
@@ -1580,6 +1584,7 @@ class PhoneControl : AccessibilityService() {
         private const val SCREEN_WAIT_MS = 6_000L
         private const val YOUTUBE = "com.google.android.youtube"
         private const val INSTAGRAM = "com.instagram.android"
+        private const val UNLOCK_SETTLE_MS = 1_200L
         private const val REEL_ROUNDS = 200
         private val REEL_POPUP_WORDS = listOf("ok", "got it", "not now", "continue", "allow", "skip", "dismiss", "while using the app")
         private val OPEN_STEP = Regex("^open app (.+)$")
