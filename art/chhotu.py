@@ -738,6 +738,22 @@ feast_parts += [ball("mango", mango_m, (0, 0, 0.05), (0.62, 0.42, 0.2), mango, 3
                 ball("mango_peel", mango_skin, (0, 0, -0.06), (0.6, 0.4, 0.09), mango, 32)]
 drips = [ball("drip", juice_m, (x, -1.12, z), (0.045, 0.04, 0.065), head, 16) for x, z in ((-0.12, -0.55), (0.1, -0.6), (0.02, -0.68))]
 
+# guitar: haath mein, naachte hue bajana
+guitar_wood = mat("guitar_wood", srgb("D9822B"), 0.3, coat=0.9)
+guitar_dark = mat("guitar_dark", srgb("5A3214"), 0.4, coat=0.5)
+string_m = mat("string", srgb("F2F2F2"), 0.2)
+hole_m = mat("hole", srgb("1A0E06"), 0.8)
+guitar = empty("guitar", root, (0.3, -1.05, -0.8))
+guitar.rotation_euler = (0, 0.64, 0)
+guitar_parts = [
+    ball("g_body", guitar_wood, (0, 0, 0), (0.4, 0.12, 0.33), guitar, 32),
+    ball("g_top", guitar_wood, (-0.36, 0, 0), (0.29, 0.11, 0.25), guitar, 32),
+    ball("g_hole", hole_m, (-0.2, -0.11, 0), (0.09, 0.02, 0.09), guitar, 20),
+    box("g_neck", guitar_dark, (-0.95, 0, 0), (0.8, 0.07, 0.1), guitar, 0.02),
+    box("g_head", guitar_dark, (-1.42, 0, 0), (0.18, 0.08, 0.15), guitar, 0.03),
+    box("g_strings", string_m, (-0.75, -0.12, 0), (1.3, 0.006, 0.06), guitar, 0.0),
+]
+
 # ---------- camera and light ----------
 target = Vector((0, 0, -0.2))
 cam_data = bpy.data.cameras.new("cam")
@@ -939,6 +955,16 @@ def clip(name, t):
         p["la"] = wave((-0.55, -1.05, -0.8), (-0.32, -1.3, -0.15), lift)
         p["ra"] = wave((0.55, -1.05, -0.8), (0.32, -1.3, -0.15), lift)
         p["mango"] = wave((0, -1.2, -0.98), (0, -1.45, -0.12), lift)
+    elif name == 'guitar':
+        beat = abs(math.sin(w * 4))
+        sway = math.sin(w * 2)
+        strum = math.sin(w * 8)
+        p.update(mw=0.28, mc=0.1, hu=0.03 + beat * 0.03, hl=0.12 + beat * 0.07, smile=1.0, llid=-24, ulid=30, bi=0.06, bo=0.1,
+                 pupil=0.3, z=beat * 0.08, sq=1 - (1 - beat) * 0.03, x=sway * 0.15, tilt=-sway * 0.1, turn=sway * 0.15,
+                 hz=-sway * 0.2, hx=-0.04 + beat * 0.06, hy=sway * 0.1, spread=0.3, guitar=True)
+        p["ra"] = (0.28, -1.25, -0.72 + strum * 0.12)
+        p["la"] = (-0.5, -1.15, -0.22 + beat * 0.03)
+        b = blink(t, 0.7)
     elif name in ('swagidle', 'swagtalk'):
         beat = math.sin(w * 2)
         if name == 'swagtalk':
@@ -1008,7 +1034,7 @@ def apply(p, name):
     for k, d in enumerate(drips):
         d.hide_render = not p.get("feast", False) or p.get("drip", 0) < 0.3 + k * 0.2
         d.location.z = (-0.55, -0.6, -0.68)[k] - p.get("drip", 0) * 0.08 * (k + 1)
-    for group, flag in ((car_parts, "car"), (food_parts, "food"), (swing_parts, "swing"), (feast_parts, "feast")):
+    for group, flag in ((car_parts, "car"), (food_parts, "food"), (swing_parts, "swing"), (feast_parts, "feast"), (guitar_parts, "guitar")):
         for part in group:
             part.hide_render = not p.get(flag, False)
     for part in mail_parts:
@@ -1057,10 +1083,10 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('feast', 0.1), ('feast', 0.36), ('feast', 0.7), ('feast', 0.9)]
+    wanted = [('guitar', 0.1), ('guitar', 0.3), ('guitar', 0.6)]
     for i, (name, t) in enumerate(wanted):
         render(f"{OUT}/{i}_{name}.png", name, t)
 else:
-    N = 54 if MODE in ('swag', 'dance', 'swing', 'feast') else 36
+    N = 54 if MODE in ('swag', 'dance', 'swing', 'feast', 'guitar') else 36
     for i in range(N):
         render(f"{OUT}/{MODE}_{i:02d}.png", MODE, i / N)

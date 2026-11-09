@@ -28,7 +28,7 @@ jobs:
           elif [ "$(cat art/mode.txt)" != full ]; then
             echo "clips=$(tr -d '\n' < art/mode.txt | jq -Rc 'split(",")')" >> "$GITHUB_OUTPUT"
           elif [ "$(cat art/char.txt 2>/dev/null)" = baby ]; then
-            echo 'clips=["idle","happy","excited","talk","sad","surprised","sleepy","grumpy","thinking","dance","hop","eat","drive","swing","feast"]' >> "$GITHUB_OUTPUT"
+            echo 'clips=["idle","happy","excited","talk","sad","surprised","sleepy","grumpy","thinking","dance","hop","eat","drive","swing","feast","guitar"]' >> "$GITHUB_OUTPUT"
           else
             echo 'clips=["idle","happy","excited","talk","mail","sad","surprised","sleepy","grumpy","thinking","swag","swagidle","swagtalk","dance"]' >> "$GITHUB_OUTPUT"
           fi
