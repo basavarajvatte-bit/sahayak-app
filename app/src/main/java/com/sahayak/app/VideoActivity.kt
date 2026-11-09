@@ -20,6 +20,8 @@ import android.widget.VideoView
 /** Idea likho, Sahayak animated video bana deta hai. */
 class VideoActivity : Activity() {
     private lateinit var idea: EditText
+    private lateinit var myScript: EditText
+    private lateinit var placeBox: android.widget.Spinner
     private lateinit var who: RadioGroup
     private lateinit var length: RadioGroup
     private lateinit var status: TextView
@@ -69,6 +71,20 @@ class VideoActivity : Activity() {
             minLines = 3
         }
         page.addView(idea)
+        page.addView(text("My script (optional)", 16f, true))
+        page.addView(text("Write your own story, one scene per line. Start with an action and a colon. Leave empty and Sahayak writes the story.\nBaby actions: dance, hop, eat, drive, swing, happy, excited, sad, surprised, sleepy, grumpy, thinking", 13f))
+        myScript = EditText(this).apply {
+            hint = "drive: Vroom vroom, here I go!\neat: Yummy apple!\nswing: Up and down!\ndance:"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 4
+        }
+        page.addView(myScript)
+        page.addView(text("Place", 16f, true))
+        placeBox = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@VideoActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("Auto") + StoryLogic.PLACES.map { it.replaceFirstChar(Char::uppercase) })
+        }
+        page.addView(placeBox)
         page.addView(text("Character", 16f, true))
         who = radios(listOf("Baby", "Chhotu"), WHO_IDS)
         page.addView(who)
@@ -95,15 +111,13 @@ class VideoActivity : Activity() {
     private fun make() {
         if (working) return
         val words = idea.text.toString().trim()
-        if (words.isEmpty()) {
-            status.text = "Write your idea first."
+        val own = myScript.text.toString().trim()
+        if (words.isEmpty() && own.isEmpty()) {
+            status.text = "Write your idea or your script first."
             return
         }
         val key = SecureStore(getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
-        if (key.isEmpty()) {
-            status.text = "Add your Gemini key in Sahayak first."
-            return
-        }
+        val chosenPlace = StoryLogic.PLACES.getOrNull(placeBox.selectedItemPosition - 1)
         val character = if (who.checkedRadioButtonId == WHO_IDS) "baby" else "chhotu"
         val seconds = listOf(15, 30, 60)[(length.checkedRadioButtonId - LENGTH_IDS).coerceIn(0, 2)]
         working = true
@@ -115,9 +129,13 @@ class VideoActivity : Activity() {
         val app = applicationContext
         Thread {
             val result = try {
+                val scripted = if (own.isEmpty()) null else
+                    StoryLogic.fromScript(own, character, chosenPlace ?: StoryLogic.offline(words, character, seconds).scenes[0].place, words)
                 val planner = Planner(GeminiLive.newClient(), key, STORY_TIMEOUT_S)
-                var built: Story? = null
+                var built: Story? = scripted
+                var note = ""
                 for (attempt in 1..STORY_TRIES) {
+                    if (built != null || key.isEmpty()) break
                     val answer = planner.storyboard(words, character, seconds)
                     built = answer?.let { StoryLogic.parse(it, character) }
                     if (built != null) break
@@ -127,11 +145,14 @@ class VideoActivity : Activity() {
                 if (built == null) {
                     RunLog.add(app, "story offline: " + planner.lastError)
                     built = StoryLogic.offline(words, character, seconds)
-                    val why = planner.lastError
-                    runOnUiThread { status.text = "Gemini did not answer ($why). Using a simple story." }
+                    note = "Gemini did not answer (" + planner.lastError.ifEmpty { "no key" } + "), so Sahayak used a simple story. Write My script to choose every line."
+                    runOnUiThread { status.text = note }
                 }
-                val story = built!!
-                runOnUiThread { showScript(story) }
+                val story = built!!.let { s -> if (chosenPlace == null) s else s.copy(scenes = s.scenes.map { it.copy(place = chosenPlace) }) }
+                runOnUiThread {
+                    showScript(story)
+                    if (note.isNotEmpty()) script.append("\n\n" + note)
+                }
                 val uri = VideoMaker(app).make(story) { line -> runOnUiThread { status.text = line } }
                 RunLog.add(app, "idea video made " + story.title)
                 story to uri

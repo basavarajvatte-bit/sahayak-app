@@ -44,6 +44,16 @@ class StoryLogicTest {
         assertTrue(StoryLogic.offline("x", "chhotu", 60).scenes.size >= 8)
     }
 
+    @Test fun readsMyScript() {
+        val story = StoryLogic.fromScript("drive: Vroom vroom!\n\nYummy food here\ndance:\nfly: up up", "baby", "park", "Fun day")!!
+        assertEquals(listOf("drive", "eat", "dance", "happy"), story.scenes.map { it.action })
+        assertEquals("Vroom vroom!", story.scenes[0].line)
+        assertEquals("", story.scenes[2].line)
+        assertEquals("fly: up up", story.scenes[3].line)
+        assertEquals("park", story.scenes[1].place)
+        assertNull(StoryLogic.fromScript("  \n ", "baby", "park", ""))
+    }
+
     @Test fun makesSafeFileName() {
         assertEquals("Jungle_Fun_1109_1400.mp4", StoryLogic.fileName("Jungle  Fun!", "1109_1400"))
     }
