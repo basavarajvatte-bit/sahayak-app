@@ -5,6 +5,8 @@ import numpy as np
 from mathutils import Vector, Matrix, Quaternion
 
 args = sys.argv[sys.argv.index("--") + 1:]
+# CHAR=baby: Sahayak ka doosra original character, bina fur ka chhota bachcha
+BABY = os.environ.get("CHAR", "chhotu") == "baby"
 MODE, OUT = args[0], args[1]
 os.makedirs(OUT, exist_ok=True)
 print("BLENDER", bpy.app.version_string)
@@ -114,6 +116,15 @@ brow_m = mat("brow", srgb("1C0A52"), 0.5, sss=0.2)
 tip_m = mat("tip", srgb("FFA63D"), 0.25, sss=0.4, coat=0.7, emission=0.6)
 stalk_m = mat("stalk", srgb("FFA63D"), 0.4, sss=0.4)
 tear_m = mat("tear", srgb("9AD8FF"), 0.03, coat=1.0)
+onesie_m = mat("onesie", srgb("FFC23D"), 0.55, sss=0.05)
+hair_m = mat("hair", srgb("2B1A12"), 0.45, sss=0.1, coat=0.2)
+blush_m = mat("blush", srgb("FF8FA0"), 0.6, sss=0.4)
+if BABY:
+    skin = mat("baby_skin", srgb("C98458"), 0.48, sss=0.35, coat=0.08)
+    skin_light = skin
+    nose_m = mat("baby_nose", srgb("B8724A"), 0.42, sss=0.35, coat=0.1)
+    pad_m = skin
+    brow_m = mat("baby_brow", srgb("2B1A12"), 0.5)
 put(tear_m.node_tree.nodes["Principled BSDF"], ["Transmission Weight", "Transmission"], 0.85)
 paper = mat("paper", srgb("FFFDF6"), 0.5, coat=0.15, emission=0.3)
 flap_m = mat("flap", srgb("FFE9C9"), 0.5, coat=0.1, emission=0.25)
@@ -153,8 +164,12 @@ def eye_material():
     t.links.new(root.outputs[0], plus.inputs[0]); t.links.new(ofs.outputs[0], plus.inputs[1])
     ramp = t.nodes.new("ShaderNodeValToRGB")
     cr = ramp.color_ramp
+    brown = [(0.0, "050308"), (0.27, "07050C"), (0.31, "3A1C0C"), (0.42, "9A5E2C"), (0.54, "6A3A1A"),
+             (0.68, "4A2810"), (0.77, "1A0C06"), (0.82, "F6F5FA"), (1.0, "E8E6F2")]
     stops = [(0.0, "050308"), (0.27, "07050C"), (0.31, "7A3E10"), (0.42, "F2B23A"), (0.54, "24D6B4"),
              (0.68, "0B8F86"), (0.77, "06222E"), (0.82, "F6F5FA"), (1.0, "E8E6F2")]
+    if BABY:
+        stops = brown
     cr.elements[0].position = stops[0][0]; cr.elements[0].color = (*srgb(stops[0][1]), 1)
     cr.elements[1].position = stops[-1][0]; cr.elements[1].color = (*srgb(stops[-1][1]), 1)
     for pos, col in stops[1:-1]:
@@ -220,6 +235,8 @@ def smooth01(x):
     return x * x * (3 - 2 * x)
 
 def add_fur(o, name, material, parents, kids, length, group_d=None, group_l=None, seed=1, droop=0.03, thick=0.0105):
+    if BABY:
+        return
     o.data.materials.append(material)
     slot = len(o.data.materials)
     o.modifiers.new(name, 'PARTICLE_SYSTEM')
@@ -478,6 +495,20 @@ for s in (-1, 1):
     tip = ball("antenna_tip", tip_m, pts[-1], 0.15, head)
     ant[s] = (base, sp, tip)
 
+# baby: antenna nahi, kaan, baal aur gaal par laali
+if BABY:
+    for o in bpy.data.objects:
+        if o.name.startswith("antenna"):
+            o.hide_render = True
+    for s_ in (-1, 1):
+        ear = ball("ear", skin, (s_ * 1.33, 0.05, 0.05), (0.2, 0.13, 0.27), head)
+        ball("ear_in", nose_m, (s_ * 1.4, -0.02, 0.05), (0.09, 0.06, 0.15), head)
+        bd = CHEEK[s_]
+        ball("blush", blush_m, tuple(surface(bd[None, :])[0] + bd * 0.01), (0.2, 0.06, 0.13), head, 24).rotation_euler = (0.3, 0, s_ * 0.6)
+    for i, (x, y, z, r) in enumerate([(0, -0.2, 1.14, 0.2), (-0.25, -0.1, 1.1, 0.17), (0.25, -0.1, 1.1, 0.17), (0.1, 0.15, 1.15, 0.18),
+                                       (-0.12, 0.12, 1.16, 0.16), (0, -0.48, 1.05, 0.14), (0.45, 0.05, 1.0, 0.13), (-0.45, 0.05, 1.0, 0.13)]):
+        ball("curl", hair_m, (x, y, z), r, head, 24)
+
 tears = {s: ball("tear", tear_m, (0, 0, 0), (0.075, 0.06, 0.105), head, 24) for s in (-1, 1)}
 
 # ---------- body, limbs ----------
@@ -498,7 +529,7 @@ def lathe_ellipsoid(a, b, c, nu=120, nv=90, pear=0.14):
     return np.array(verts), faces
 
 bv, bf = lathe_ellipsoid(0.80, 0.74, 0.86)
-body_o = new_mesh("body", bv, bf, root, [skin, skin_light])
+body_o = new_mesh("body", bv, bf, root, [onesie_m, onesie_m] if BABY else [skin, skin_light])
 body_o.location = (0, 0, -0.85)
 ud = bv / np.linalg.norm(bv, axis=1, keepdims=True)
 pale = np.exp(-((1 - np.clip(ud @ (np.array([0, -1, -0.15]) / np.linalg.norm([0, -1, -0.15])), -1, 1)) * 2) / (0.75 ** 2))
@@ -547,7 +578,7 @@ arms, hands = {}, {}
 for s in (-1, 1):
     a = np.array([s * 0.74, -0.05, -0.42])
     h = np.array([s * 1.2, -0.25, -1.0])
-    o = new_mesh("arm", tube_verts(a, (a + h) / 2, h, 0.25, 0.20), tube_faces(), root, [skin])
+    o = new_mesh("arm", tube_verts(a, (a + h) / 2, h, 0.25, 0.20), tube_faces(), root, [onesie_m if BABY else skin])
     add_fur(o, "arm_fur", fur_main, 2600, 24, 0.13, seed=6 + s)
     arms[s] = (o, key_object(o), a)
     hand = empty("hand", root, tuple(h))
@@ -561,7 +592,7 @@ for s in (-1, 1):
 for s in (-1, 1):
     a = np.array([s * 0.42, -0.05, -1.5])
     h = np.array([s * 0.5, -0.1, -1.92])
-    o = new_mesh("leg", tube_verts(a, (a + h) / 2, h, 0.32, 0.3), tube_faces(), root, [skin])
+    o = new_mesh("leg", tube_verts(a, (a + h) / 2, h, 0.32, 0.3), tube_faces(), root, [onesie_m if BABY else skin])
     add_fur(o, "leg_fur", fur_main, 1300, 24, 0.13, seed=11 + s)
     foot = ball("foot", skin, (s * 0.54, -0.3, -2.0), (0.40, 0.56, 0.20), root)
     add_fur(foot, "foot_fur", fur_light, 1600, 20, 0.06, seed=13 + s)
@@ -891,7 +922,7 @@ def render(path, name, t):
     bpy.ops.render.render(write_still=True)
 
 if MODE == 'preview':
-    wanted = [('dance', 0.1), ('dance', 0.27), ('dance', 0.6), ('dance', 0.75)]
+    wanted = [('idle', 0.2), ('happy', 0.25), ('talk', 0.05), ('dance', 0.27)]
     for i, (name, t) in enumerate(wanted):
         render(f"{OUT}/{i}_{name}.png", name, t)
 else:

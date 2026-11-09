@@ -27,6 +27,8 @@ jobs:
             echo 'clips=["preview"]' >> "$GITHUB_OUTPUT"
           elif [ "$(cat art/mode.txt)" != full ]; then
             echo "clips=$(tr -d '\n' < art/mode.txt | jq -Rc 'split(",")')" >> "$GITHUB_OUTPUT"
+          elif [ "$(cat art/char.txt 2>/dev/null)" = baby ]; then
+            echo 'clips=["idle","happy","excited","talk","sad","surprised","sleepy","grumpy","thinking","dance"]' >> "$GITHUB_OUTPUT"
           else
             echo 'clips=["idle","happy","excited","talk","mail","sad","surprised","sleepy","grumpy","thinking","swag","swagidle","swagtalk","dance"]' >> "$GITHUB_OUTPUT"
           fi
@@ -53,6 +55,7 @@ jobs:
           blender --version | head -1
       - name: Render
         run: |
+          export CHAR=$(cat art/char.txt 2>/dev/null || echo chhotu)
           blender -b -noaudio -P art/chhotu.py -- "${{ matrix.clip }}" "$PWD/art/out"
           ls art/out | wc -l
       - uses: actions/upload-artifact@v4
@@ -75,15 +78,16 @@ jobs:
         run: |
           sudo apt-get install -y -qq webp
           MODE=$(cat art/mode.txt)
+          CHAR=$(cat art/char.txt 2>/dev/null || echo chhotu)
           if [ "$MODE" = preview ]; then
             mkdir -p art/preview
             rm -f art/preview/*
             cp art/got/*/*.png art/preview/
           else
-            mkdir -p app/src/main/assets/chhotu
-            if [ "$MODE" = full ]; then rm -f app/src/main/assets/chhotu/*; fi
+            mkdir -p app/src/main/assets/$CHAR
+            if [ "$MODE" = full ]; then rm -f app/src/main/assets/$CHAR/*; fi
             for f in art/got/*/*.png; do
-              cwebp -quiet -q 84 -alpha_q 90 "$f" -o "app/src/main/assets/chhotu/$(basename "${f%.png}").webp"
+              cwebp -quiet -q 84 -alpha_q 90 "$f" -o "app/src/main/assets/$CHAR/$(basename "${f%.png}").webp"
             done
           fi
           rm -rf art/got
