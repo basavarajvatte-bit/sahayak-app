@@ -1,6 +1,7 @@
 package com.sahayak.app
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.sin
@@ -15,8 +16,52 @@ object Music {
     private val SCALE = intArrayOf(0, 2, 4, 7, 9, 12, 14, 16)
     private const val ROOT_HZ = 261.63
     private const val LEVEL = 6_500.0
+    private const val SOFT_BPM = 100.0
+    private const val SOFT_LEVEL = 7_500.0
+    private const val DUCK = 0.3
+    private const val VOICE_FLOOR = 300
 
     private fun hz(semi: Int) = ROOT_HZ * 2.0.pow(semi / 12.0)
+
+    /** Poem ke liye halki lori jaisi dhun ka ek beat, seconds mein. */
+    const val SOFT_BEAT = 60.0 / SOFT_BPM
+
+    /**
+     * Poem ke liye naram dhun: ghanti jaisi dhun, halka bass aur lambe chord. Dhol nahi.
+     * Dhun paas-paas ke sur par chalti hai, isliye lori jaisi lagti hai.
+     */
+    fun soft(seconds: Double, rate: Int, seed: Int): ShortArray {
+        val total = (seconds * rate).toInt()
+        val out = DoubleArray(total)
+        val rnd = java.util.Random(seed.toLong())
+        val beats = (seconds / SOFT_BEAT).toInt() + 1
+        var step = 2 + rnd.nextInt(3)
+        for (b in 0 until beats) {
+            val start = (b * SOFT_BEAT * rate).toInt()
+            val chord = CHORDS[(b / 4) % CHORDS.size]
+            if (b % 4 == 0) chord.forEach { note(out, start, (SOFT_BEAT * 4 * rate).toInt(), hz(it - 12), 0.10, 0.6, rate, 1) }
+            if (b % 2 == 0) note(out, start, (SOFT_BEAT * 1.8 * rate).toInt(), hz(chord[0] - 24), 0.38, 2.5, rate, 2)
+            // bar ki pehli beat par chord ka sur, baaki par ek kadam upar ya neeche
+            val pitch = if (b % 4 == 0) chord[b / 4 % 3] + 12 else {
+                step = (step + rnd.nextInt(3) - 1).coerceIn(0, SCALE.size - 1)
+                SCALE[step] + 12
+            }
+            note(out, start, (SOFT_BEAT * 1.6 * rate).toInt(), hz(pitch), 0.30, 3.5, rate, 2)
+            // kabhi-kabhi beech mein ek halka sur
+            if (b % 4 == 3 && rnd.nextBoolean()) {
+                note(out, start + (SOFT_BEAT / 2 * rate).toInt(), (SOFT_BEAT * rate).toInt(), hz(SCALE[(step + 1).coerceAtMost(SCALE.size - 1)] + 12), 0.18, 5.0, rate, 2)
+            }
+        }
+        return finish(out, total, rate, SOFT_LEVEL)
+    }
+
+    private fun finish(out: DoubleArray, total: Int, rate: Int, level: Double): ShortArray {
+        val fade = (rate * 0.6).toInt()
+        return ShortArray(total) { i ->
+            val edge = minOf(1.0, i.toDouble() / fade, (total - i).toDouble() / fade)
+            (out[i] * level * edge).coerceIn(-32_000.0, 32_000.0).toInt().toShort()
+        }
+    }
 
     fun make(seconds: Double, rate: Int, seed: Int): ShortArray {
         val total = (seconds * rate).toInt()
@@ -41,11 +86,7 @@ object Music {
             }
             if (b % 2 == 0) kick(out, start, rate) else clap(out, start, rate, rnd)
         }
-        val fade = (rate * 0.6).toInt()
-        return ShortArray(total) { i ->
-            val edge = minOf(1.0, i.toDouble() / fade, (total - i).toDouble() / fade)
-            (out[i] * LEVEL * edge).coerceIn(-32_000.0, 32_000.0).toInt().toShort()
-        }
+        return finish(out, total, rate, LEVEL)
     }
 
     private fun note(out: DoubleArray, start: Int, length: Int, freq: Double, volume: Double, decay: Double, rate: Int, harmonics: Int) {
@@ -80,15 +121,18 @@ object Music {
         }
     }
 
-    /** Awaaz chal rahi ho to music dheema, warna poora. */
+    /** Awaaz chal rahi ho to music dheere-dheere halka hota hai aur chup hone par wapas aata hai. Jhatka nahi lagta. */
     fun mix(voice: ShortArray, music: ShortArray?, rate: Int): ShortArray {
         if (music == null) return voice
-        val window = rate / 10
+        val hold = rate / 4
+        val down = 1.0 / (rate * 0.05)
+        val up = 1.0 / (rate * 0.35)
         var loud = 0
+        var gain = 1.0
         return ShortArray(voice.size) { i ->
-            if (voice[i].toInt() != 0) loud = window else if (loud > 0) loud--
-            val duck = if (loud > 0) 0.35 else 1.0
-            (voice[i] + music.getOrElse(i) { 0 } * duck).toInt().coerceIn(-32_000, 32_000).toShort()
+            if (abs(voice[i].toInt()) > VOICE_FLOOR) loud = hold else if (loud > 0) loud--
+            gain = if (loud > 0) maxOf(DUCK, gain - down) else minOf(1.0, gain + up)
+            (voice[i] + music.getOrElse(i) { 0 } * gain).toInt().coerceIn(-32_000, 32_000).toShort()
         }
     }
 }

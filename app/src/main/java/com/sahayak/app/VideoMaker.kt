@@ -30,6 +30,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -52,10 +53,20 @@ class VideoMaker(private val context: Context) {
         val rate = voices.firstOrNull { it != null }?.rate ?: DEFAULT_RATE
         val sceneSeconds = story.scenes.mapIndexed { i, scene ->
             val talk = voices[i]?.let { it.samples.size.toDouble() / it.rate } ?: 0.0
-            max(scene.seconds, talk + SPEECH_PAD + LEAD_IN)
+            if (story.poem) {
+                // Poem ki har line dhun ki beat par shuru ho
+                val need = max(scene.seconds, talk + POEM_PAD + LEAD_IN)
+                ceil(need / Music.SOFT_BEAT - 0.001) * Music.SOFT_BEAT
+            } else max(scene.seconds, talk + SPEECH_PAD + LEAD_IN)
         }
         val voice = mixAudio(voices, sceneSeconds, rate)
-        val audio = Music.mix(voice, if (story.music) Music.make(sceneSeconds.sum(), rate, story.title.hashCode()) else null, rate)
+        val seed = story.title.hashCode()
+        val tune = when {
+            !story.music -> null
+            story.poem -> Music.soft(sceneSeconds.sum(), rate, seed)
+            else -> Music.make(sceneSeconds.sum(), rate, seed)
+        }
+        val audio = Music.mix(voice, tune, rate)
         val stamp = SimpleDateFormat("MMdd_HHmm", Locale.ENGLISH).format(Date())
         val name = StoryLogic.fileName(story.title, stamp)
         val temp = File(context.cacheDir, "render.mp4")
@@ -83,7 +94,7 @@ class VideoMaker(private val context: Context) {
         }
         tts.language = Locale("en", "IN")
         tts.setPitch(if (story.character == "baby") BABY_PITCH else CHHOTU_PITCH)
-        tts.setSpeechRate(VOICE_RATE)
+        tts.setSpeechRate(if (story.poem) POEM_RATE else VOICE_RATE)
         val result = story.scenes.mapIndexed { i, scene ->
             if (scene.line.isBlank()) return@mapIndexed null
             val file = File(context.cacheDir, "line_$i.wav")
@@ -172,7 +183,7 @@ class VideoMaker(private val context: Context) {
     private fun background(place: String): Bitmap = backgrounds.getOrPut(place) { Backdrops.draw(place, WIDTH, HEIGHT) }
 
     private val subtitle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 54f
+        textSize = SUB_SIZE
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
     }
@@ -186,7 +197,12 @@ class VideoMaker(private val context: Context) {
     private val shadow = Paint(Paint.ANTI_ALIAS_FLAG)
     private val drawPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
-    private fun drawFrame(canvas: Canvas, story: Story, scene: Scene, frame: Int, inScene: Double, talking: Boolean) {
+    /**
+     * mouth: awaaz se chuna talk frame, ya -1. said: line ka kitna hissa bola ja chuka, 0 se 1, ya -1.
+     */
+    private fun drawFrame(
+        canvas: Canvas, story: Story, scene: Scene, frame: Int, inScene: Double, talking: Boolean, mouth: Int, said: Double
+    ) {
         canvas.drawBitmap(background(scene.place), 0f, 0f, null)
         // Props wali activity mein muh clip ke andar hi chalta hai
         val propAction = scene.action in StoryLogic.ACTIVITIES
@@ -203,13 +219,19 @@ class VideoMaker(private val context: Context) {
             canvas.drawCircle(WIDTH / 2f, top + size * 0.93f, size * 0.32f, shadow)
             canvas.restore()
         }
-        list.getOrNull(frame % max(list.size, 1))?.let { canvas.drawBitmap(it, null, RectF(left, top, left + size, top + size), drawPaint) }
+        val lip = talking && !propAction && mouth >= 0 && list.size == LipSync.OPEN.size
+        val shown = if (lip) mouth else frame % max(list.size, 1)
+        list.getOrNull(shown)?.let { canvas.drawBitmap(it, null, RectF(left, top, left + size, top + size), drawPaint) }
         Effects.draw(canvas, scene.effect, inScene, frame, WIDTH, HEIGHT)
         if (scene.pop.isNotBlank()) Effects.pop(canvas, scene.pop, inScene, WIDTH)
         else if (frame < FPS * TITLE_SECONDS) canvas.drawText(story.title, WIDTH / 2f, 120f, titlePaint)
         if (scene.line.isNotBlank() && inScene >= LEAD_IN * 0.5) {
             val lines = StoryLogic.wrap(scene.line, SUB_CHARS)
             var y = HEIGHT - 190f - (lines.size - 1) * 64f
+            if (story.poem) {
+                drawPoemLine(canvas, scene.line, lines, y, said)
+                return
+            }
             lines.forEach { text ->
                 subtitle.style = Paint.Style.STROKE
                 subtitle.strokeWidth = 10f
@@ -221,6 +243,37 @@ class VideoMaker(private val context: Context) {
                 y += 64f
             }
         }
+    }
+
+    /** Poem ki line: jo shabd bola ja raha hai woh peela aur thoda bada. */
+    private fun drawPoemLine(canvas: Canvas, line: String, lines: List<String>, top: Float, said: Double) {
+        val active = if (said < 0) -1 else PoemLogic.activeWord(PoemLogic.wordEnds(line), said)
+        var index = 0
+        var y = top
+        subtitle.textAlign = Paint.Align.LEFT
+        lines.forEach { text ->
+            val parts = text.split(" ").filter { it.isNotEmpty() }
+            subtitle.textSize = SUB_SIZE
+            var x = (WIDTH - subtitle.measureText(parts.joinToString(" "))) / 2f
+            parts.forEach { word ->
+                subtitle.textSize = SUB_SIZE
+                val width = subtitle.measureText("$word ")
+                val now = index == active
+                if (now) subtitle.textSize = SUB_SIZE * 1.12f
+                subtitle.style = Paint.Style.STROKE
+                subtitle.strokeWidth = 10f
+                subtitle.color = Color.BLACK
+                canvas.drawText(word, x, y, subtitle)
+                subtitle.style = Paint.Style.FILL
+                subtitle.color = if (now) Color.rgb(255, 221, 51) else Color.WHITE
+                canvas.drawText(word, x, y, subtitle)
+                x += width
+                index++
+            }
+            y += 64f
+        }
+        subtitle.textSize = SUB_SIZE
+        subtitle.textAlign = Paint.Align.CENTER
     }
 
     // ---------- MP4 ----------
@@ -293,12 +346,25 @@ class VideoMaker(private val context: Context) {
         var frame = 0
         story.scenes.forEachIndexed { i, scene ->
             val count = (seconds[i] * FPS).toInt()
-            val talkEnd = voices[i]?.let { LEAD_IN + it.samples.size.toDouble() / it.rate } ?: -1.0
+            val talkLen = voices[i]?.let { it.samples.size.toDouble() / it.rate } ?: 0.0
+            val talkEnd = if (voices[i] == null) -1.0 else LEAD_IN + talkLen
+            val levels = voices[i]?.let { LipSync.levels(it.samples, it.rate, FPS) }
+            var mouth = frame % LipSync.OPEN.size
             repeat(count) { k ->
                 val inScene = k.toDouble() / FPS
+                val talking = inScene in LEAD_IN..talkEnd
+                // Muh awaaz ke zor ke saath khulta aur band hota hai
+                if (talking && levels != null) {
+                    val level = levels.getOrElse(((inScene - LEAD_IN) * FPS).toInt()) { 0f }
+                    mouth = LipSync.next(mouth, frame, level)
+                } else mouth = frame % LipSync.OPEN.size
+                val said = when {
+                    talkLen <= 0.0 || inScene < LEAD_IN || inScene > talkEnd + SAID_HOLD -> -1.0
+                    else -> ((inScene - LEAD_IN) / talkLen).coerceAtMost(1.0)
+                }
                 val canvas = surface.lockHardwareCanvas()
                 try {
-                    drawFrame(canvas, story, scene, frame, inScene, inScene in LEAD_IN..talkEnd)
+                    drawFrame(canvas, story, scene, frame, inScene, talking, if (levels == null) -1 else mouth, said)
                 } finally {
                     surface.unlockCanvasAndPost(canvas)
                 }
@@ -403,6 +469,10 @@ class VideoMaker(private val context: Context) {
         private const val TTS_WAIT_S = 20L
         private const val LEAD_IN = 0.3
         private const val SPEECH_PAD = 0.6
+        private const val POEM_PAD = 0.45
+        private const val SAID_HOLD = 0.15
+        private const val POEM_RATE = 0.85f
+        private const val SUB_SIZE = 54f
         private const val SUB_CHARS = 22
         private const val BABY_PITCH = 1.75f
         private const val CHHOTU_PITCH = 1.6f
