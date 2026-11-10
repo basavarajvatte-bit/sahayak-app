@@ -8,7 +8,10 @@ data class Scene(
     val pop: String = "", val effect: String = "", val close: Boolean = false
 )
 
-data class Story(val title: String, val caption: String, val character: String, val scenes: List<Scene>, val music: Boolean = true)
+data class Story(
+    val title: String, val caption: String, val character: String, val scenes: List<Scene>, val music: Boolean = true,
+    val poem: Boolean = false
+)
 
 /** Idea se bani kahani ko jaanchna. AI galat naam de to bhi video bane. */
 object StoryLogic {
@@ -28,7 +31,7 @@ object StoryLogic {
     fun actionsFor(character: String) = if (character == "chhotu") ACTIONS + SWAG else ACTIONS + ACTIVITIES
 
     /** Idea ke shabdon se activity: car se drive, khana se eat. */
-    private fun activityFor(lower: String): String? = when {
+    fun activityFor(lower: String): String? = when {
         listOf("guitar", "sing", "song", "music").any { it in lower } -> "guitar"
         listOf("car", "drive", "driving").any { it in lower } -> "drive"
         listOf("mango", "high chair", "feed", "eat", "food", "lunch", "khana", "yum").any { it in lower } -> "feast"
@@ -37,6 +40,17 @@ object StoryLogic {
         listOf("swing", "jhoola").any { it in lower } -> "swing"
         "dance" in lower -> "dance"
         else -> null
+    }
+
+    /** Shabdon se jagah: star se night, sea se beach. Kuch na mile to park. */
+    fun placeFor(lower: String): String = PLACES.firstOrNull { it in lower } ?: when {
+        "sea" in lower || "sand" in lower -> "beach"
+        "moon" in lower || "star" in lower || "sleep" in lower -> "night"
+        "song" in lower || "sing" in lower || "show" in lower -> "stage"
+        "home" in lower || "house" in lower -> "room"
+        "rocket" in lower || "planet" in lower -> "space"
+        "ice" in lower || "winter" in lower -> "snow"
+        else -> "park"
     }
 
     /**
@@ -96,15 +110,7 @@ object StoryLogic {
     /** Gemini na chale to bhi video bane: idea se saadi kahani. */
     fun offline(idea: String, character: String, seconds: Int): Story {
         val lower = idea.lowercase()
-        val place = PLACES.firstOrNull { it in lower } ?: when {
-            "sea" in lower || "sand" in lower -> "beach"
-            "moon" in lower || "star" in lower || "sleep" in lower -> "night"
-            "song" in lower || "sing" in lower || "show" in lower -> "stage"
-            "home" in lower || "house" in lower -> "room"
-            "rocket" in lower || "planet" in lower -> "space"
-            "ice" in lower || "winter" in lower -> "snow"
-            else -> "park"
-        }
+        val place = placeFor(lower)
         val who = if (character == "baby") "Baby" else "Chhotu"
         val doing = activityFor(lower)?.takeIf { it in actionsFor(character) } ?: "dance"
         if (doing == "feast") {

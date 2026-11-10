@@ -21,6 +21,7 @@ import android.widget.VideoView
 class VideoActivity : Activity() {
     private lateinit var idea: EditText
     private lateinit var myScript: EditText
+    private lateinit var poemBox: EditText
     private lateinit var placeBox: android.widget.Spinner
     private lateinit var who: RadioGroup
     private lateinit var length: RadioGroup
@@ -72,6 +73,14 @@ class VideoActivity : Activity() {
             minLines = 3
         }
         page.addView(idea)
+        page.addView(text("Poem (optional)", 16f, true))
+        page.addView(text("Paste a poem here, one line per row. The character recites it with soft music and each word lights up as it is spoken. Or leave this empty and write \"poem about rain\" in the idea box.", 13f))
+        poemBox = EditText(this).apply {
+            hint = "Little star up in the sky,\nShining bright and oh so high."
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 4
+        }
+        page.addView(poemBox)
         page.addView(text("My script (optional)", 16f, true))
         page.addView(text("Write your own story, one scene per line. Start with an action and a colon. Leave empty and Sahayak writes the story.\nBaby actions: feast, guitar, dance, hop, eat, drive, swing, happy, excited, sad, surprised, sleepy, grumpy, thinking\nAdd in curly brackets: {Yum!} big word, {hearts} {sparkles} {stars} {bubbles} effects, {close} close-up", 13f))
         myScript = EditText(this).apply {
@@ -115,8 +124,9 @@ class VideoActivity : Activity() {
         if (working) return
         val words = idea.text.toString().trim()
         val own = myScript.text.toString().trim()
-        if (words.isEmpty() && own.isEmpty()) {
-            status.text = "Write your idea or your script first."
+        val pasted = PoemLogic.lines(poemBox.text.toString())
+        if (words.isEmpty() && own.isEmpty() && pasted.isEmpty()) {
+            status.text = "Write your idea, your poem or your script first."
             return
         }
         val key = SecureStore(getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
@@ -138,6 +148,21 @@ class VideoActivity : Activity() {
                 val planner = Planner(GeminiLive.newClient(), key, STORY_TIMEOUT_S)
                 var built: Story? = scripted
                 var note = ""
+                if (built == null && (pasted.isNotEmpty() || PoemLogic.wantsPoem(words))) {
+                    // Poem: chipkayi hui, ya Gemini ki likhi, ya Sahayak ki apni
+                    var rows = pasted
+                    val count = PoemLogic.lineCount(seconds)
+                    if (rows.isEmpty() && key.isNotEmpty()) {
+                        runOnUiThread { status.text = "Writing the poem" }
+                        rows = planner.poem(words, count)?.let { PoemLogic.lines(it).take(count) }.orEmpty()
+                        if (rows.isEmpty()) RunLog.add(app, "poem failed: " + planner.lastError)
+                    }
+                    if (rows.isEmpty()) {
+                        rows = PoemLogic.builtIn(words, count)
+                        note = "Gemini did not write a poem (" + planner.lastError.ifEmpty { "no key" } + "), so Sahayak used its own poem. Paste your poem in the Poem box to choose every line."
+                    }
+                    built = PoemLogic.fromPoem(rows, character, chosenPlace, if (pasted.isEmpty()) "" else words, seconds)
+                }
                 for (attempt in 1..STORY_TRIES) {
                     if (built != null || key.isEmpty()) break
                     val answer = planner.storyboard(words, character, seconds)
