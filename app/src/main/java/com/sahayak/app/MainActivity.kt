@@ -319,10 +319,16 @@ class MainActivity : Activity() {
         }
     }
 
+    /** More dabaya ho to poori list, warna sirf 4 kaam. */
+    private var todoOpen = false
+
     private fun renderTodos() {
         val box = findViewById<LinearLayout>(R.id.todoBox)
         box.removeAllViews()
-        Todos.all(this).sortedBy { it.optBoolean("done") }.forEach { item ->
+        val all = Todos.all(this).sortedBy { it.optBoolean("done") }
+        val pending = all.count { !it.optBoolean("done") }
+        val shown = if (todoOpen) all else all.filter { !it.optBoolean("done") }.take(TODO_ROWS)
+        shown.forEach { item ->
             val done = item.optBoolean("done")
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             row.addView(TextView(this).apply {
@@ -341,6 +347,16 @@ class MainActivity : Activity() {
                 renderTodos()
             })
             box.addView(row)
+        }
+        val hidden = all.size - shown.size
+        if (hidden > 0 || todoOpen) {
+            box.addView(smallButton(if (todoOpen) "Less" else "More ($hidden)") {
+                todoOpen = !todoOpen
+                renderTodos()
+            })
+        }
+        if (pending == 0 && !todoOpen) {
+            box.addView(TextView(this).apply { text = "No tasks left."; textSize = 15f })
         }
     }
 
@@ -592,6 +608,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val TODO_ROWS = 4
         private const val REQUEST_PERMISSIONS = 1
         private const val REQUEST_SCREEN = 2
         private const val LOW_RATING = 5

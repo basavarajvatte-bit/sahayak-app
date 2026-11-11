@@ -140,7 +140,7 @@ class TodoActivity : Activity() {
         list.removeAllViews()
         val items = Todos.pending(this)
         if (items.isEmpty()) list.addView(label("No tasks yet.", 15f))
-        items.forEach { item ->
+        (if (open) items else items.take(ROWS)).forEach { item ->
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             row.addView(label(item.optString("text"), 16f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(button("Done") {
@@ -153,5 +153,17 @@ class TodoActivity : Activity() {
             })
             list.addView(row)
         }
+        if (items.size > ROWS) {
+            list.addView(button(if (open) "Less" else "More (" + (items.size - ROWS) + ")") {
+                open = !open
+                render()
+            })
+        }
+    }
+
+    private var open = false
+
+    companion object {
+        private const val ROWS = 4
     }
 }
