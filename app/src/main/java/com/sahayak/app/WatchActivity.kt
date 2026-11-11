@@ -86,7 +86,7 @@ class WatchActivity : Activity() {
         }
         page.addView(HorizontalScroll(this, every))
         google = CheckBox(this).apply {
-            text = "Also search Google news (at most every 30 min, uses your Gemini key)"
+            text = "Also search Google News (free, no key needed)"
             isChecked = job.google
         }
         page.addView(google)

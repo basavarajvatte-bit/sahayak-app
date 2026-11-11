@@ -17,7 +17,7 @@ object Watcher {
     private const val NOTE_ID = 7_801
     private const val MAX_RESULTS = 150
     private const val MAX_PAGE = 2_000_000
-    private const val AI_GAP_MS = 30 * 60_000L
+    private const val AI_GAP_MS = 5 * 60_000L
     private const val SHOW_LINES = 5
     val INTERVALS = listOf(1, 5, 15, 30, 60)
     private val busy = AtomicBoolean(false)
@@ -114,7 +114,7 @@ object Watcher {
             prefs(c).edit().putLong("last", System.currentTimeMillis()).apply()
             if (j.url.isNotBlank()) checkSite(c, j)
             val lastAi = prefs(c).getLong("last_ai", 0L)
-            if (j.google && (!scheduled || System.currentTimeMillis() - lastAi >= maxOf(AI_GAP_MS, j.minutes * 60_000L))) {
+            if (j.google && (!scheduled || System.currentTimeMillis() - lastAi >= AI_GAP_MS - 30_000L)) {
                 prefs(c).edit().putLong("last_ai", System.currentTimeMillis()).apply()
                 checkGoogle(c, j)
             }
@@ -125,10 +125,23 @@ object Watcher {
 
     private fun checkSite(c: Context, j: Job) {
         val url = if (j.url.startsWith("http")) j.url else "https://" + j.url
+        val request = try {
+            Request.Builder().url(url).header("User-Agent", "Mozilla/5.0 (Linux; Android 12) Sahayak").build()
+        } catch (e: IllegalArgumentException) {
+            add(c, "Website", "Error", "Website address is not correct", url, false)
+            return
+        }
+        val strict = GeminiLive.newClient().newBuilder().callTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
+        val call = try {
+            strict.newCall(request).execute()
+        } catch (e: javax.net.ssl.SSLException) {
+            null
+        } catch (e: IOException) {
+            add(c, "Website", "Error", "Could not open the website. Check internet.", url, false)
+            return
+        }
         val html = try {
-            GeminiLive.newClient().newCall(
-                Request.Builder().url(url).header("User-Agent", "Mozilla/5.0 (Linux; Android 12) Sahayak").build()
-            ).execute().use { r ->
+            (call ?: looseClient().newCall(request).execute()).use { r ->
                 if (!r.isSuccessful) {
                     add(c, "Website", "Error", "Website answered " + r.code, url, false)
                     return
@@ -136,7 +149,7 @@ object Watcher {
                 r.body?.string()?.take(MAX_PAGE).orEmpty()
             }
         } catch (e: IOException) {
-            add(c, "Website", "Error", "Could not open the website. " + (e.message ?: ""), url, false)
+            add(c, "Website", "Error", "Could not open the website. Check internet.", url, false)
             return
         } catch (e: IllegalArgumentException) {
             add(c, "Website", "Error", "Website address is not correct", url, false)
@@ -162,23 +175,53 @@ object Watcher {
         if (hot.isNotEmpty()) WorkList.notifyText(c, NOTE_ID, "New on website: " + hot.first().take(120))
     }
 
+    /** Google News ka muft RSS. Koi key nahi, koi limit nahi. */
     private fun checkGoogle(c: Context, j: Job) {
-        val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
-        if (key.isEmpty()) {
-            add(c, "Google", "Error", "Add your Gemini key in Sahayak to search Google", "", false)
+        val q = java.net.URLEncoder.encode(j.what + " when:7d", "UTF-8")
+        val url = "https://news.google.com/rss/search?q=$q&hl=en-IN&gl=IN&ceid=IN:en"
+        val xml = try {
+            GeminiLive.newClient().newBuilder().callTimeout(40, java.util.concurrent.TimeUnit.SECONDS).build().newCall(
+                Request.Builder().url(url).header("User-Agent", "Mozilla/5.0 (Linux; Android 12) Sahayak").build()
+            ).execute().use { r ->
+                if (!r.isSuccessful) {
+                    add(c, "Google", "Error", "Google News answered " + r.code, "", false)
+                    return
+                }
+                r.body?.string()?.take(MAX_PAGE).orEmpty()
+            }
+        } catch (e: IOException) {
+            add(c, "Google", "Error", "No internet or Google News did not open", "", false)
             return
         }
-        val planner = Planner(GeminiLive.newClient(), key, 90L)
-        val found = planner.searchNews(j.what)
-        if (found == null) {
-            add(c, "Google", "Error", planner.lastError.ifEmpty { "Search did not answer" }, "", false)
+        val keys = WatchLogic.keywords(j.what)
+        val items = WatchLogic.news(xml)
+        val hits = items.filter { WatchLogic.newsHit(it.title, keys) }
+        val seen = prefs(c).getStringSet("news_seen", null)
+        prefs(c).edit().putStringSet("news_seen", (items.map { it.link } + seen.orEmpty()).take(300).toSet()).apply()
+        if (seen == null) {
+            val top = (hits + items).distinct().take(SHOW_LINES)
+            add(c, "Google", "Started", if (top.isEmpty()) "No news in the last 7 days yet." else "Latest news:\n• " + top.joinToString("\n• ") { it.title },
+                top.firstOrNull()?.link.orEmpty(), false)
             return
         }
-        val (yes, summary, link) = found
-        val before = prefs(c).getString("last_summary", "").orEmpty()
-        prefs(c).edit().putString("last_summary", summary).apply()
-        val alert = yes && summary != before
-        add(c, "Google", if (yes) "Found" else "Not yet", summary, link, alert)
-        if (alert) WorkList.notifyText(c, NOTE_ID, "News found: " + summary.take(140))
+        val fresh = hits.filter { it.link !in seen }
+        if (fresh.isEmpty()) {
+            add(c, "Google", "No change", "", "", false)
+            return
+        }
+        add(c, "Google", "Found", "• " + fresh.take(SHOW_LINES).joinToString("\n• ") { it.title }, fresh.first().link, true)
+        WorkList.notifyText(c, NOTE_ID, "News found: " + fresh.first().title.take(140))
+    }
+
+    /** Kuch sarkari sites ka certificate adhoora hota hai. Sirf padhne ke liye, phir bhi khol lo. */
+    private fun looseClient(): okhttp3.OkHttpClient {
+        val trust = object : javax.net.ssl.X509TrustManager {
+            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {}
+            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+        }
+        val ssl = javax.net.ssl.SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), java.security.SecureRandom()) }
+        return GeminiLive.newClient().newBuilder().sslSocketFactory(ssl.socketFactory, trust)
+            .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
     }
 }
