@@ -262,33 +262,48 @@ class TodoPopup(
             gravity = Gravity.CENTER
         })
         card.addView(top)
-        items.take(MAX_ROWS).forEach { item ->
+        fun row(item: org.json.JSONObject) = TextView(service).apply {
+            text = "○  " + item.optString("text")
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setShadowLayer(8f, 0f, 2f, Color.BLACK)
+            setPadding(0, pad / 2, 0, pad / 2)
+            setOnClickListener {
+                Todos.complete(service, item.optString("id"))
+                text = "✓  " + item.optString("text")
+                alpha = 0.5f
+                isClickable = false
+                if (ttsReady) tts.stop()
+                endMood = "dance"
+                buddy?.mood = "dance"
+                main.removeCallbacks(hideLater)
+                main.postDelayed(hideLater, AFTER_TAP_MS)
+            }
+        }
+        items.take(MAX_ROWS).forEach { card.addView(row(it)) }
+        // Baaki kaam "More" ke andar, taaki popup chhota rahe
+        if (items.size > MAX_ROWS) {
+            val rest = LinearLayout(service).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = android.view.View.GONE
+            }
+            items.drop(MAX_ROWS).forEach { rest.addView(row(it)) }
             card.addView(TextView(service).apply {
-                text = "○  " + item.optString("text")
-                textSize = 18f
-                setTextColor(Color.WHITE)
+                text = "▼  More (" + (items.size - MAX_ROWS) + ")"
+                textSize = 16f
+                setTextColor(Color.rgb(32, 201, 151))
                 setShadowLayer(8f, 0f, 2f, Color.BLACK)
                 setPadding(0, pad / 2, 0, pad / 2)
                 setOnClickListener {
-                    Todos.complete(service, item.optString("id"))
-                    text = "✓  " + item.optString("text")
-                    alpha = 0.5f
-                    isClickable = false
-                    if (ttsReady) tts.stop()
-                    endMood = "dance"
-                    buddy?.mood = "dance"
+                    val open = rest.visibility != android.view.View.VISIBLE
+                    rest.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+                    text = (if (open) "▲  Less" else "▼  More (" + (items.size - MAX_ROWS) + ")")
+                    // List dekh rahe ho to popup turant band na ho
                     main.removeCallbacks(hideLater)
-                    main.postDelayed(hideLater, AFTER_TAP_MS)
+                    main.postDelayed(hideLater, MORE_OPEN_MS)
                 }
             })
-        }
-        if (items.size > MAX_ROWS) {
-            card.addView(TextView(service).apply {
-                text = "+" + (items.size - MAX_ROWS) + " more in Sahayak"
-                textSize = 14f
-                setTextColor(Color.LTGRAY)
-                setShadowLayer(8f, 0f, 2f, Color.BLACK)
-            })
+            card.addView(rest)
         }
         reveal(card, speech(items), SWAG_MS)
     }
@@ -404,6 +419,7 @@ class TodoPopup(
         private const val CRACK_MS = 520L
         private const val LEAVE_MS = 220L
         private const val AFTER_TAP_MS = 3_200L
-        private const val MAX_ROWS = 5
+        private const val MAX_ROWS = 4
+        private const val MORE_OPEN_MS = 8_000L
     }
 }
