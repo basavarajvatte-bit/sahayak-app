@@ -69,6 +69,7 @@ class PhoneControl : AccessibilityService() {
     override fun onServiceConnected() {
         instance = this
         ShortsQueue.rearm(this)
+        Watcher.rearm(this)
         Frames.load(this)
         todoPopup = TodoPopup(this)
         val filter = IntentFilter(Intent.ACTION_USER_PRESENT)

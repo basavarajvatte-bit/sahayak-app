@@ -53,6 +53,11 @@
         </activity>
 
         <activity
+            android:name=".WatchActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".VideoActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
