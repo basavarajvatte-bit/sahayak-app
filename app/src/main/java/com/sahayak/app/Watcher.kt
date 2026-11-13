@@ -19,6 +19,8 @@ object Watcher {
     private const val MAX_PAGE = 2_000_000
     private const val AI_GAP_MS = 5 * 60_000L
     private const val SHOW_LINES = 5
+    private const val MAX_SEEN = 2_000
+    private const val TOPIC_LABEL = 28
     val INTERVALS = listOf(1, 5, 15, 30, 60)
     private val busy = AtomicBoolean(false)
 
@@ -57,10 +59,11 @@ object Watcher {
     private fun add(c: Context, source: String, status: String, text: String, link: String, alert: Boolean) {
         val list = results(c).toMutableList()
         val now = System.currentTimeMillis()
-        val top = list.firstOrNull()
-        // Lagataar "koi badlav nahi" ek hi line mein ginti ke saath
-        if (!alert && top != null && top.optString("source") == source && top.optString("status") == status && status == "No change") {
-            top.put("at", now).put("count", top.optInt("count", 1) + 1)
+        // Lagataar "koi badlav nahi" ek hi line mein ginti ke saath. Har source (website, har topic) ki apni line.
+        val last = list.indexOfFirst { it.optString("source") == source }
+        if (!alert && status == "No change" && last >= 0 && list[last].optString("status") == status) {
+            val same = list.removeAt(last)
+            list.add(0, same.put("at", now).put("count", same.optInt("count", 1) + 1))
         } else {
             list.add(0, JSONObject().put("at", now).put("source", source).put("status", status).put("text", text)
                 .put("link", link).put("alert", alert).put("count", 1))
@@ -158,9 +161,10 @@ object Watcher {
         val now = WatchLogic.lines(html)
         val seen = prefs(c).getStringSet("seen", null)
         prefs(c).edit().putStringSet("seen", now.toSet()).apply()
-        val keys = WatchLogic.keywords(j.what)
+        val topics = WatchLogic.topics(j.what)
+        val keys = topics.map { WatchLogic.keywords(it) }
         if (seen == null) {
-            val top = WatchLogic.important(now, keys).take(SHOW_LINES)
+            val top = WatchLogic.importantAny(now, keys).take(SHOW_LINES)
             add(c, "Website", "Started", if (top.isEmpty()) "Watching " + now.size + " lines on the page." else "Current notices:\n• " + top.joinToString("\n• "), url, false)
             return
         }
@@ -169,48 +173,67 @@ object Watcher {
             add(c, "Website", "No change", "", url, false)
             return
         }
-        val hot = WatchLogic.important(fresh, keys)
+        val hot = WatchLogic.importantAny(fresh, keys)
         val show = (hot + fresh).distinct().take(SHOW_LINES)
         add(c, "Website", if (hot.isNotEmpty()) "New notice" else "Page changed", "• " + show.joinToString("\n• "), url, hot.isNotEmpty())
-        if (hot.isNotEmpty()) WorkList.notifyText(c, NOTE_ID, "New on website: " + hot.first().take(120))
+        if (hot.isNotEmpty()) {
+            // Kai topic hon to batao notice kis topic ka hai
+            val index = WatchLogic.topicOf(hot.first(), keys)
+            val about = if (topics.size > 1 && index >= 0) " (" + topics[index].take(TOPIC_LABEL) + ")" else ""
+            WorkList.notifyText(c, NOTE_ID, "New on website$about: " + hot.first().take(120))
+        }
+    }
+
+    /** Har topic ki alag Google News khoj, alag nateeja aur alag notification. */
+    private fun checkGoogle(c: Context, j: Job) {
+        val topics = WatchLogic.topics(j.what)
+        topics.forEachIndexed { i, topic ->
+            val source = if (topics.size > 1) "Google · " + topic.take(TOPIC_LABEL) else "Google"
+            checkTopic(c, topic, source, NOTE_ID + 1 + i)
+        }
+        // Hataye gaye topic bhool jao, taaki wapas jodne par nayi shuruaat ho
+        val p = prefs(c)
+        p.edit().putStringSet("news_topics", p.getStringSet("news_topics", null).orEmpty().intersect(topics.map { it.lowercase() }.toSet())).apply()
     }
 
     /** Google News ka muft RSS. Koi key nahi, koi limit nahi. */
-    private fun checkGoogle(c: Context, j: Job) {
-        val q = java.net.URLEncoder.encode(j.what + " when:7d", "UTF-8")
+    private fun checkTopic(c: Context, what: String, source: String, noteId: Int) {
+        val q = java.net.URLEncoder.encode("$what when:7d", "UTF-8")
         val url = "https://news.google.com/rss/search?q=$q&hl=en-IN&gl=IN&ceid=IN:en"
         val xml = try {
             GeminiLive.newClient().newBuilder().callTimeout(40, java.util.concurrent.TimeUnit.SECONDS).build().newCall(
                 Request.Builder().url(url).header("User-Agent", "Mozilla/5.0 (Linux; Android 12) Sahayak").build()
             ).execute().use { r ->
                 if (!r.isSuccessful) {
-                    add(c, "Google", "Error", "Google News answered " + r.code, "", false)
+                    add(c, source, "Error", "Google News answered " + r.code, "", false)
                     return
                 }
                 r.body?.string()?.take(MAX_PAGE).orEmpty()
             }
         } catch (e: IOException) {
-            add(c, "Google", "Error", "No internet or Google News did not open", "", false)
+            add(c, source, "Error", "No internet or Google News did not open", "", false)
             return
         }
-        val keys = WatchLogic.keywords(j.what)
+        val keys = WatchLogic.keywords(what)
         val items = WatchLogic.news(xml)
         val hits = items.filter { WatchLogic.newsHit(it.title, keys) }
-        val seen = prefs(c).getStringSet("news_seen", null)
-        prefs(c).edit().putStringSet("news_seen", (items.map { it.link } + seen.orEmpty()).take(300).toSet()).apply()
-        if (seen == null) {
+        val seen = prefs(c).getStringSet("news_seen", null).orEmpty()
+        val started = prefs(c).getStringSet("news_topics", null).orEmpty()
+        prefs(c).edit().putStringSet("news_seen", (items.map { it.link } + seen).take(MAX_SEEN).toSet())
+            .putStringSet("news_topics", started + what.lowercase()).apply()
+        if (what.lowercase() !in started) {
             val top = (hits + items).distinct().take(SHOW_LINES)
-            add(c, "Google", "Started", if (top.isEmpty()) "No news in the last 7 days yet." else "Latest news:\n• " + top.joinToString("\n• ") { it.title },
+            add(c, source, "Started", if (top.isEmpty()) "No news in the last 7 days yet." else "Latest news:\n• " + top.joinToString("\n• ") { it.title },
                 top.firstOrNull()?.link.orEmpty(), false)
             return
         }
         val fresh = hits.filter { it.link !in seen }
         if (fresh.isEmpty()) {
-            add(c, "Google", "No change", "", "", false)
+            add(c, source, "No change", "", "", false)
             return
         }
-        add(c, "Google", "Found", "• " + fresh.take(SHOW_LINES).joinToString("\n• ") { it.title }, fresh.first().link, true)
-        WorkList.notifyText(c, NOTE_ID, "News found: " + fresh.first().title.take(140))
+        add(c, source, "Found", "• " + fresh.take(SHOW_LINES).joinToString("\n• ") { it.title }, fresh.first().link, true)
+        WorkList.notifyText(c, noteId, "News found: " + fresh.first().title.take(140))
     }
 
     /** Kuch sarkari sites ka certificate adhoora hota hai. Sirf padhne ke liye, phir bhi khol lo. */

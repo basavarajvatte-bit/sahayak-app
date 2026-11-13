@@ -38,4 +38,21 @@ class WatchLogicTest {
         org.junit.Assert.assertTrue(WatchLogic.newsHit(items[0].title, keys))
         org.junit.Assert.assertFalse(WatchLogic.newsHit(items[1].title, keys))
     }
+
+    @Test fun splitsTopicsByLine() {
+        val topics = WatchLogic.topics("UP NEET PG  counselling\n\n  Maharashtra CET round 2 \nup neet pg counselling\n")
+        assertEquals(listOf("UP NEET PG counselling", "Maharashtra CET round 2"), topics)
+        assertEquals(WatchLogic.MAX_TOPICS, WatchLogic.topics((1..20).joinToString("\n") { "topic $it" }).size)
+        assertEquals(listOf("only one"), WatchLogic.topics("only one"))
+    }
+
+    @Test fun matchesLineToItsTopic() {
+        val keys = listOf("UP NEET PG counselling", "Maharashtra CET cell merit list").map { WatchLogic.keywords(it) }
+        assertEquals(1, WatchLogic.topicOf("Maharashtra CET cell merit list published", keys))
+        assertEquals(0, WatchLogic.topicOf("UP NEET PG counselling registration open", keys))
+        assertEquals(-1, WatchLogic.topicOf("Contact us", keys))
+        val lines = listOf("Contact us", "Maharashtra CET merit list published", "NEET PG counselling registration open")
+        assertEquals(2, WatchLogic.importantAny(lines, keys).size)
+        assertTrue(WatchLogic.importantAny(lines, emptyList()).isEmpty())
+    }
 }

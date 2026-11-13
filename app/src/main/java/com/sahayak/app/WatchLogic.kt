@@ -18,6 +18,24 @@ object WatchLogic {
             .filter { it.length in MIN_LINE..MAX_LINE }.distinct()
     }
 
+    const val MAX_TOPICS = 8
+
+    /** Har line ek alag topic. Khaali aur dohrayi lines hatao. */
+    fun topics(what: String): List<String> =
+        what.lines().map { SPACE.replace(it, " ").trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }.take(MAX_TOPICS)
+
+    /** Line kis topic ki hai: sabse zyada score wala, kam se kam 2. Koi na ho to -1. */
+    fun topicOf(line: String, keysByTopic: List<List<String>>): Int {
+        val scores = keysByTopic.map { score(line, it) }
+        val best = scores.maxOrNull() ?: return -1
+        return if (best >= 2) scores.indexOf(best) else -1
+    }
+
+    /** Kisi bhi topic ke liye kaam ki lines, sabse kaam ki pehle. */
+    fun importantAny(lines: List<String>, keysByTopic: List<List<String>>): List<String> =
+        lines.map { line -> line to (keysByTopic.maxOfOrNull { score(line, it) } ?: 0) }
+            .filter { it.second >= 2 }.sortedByDescending { it.second }.map { it.first }
+
     fun keywords(job: String): List<String> = BrainLogic.tokens(job).filter { it.length > 2 || it == "pg" || it == "up" }
 
     /** Line kitni kaam ki hai: job ke shabd aur registration jaise shabd. */

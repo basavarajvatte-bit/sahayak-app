@@ -65,9 +65,12 @@ class WatchActivity : Activity() {
         page.addView(text("News Watch", 24f, true))
         page.addView(text("Sahayak keeps checking for your news and shows every result below.", 14f))
         page.addView(text("What to look for", 16f, true))
+        page.addView(text("One topic per line, up to " + WatchLogic.MAX_TOPICS + ". Each topic is searched on its own and gets its own results and alert.", 13f))
         what = EditText(this).apply {
             setText(job.what)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 3
+            hint = "UP NEET PG counselling registration open\nMaharashtra NEET PG round 2 schedule"
         }
         page.addView(what)
         page.addView(text("Website to watch (optional)", 16f, true))
