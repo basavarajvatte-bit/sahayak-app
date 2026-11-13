@@ -317,6 +317,65 @@ object Market {
         }
     }
 
+    // ---------- Khabar ki gehrai ----------
+
+    private const val MAX_DEPTH = 40
+    private const val RELATED = 12
+
+    private fun cachedDepth(c: Context, link: String): JSONObject? {
+        val a = JSONArray(prefs(c).getString("depth", "[]"))
+        for (i in 0 until a.length()) {
+            val o = a.optJSONObject(i) ?: continue
+            if (o.optString("link") == link) return o
+        }
+        return null
+    }
+
+    /**
+     * Khabar par research: purani khabrein dhoondho, phir AI se poochho ki ye kitni badi baat hai.
+     * Jawab mein: ai (JSON text), searched, related [{t,l,d}], error.
+     */
+    fun depth(c: Context, title: String, link: String, kind: String, force: Boolean): JSONObject {
+        if (!force) cachedDepth(c, link)?.let { return it }
+        val out = JSONObject().put("link", link).put("at", System.currentTimeMillis())
+        lastError = ""
+        val mine = MarketLogic.key(title)
+        val older = get(rssAll(MarketLogic.relatedQuery(title, kind)))?.let { xml ->
+            WatchLogic.news(xml).filter { MarketLogic.cleanTitle(it.title) != title && MarketLogic.key(it.title) != mine }
+                .sortedByDescending { MarketLogic.pubTime(it.date) }.take(RELATED)
+        }.orEmpty()
+        val day = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH)
+        val related = JSONArray()
+        older.forEach { n ->
+            val at = MarketLogic.pubTime(n.date)
+            related.put(JSONObject().put("t", n.title).put("l", n.link).put("d", if (at > 0) day.format(Date(at)) else ""))
+        }
+        out.put("related", related)
+        val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
+        if (key.isEmpty()) return out.put("error", "Add your Gemini key in Sahayak to get the full research")
+        val text = "Today: " + day.format(Date()) + "\nType: " + kind + "\nHeadline: " + title + "\nOlder related headlines:\n" +
+            (if (older.isEmpty()) "(none found)" else older.joinToString("\n") { n ->
+                val at = MarketLogic.pubTime(n.date)
+                "- " + (if (at > 0) day.format(Date(at)) + ": " else "") + n.title
+            })
+        val planner = Planner(GeminiLive.newClient(), key, 60L)
+        val answer = planner.depth(text)
+        if (answer == null || MarketLogic.parseDepth(answer.first) == null) {
+            return out.put("error", planner.lastError.ifEmpty { "AI did not give a clear answer. Tap Research again" })
+        }
+        out.put("ai", MarketLogic.jsonBlock(answer.first)).put("searched", answer.second)
+        synchronized(this) {
+            val a = JSONArray(prefs(c).getString("depth", "[]"))
+            val list = mutableListOf(out)
+            for (i in 0 until a.length()) a.optJSONObject(i)?.takeIf { it.optString("link") != link }?.let { list.add(it) }
+            prefs(c).edit().putString("depth", JSONArray(list.take(MAX_DEPTH)).toString()).apply()
+        }
+        return out
+    }
+
+    private fun rssAll(query: String) =
+        "https://news.google.com/rss/search?q=" + URLEncoder.encode(query, "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
+
     private fun mark(mood: String) = when (mood) {
         "Good" -> "🟢 "
         "Bad" -> "🔴 "

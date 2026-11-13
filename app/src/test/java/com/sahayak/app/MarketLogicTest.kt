@@ -83,4 +83,46 @@ class MarketLogicTest {
         assertEquals("4:00 PM", MarketLogic.clock(16, 0))
         assertEquals("12:05 AM", MarketLogic.clock(0, 5))
     }
+
+    @Test fun readsDepthAnswerAndShowsTheJump() {
+        val answer = """Here is the analysis:
+```json
+{"company":"ABC Ltd","level":9,"what":"Profit bahut badha.","numbers":[{"what":"Net profit","before":25,"after":300,"unit":"₹ crore","period":"Q2 vs last year"},
+{"what":"bad","before":"n/a","after":3}],"past":["12 Aug 2026: order mila", ""],"why":"Kamai badhi.","unsure":""}
+```"""
+        val d = MarketLogic.parseDepth(answer)!!
+        assertEquals("ABC Ltd", d.company)
+        assertEquals(5, d.level)
+        assertEquals(1, d.numbers.size)
+        assertEquals(1, d.past.size)
+        val n = d.numbers[0]
+        assertEquals("₹25 crore", MarketLogic.numText(n.before, n.unit))
+        assertEquals("₹300 crore", MarketLogic.numText(n.after, n.unit))
+        assertEquals("12.0 times bigger  (▲ 1,100%)" to 1, MarketLogic.jumpText(n.before, n.after))
+        assertNull(MarketLogic.parseDepth("Sorry, no idea"))
+    }
+
+    @Test fun describesOtherChanges() {
+        assertEquals("▲ 4.0% more" to 1, MarketLogic.jumpText(100.0, 104.0))
+        assertEquals("▼ 20.0% less" to -1, MarketLogic.jumpText(100.0, 80.0))
+        assertEquals("Loss turned into profit" to 1, MarketLogic.jumpText(-50.0, 20.0))
+        assertEquals("Profit turned into loss" to -1, MarketLogic.jumpText(50.0, -20.0))
+        assertEquals("Loss became bigger" to -1, MarketLogic.jumpText(-10.0, -40.0))
+        assertEquals("1,234.5 MW", MarketLogic.numText(1234.5, "MW"))
+        assertEquals("12%", MarketLogic.numText(12.0, "%"))
+    }
+
+    @Test fun findsCompanyAndHeadlineFigures() {
+        assertEquals("Tata Motors", MarketLogic.companyGuess("Tata Motors Q2 net profit falls 20% - Mint"))
+        assertEquals("L&T", MarketLogic.companyGuess("L&T bags Rs 5,000 crore order"))
+        assertEquals("", MarketLogic.companyGuess("Sensex falls 500 points"))
+        assertEquals("Tata Motors results profit", MarketLogic.relatedQuery("Tata Motors Q2 net profit falls 20%", "Results"))
+        val a = MarketLogic.headlineJump("ABC net profit jumps to Rs 300 crore from Rs 25 crore")!!
+        assertEquals(25.0, a.before, 0.001)
+        assertEquals(300.0, a.after, 0.001)
+        val b = MarketLogic.headlineJump("XYZ order book grows from Rs 1.5 lakh crore to Rs 2 lakh crore")!!
+        assertEquals(150000.0, b.before, 0.001)
+        assertEquals(200000.0, b.after, 0.001)
+        assertNull(MarketLogic.headlineJump("ABC wins Rs 300 crore order"))
+    }
 }

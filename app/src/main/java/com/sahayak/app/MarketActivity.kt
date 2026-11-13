@@ -200,6 +200,7 @@ class MarketActivity : Activity() {
         newsStatus = text("", 14f, true)
         page.addView(newsStatus)
         page.addView(text("Good and Bad tags are a guess from the words in the headline. They are not advice.", 12f, false, GREY))
+        page.addView(text("Tap any news to see how big it is, with before and now figures and what happened earlier.", 13f, true, TEAL))
         newsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(newsBox)
         page.addView(button("Clear news list") {
@@ -334,7 +335,7 @@ class MarketActivity : Activity() {
             box.addView(text(head, 13f, true, color))
             box.addView(text(n.optString("title"), 15f))
             n.optString("source").takeIf { it.isNotEmpty() }?.let { box.addView(text(it, 12f, false, GREY)) }
-            box.setOnClickListener { open(n.optString("link")) }
+            box.setOnClickListener { startActivity(MarketNewsActivity.forNews(this, n)) }
             newsBox.addCard(box)
         }
         if (news.size > NEWS_ROWS) {

@@ -173,4 +173,140 @@ object MarketLogic {
         val h = if (hour % 12 == 0) 12 else hour % 12
         return h.toString() + ":" + String.format(Locale.ENGLISH, "%02d", minute) + (if (hour < 12) " AM" else " PM")
     }
+
+    // ---------- Khabar ki gehrai ----------
+
+    data class Num(val what: String, val before: Double, val after: Double, val unit: String, val period: String)
+    data class Depth(val company: String, val level: Int, val what: String, val numbers: List<Num>, val past: List<String>, val why: String, val unsure: String)
+
+    /** AI ke jawab mein se JSON wala hissa. */
+    fun jsonBlock(text: String): String {
+        val a = text.indexOf('{')
+        val b = text.lastIndexOf('}')
+        return if (a >= 0 && b > a) text.substring(a, b + 1) else ""
+    }
+
+    fun parseDepth(text: String): Depth? {
+        try {
+            val o = JSONObject(jsonBlock(text))
+            val numbers = mutableListOf<Num>()
+            val arr = o.optJSONArray("numbers")
+            if (arr != null) {
+                for (i in 0 until arr.length()) {
+                    val n = arr.optJSONObject(i) ?: continue
+                    val before = n.optDouble("before", Double.NaN)
+                    val after = n.optDouble("after", Double.NaN)
+                    if (before.isNaN() || after.isNaN() || before.isInfinite() || after.isInfinite()) continue
+                    numbers.add(Num(n.optString("what"), before, after, n.optString("unit"), n.optString("period")))
+                }
+            }
+            val past = mutableListOf<String>()
+            val old = o.optJSONArray("past")
+            if (old != null) for (i in 0 until old.length()) old.optString(i).trim().takeIf { it.isNotEmpty() }?.let { past.add(it) }
+            val what = o.optString("what").trim()
+            if (what.isEmpty() && numbers.isEmpty()) return null
+            return Depth(o.optString("company").trim(), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(5),
+                o.optString("why").trim(), o.optString("unsure").trim())
+        } catch (e: JSONException) {
+            return null
+        }
+    }
+
+    fun levelWord(level: Int): String = when (level) {
+        1 -> "Routine"
+        2 -> "Small"
+        3 -> "Worth noting"
+        4 -> "Big"
+        else -> "Very big"
+    }
+
+    /** 25 aur "₹ crore" se "₹25 crore". */
+    fun numText(value: Double, unit: String): String {
+        val n = String.format(Locale.ENGLISH, "%,.2f", value).removeSuffix("0").removeSuffix("0").removeSuffix(".")
+        val u = unit.trim()
+        return when {
+            u.isEmpty() -> n
+            u == "%" -> "$n%"
+            u.startsWith("₹") -> ("₹" + n + " " + u.removePrefix("₹").trim()).trim()
+            u.startsWith("$") -> ("$" + n + " " + u.removePrefix("$").trim()).trim()
+            else -> "$n $u"
+        }
+    }
+
+    /** Kitna bada badlav. Jodi: (likhne ke liye, +1 badha / -1 ghata / 0 barabar). */
+    fun jumpText(before: Double, after: Double): Pair<String, Int> {
+        fun p(v: Double) = String.format(Locale.ENGLISH, "%,.0f", v) + "%"
+        return when {
+            before > 0 && after > 0 -> {
+                val ratio = after / before
+                when {
+                    ratio >= 2.0 -> (String.format(Locale.ENGLISH, "%.1f", ratio) + " times bigger  (▲ " + p((ratio - 1) * 100) + ")") to 1
+                    ratio > 1.0005 -> ("▲ " + String.format(Locale.ENGLISH, "%.1f", (ratio - 1) * 100) + "% more") to 1
+                    ratio < 0.9995 -> ("▼ " + String.format(Locale.ENGLISH, "%.1f", (1 - ratio) * 100) + "% less") to -1
+                    else -> "No change" to 0
+                }
+            }
+            before < 0 && after > 0 -> "Loss turned into profit" to 1
+            before > 0 && after < 0 -> "Profit turned into loss" to -1
+            before < 0 && after < 0 -> if (after > before) ("Loss became smaller") to 1 else if (after < before) ("Loss became bigger") to -1 else "No change" to 0
+            before == 0.0 && after > 0 -> "New, was zero before" to 1
+            else -> "" to 0
+        }
+    }
+
+    private val NOT_NAME = setOf(
+        "q1", "q2", "q3", "q4", "ceo", "cfo", "md", "net", "share", "shares", "stock", "stocks", "profit", "results", "result", "bags", "wins",
+        "to", "gets", "reports", "posts", "board", "india", "indian", "sensex", "nifty", "rbi", "sebi", "gst", "why", "how", "what", "these", "top", "breaking"
+    )
+
+    /** Heading ki shuruaat ke bade akshar wale shabd: aksar company ka naam. */
+    fun companyGuess(title: String): String {
+        val out = mutableListOf<String>()
+        for (word in cleanTitle(title).split(' ')) {
+            val w = word.trim(',', ':', ';', '\'', '"', '(', ')')
+            if (w.isEmpty() || out.size >= 4) break
+            val plain = w.lowercase(Locale.ENGLISH).removeSuffix("'s").removeSuffix("’s")
+            if (plain in NOT_NAME || !(w[0].isUpperCase() || w == "&")) break
+            out.add(w.removeSuffix("'s").removeSuffix("’s"))
+            if (w.endsWith("'s") || w.endsWith("’s")) break
+        }
+        return out.joinToString(" ").trimEnd('&', ' ')
+    }
+
+    /** Purani khabrein dhoondhne ke liye sawaal. */
+    fun relatedQuery(title: String, kind: String): String {
+        val company = companyGuess(title)
+        if (company.isEmpty()) return BrainLogic.tokens(cleanTitle(title)).filter { it.length > 2 }.take(6).joinToString(" ")
+        val about = when (kind) {
+            "Results" -> "results profit"
+            "Management" -> "CEO"
+            "Deal" -> "order deal"
+            "Trade war" -> "tariff"
+            else -> ""
+        }
+        return "$company $about".trim()
+    }
+
+    private val AMOUNT = Regex("""(?i)([0-9][0-9,]*(?:\.[0-9]+)?)\s*(lakh crore|crore|cr|lakh|billion|bn|million|mn)\b""")
+
+    private fun inCrore(value: Double, unit: String): Double? = when (unit.lowercase(Locale.ENGLISH)) {
+        "lakh crore" -> value * 100_000
+        "crore", "cr" -> value
+        "lakh" -> value / 100
+        else -> null
+    }
+
+    /** Heading mein "from Rs 25 crore to Rs 300 crore" jaisa ho to khud nikal lo. */
+    fun headlineJump(title: String): Num? {
+        val found = AMOUNT.findAll(title).toList()
+        if (found.size < 2) return null
+        val from = title.lowercase(Locale.ENGLISH).indexOf("from ")
+        if (from < 0) return null
+        val beforeMatch = found.firstOrNull { it.range.first > from } ?: return null
+        val afterMatch = found.firstOrNull { it !== beforeMatch } ?: return null
+        fun crore(m: MatchResult) = m.groupValues[1].replace(",", "").toDoubleOrNull()?.let { inCrore(it, m.groupValues[2]) }
+        val before = crore(beforeMatch) ?: return null
+        val after = crore(afterMatch) ?: return null
+        return Num("", before, after, "₹ crore", "")
+    }
 }
