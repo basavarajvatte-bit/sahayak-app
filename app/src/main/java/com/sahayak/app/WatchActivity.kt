@@ -21,7 +21,9 @@ import java.util.Locale
 
 /** News Watch: ek job do, Sahayak tay samay par dhoondhta rahe. */
 class WatchActivity : Activity() {
-    private lateinit var what: EditText
+    private lateinit var topicBox: LinearLayout
+    private val topics = mutableListOf<EditText>()
+    private lateinit var addTopic: Button
     private lateinit var url: EditText
     private lateinit var every: RadioGroup
     private lateinit var google: CheckBox
@@ -65,14 +67,12 @@ class WatchActivity : Activity() {
         page.addView(text("News Watch", 24f, true))
         page.addView(text("Sahayak keeps checking for your news and shows every result below.", 14f))
         page.addView(text("What to look for", 16f, true))
-        page.addView(text("One topic per line, up to " + WatchLogic.MAX_TOPICS + ". Each topic is searched on its own and gets its own results and alert.", 13f))
-        what = EditText(this).apply {
-            setText(job.what)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            minLines = 3
-            hint = "UP NEET PG counselling registration open\nMaharashtra NEET PG round 2 schedule"
-        }
-        page.addView(what)
+        page.addView(text("Each topic is watched on its own, with its own results and alert. Up to " + WatchLogic.MAX_TOPICS + ".", 13f))
+        topicBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(topicBox)
+        addTopic = button("+ Add another topic") { addRow("") }
+        page.addView(addTopic)
+        WatchLogic.topics(job.what).ifEmpty { listOf("") }.forEach { addRow(it) }
         page.addView(text("Website to watch (optional)", 16f, true))
         url = EditText(this).apply {
             setText(job.url)
@@ -115,6 +115,39 @@ class WatchActivity : Activity() {
         page.addView(list)
     }
 
+    /** Ek topic ki line: likhne ka box aur hatane ka button. */
+    private fun addRow(value: String) {
+        if (topics.size >= WatchLogic.MAX_TOPICS) return
+        val box = EditText(this).apply {
+            setText(value)
+            hint = "Topic " + (topics.size + 1) + ", e.g. Maharashtra NEET PG round 2"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val row = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        row.addView(text((topics.size + 1).toString() + ".", 16f, true), LinearLayout.LayoutParams(dp(28), LinearLayout.LayoutParams.WRAP_CONTENT))
+        row.addView(box, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(button("✕") {
+            if (topics.size == 1) {
+                box.setText("")
+                return@button
+            }
+            topics.remove(box)
+            topicBox.removeView(row)
+            renumber()
+        })
+        topics.add(box)
+        topicBox.addView(row)
+        renumber()
+        if (value.isEmpty() && topics.size > 1) box.requestFocus()
+    }
+
+    private fun renumber() {
+        for (i in 0 until topicBox.childCount) {
+            ((topicBox.getChildAt(i) as LinearLayout).getChildAt(0) as TextView).text = (i + 1).toString() + "."
+        }
+        addTopic.isEnabled = topics.size < WatchLogic.MAX_TOPICS
+    }
+
     private class HorizontalScroll(context: android.content.Context, child: android.view.View) : android.widget.HorizontalScrollView(context) {
         init {
             addView(child)
@@ -123,7 +156,7 @@ class WatchActivity : Activity() {
 
     private fun save() {
         val minutes = Watcher.INTERVALS[(every.checkedRadioButtonId - IDS).coerceIn(0, Watcher.INTERVALS.lastIndex)]
-        Watcher.save(this, Watcher.job(this).copy(what = what.text.toString().trim(), url = url.text.toString().trim(), minutes = minutes, google = google.isChecked))
+        Watcher.save(this, Watcher.job(this).copy(what = topics.joinToString("\n") { it.text.toString().replace('\n', ' ').trim() }.trim(), url = url.text.toString().trim(), minutes = minutes, google = google.isChecked))
     }
 
     private fun flip() {
