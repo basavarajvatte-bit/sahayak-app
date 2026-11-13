@@ -40,6 +40,18 @@ class MarketActivity : Activity() {
     private var newsOpen = false
     private var reportsOpen = false
     private var loading = true
+    private lateinit var greenStatus: TextView
+    private lateinit var greenFresh: Button
+    private lateinit var greenBox: LinearLayout
+    private var greenOpen = false
+    private var almostOpen = false
+    private val greenTick = object : Runnable {
+        override fun run() {
+            if (!GreenList.running()) return
+            greenStatus.text = GreenList.progress
+            main.postDelayed(this, 1_000L)
+        }
+    }
     private val main = Handler(Looper.getMainLooper())
     private val time = SimpleDateFormat("d MMM, h:mm a", Locale.ENGLISH)
     private val day = SimpleDateFormat("d MMM", Locale.ENGLISH)
@@ -142,6 +154,34 @@ class MarketActivity : Activity() {
             }
         })
 
+        // ----- Hara scorecard -----
+        page.addView(text("Green scorecard", 18f, true))
+        page.addView(text("Shares whose whole Tickertape scorecard is green. Tap a share to open it in Tickertape.", 13f))
+        page.addView(HorizontalScrollView(this).apply {
+            addView(RadioGroup(context).apply {
+                orientation = RadioGroup.HORIZONTAL
+                GreenList.SIZES.forEachIndexed { i, n ->
+                    addView(RadioButton(context).apply { id = GREEN_IDS + i; text = "Top $n companies"; textSize = 14f })
+                }
+                check(GREEN_IDS + GreenList.SIZES.indexOf(GreenList.size(this@MarketActivity)).coerceAtLeast(0))
+                setOnCheckedChangeListener { _, id ->
+                    GreenList.setSize(this@MarketActivity, GreenList.SIZES[(id - GREEN_IDS).coerceIn(0, GreenList.SIZES.lastIndex)])
+                }
+            })
+        })
+        page.addView(button("Green scorecard") {
+            if (GreenList.saved(this) == null && !GreenList.running()) makeGreen() else {
+                greenOpen = !greenOpen
+                render()
+            }
+        })
+        greenFresh = button("") { if (GreenList.running()) GreenList.stop() else makeGreen() }
+        page.addView(greenFresh)
+        greenStatus = text("", 14f, true)
+        page.addView(greenStatus)
+        greenBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(greenBox)
+
         // ----- Roz ki report -----
         page.addView(text("Daily report", 18f, true))
         page.addView(text("Every day: how much each saved share moved, and its news.", 13f))
@@ -226,14 +266,84 @@ class MarketActivity : Activity() {
     override fun onResume() {
         super.onResume()
         main.post(refresh)
+        if (GreenList.running()) main.post(greenTick)
     }
 
     override fun onPause() {
         super.onPause()
         main.removeCallbacks(refresh)
+        main.removeCallbacks(greenTick)
+    }
+
+    /** Tickertape se sab companies ka scorecard dekhna: kuch minute lagte hain. */
+    private fun makeGreen() {
+        val app = applicationContext
+        greenOpen = true
+        greenStatus.text = "Starting"
+        Thread {
+            val answer = GreenList.run(app)
+            main.post {
+                if (isDestroyed) return@post
+                greenStatus.text = answer
+                render()
+            }
+        }.start()
+        main.postDelayed(greenTick, 500L)
+        main.postDelayed({ if (!isDestroyed) render() }, 600L)
+    }
+
+    private fun openGreen(row: org.json.JSONObject) {
+        val slug = row.optString("slug")
+        if (slug.startsWith("/stocks/")) {
+            if (!Market.openTickertape(this, "https://www.tickertape.in$slug")) greenStatus.text = "Could not open Tickertape"
+            return
+        }
+        greenStatus.text = "Opening " + row.optString("name") + " in Tickertape"
+        Thread {
+            val link = Market.tickertapeLink(row.optString("ticker").ifEmpty { row.optString("name") }, row.optString("sid"))
+            main.post {
+                if (isDestroyed) return@post
+                greenStatus.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
+            }
+        }.start()
+    }
+
+    private fun renderGreen() {
+        val running = GreenList.running()
+        greenFresh.text = if (running) "Stop" else "Make fresh list (takes a few minutes)"
+        greenBox.removeAllViews()
+        if (!greenOpen) return
+        val saved = GreenList.saved(this)
+        if (saved == null) {
+            if (!running) greenBox.addView(text("No list yet.", 14f, false, GREY))
+            return
+        }
+        val rows = saved.optJSONArray("rows") ?: org.json.JSONArray()
+        val all = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
+        val full = all.filter { it.optInt("green") == it.optInt("total") }
+        val almost = all.filter { it.optInt("green") < it.optInt("total") }
+        greenBox.addView(text("List made " + time.format(Date(saved.optLong("at"))) + ". Checked " + saved.optInt("checked") + " companies. All green: " + full.size, 13f, false, GREY))
+        if (full.isEmpty()) greenBox.addView(text("No share is fully green right now.", 14f))
+        fun show(row: org.json.JSONObject, color: Int) {
+            val box = card()
+            val ticker = row.optString("ticker")
+            box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
+            box.addView(text(row.optInt("green").toString() + " of " + row.optInt("total") + " green  ·  Open in Tickertape", 13f, true, color))
+            box.setOnClickListener { openGreen(row) }
+            greenBox.addCard(box)
+        }
+        full.forEach { show(it, GREEN) }
+        if (almost.isNotEmpty()) {
+            greenBox.addView(button(if (almostOpen) "Hide one short of full green" else "One short of full green (" + almost.size + ")") {
+                almostOpen = !almostOpen
+                render()
+            })
+            if (almostOpen) almost.forEach { show(it, TEAL) }
+        }
     }
 
     private fun render() {
+        renderGreen()
         renderShares()
         renderReports()
         renderNews()
@@ -359,6 +469,7 @@ class MarketActivity : Activity() {
 
     companion object {
         private const val IDS = 6_000
+        private const val GREEN_IDS = 6_100
         private const val REFRESH_MS = 15_000L
         private const val NEWS_ROWS = 10
         private const val INK = 0xFF1D2433.toInt()

@@ -138,4 +138,30 @@ class MarketLogicTest {
         assertEquals(200000.0, b.after, 0.001)
         assertNull(MarketLogic.headlineJump("ABC wins Rs 300 crore order"))
     }
+
+    @Test fun readsScreenerAndScorecard() {
+        val screen = """{"success":true,"data":{"results":[
+            {"sid":"RELI","stock":{"info":{"name":"Reliance Industries Ltd","ticker":"RELIANCE"},"slug":"/stocks/reliance-industries-RELI"}},
+            {"sid":"TCS","stock":{"info":{"name":null,"ticker":"TCS"}}},{"stock":{}}]}}"""
+        val stocks = MarketLogic.parseScreener(screen)
+        assertEquals(2, stocks.size)
+        assertEquals(MarketLogic.Stock("RELI", "Reliance Industries Ltd", "RELIANCE", "/stocks/reliance-industries-RELI"), stocks[0])
+        assertEquals(MarketLogic.Stock("TCS", "TCS", "TCS", ""), stocks[1])
+        assertTrue(MarketLogic.parseScreener("blocked").isEmpty())
+
+        // Screenshot wala Torrent Power: 3 hari, 6 mein se
+        val torrent = """{"success":true,"data":[
+            {"name":"Performance","tag":"Avg","colour":"yellow","locked":true},{"name":"Valuation","tag":"High","colour":"red","locked":true},
+            {"name":"Growth","tag":"Low","colour":"red","locked":true},{"name":"Profitability","tag":"High","colour":"green","locked":true},
+            {"name":"Entry point","tag":"Good","colour":"green"},{"name":"Red flags","tag":"Low","colour":"green"}]}"""
+        assertEquals(3 to 6, MarketLogic.parseScorecard(torrent))
+        // Rang na likha ho to tag se: sab hara
+        val green = """{"data":[{"name":"Performance","tag":"High"},{"name":"Valuation","tag":"Low"},{"name":"Growth","tag":"High"},
+            {"name":"Profitability","tag":"High"},{"name":"Entry point","tag":"Good"},{"name":"Red flags","tag":"Low"},{"name":"Empty","tag":null}]}"""
+        assertEquals(6 to 6, MarketLogic.parseScorecard(green))
+        assertFalse(MarketLogic.isGreen("Valuation", "High", ""))
+        assertFalse(MarketLogic.isGreen("Red flags", "High", "#ff0000"))
+        assertNull(MarketLogic.parseScorecard("<html>"))
+        assertEquals("/stocks/b-TCS", MarketLogic.tickertapeSlug("""{"a":[{"slug":"/stocks/a-AAA"},{"slug":"/stocks/b-TCS"}]}""", "TCS"))
+    }
 }

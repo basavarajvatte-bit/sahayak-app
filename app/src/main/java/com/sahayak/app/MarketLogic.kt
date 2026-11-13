@@ -226,10 +226,10 @@ object MarketLogic {
             val reasons = mutableListOf<String>()
             val why = o.optJSONArray("reasons")
             if (why != null) for (i in 0 until why.length()) why.optString(i).trim().takeIf { it.isNotEmpty() }?.let { reasons.add(it) }
-            val what = o.optString("what").trim()
+            val what = str(o, "what")
             if (what.isEmpty() && numbers.isEmpty() && trends.isEmpty()) return null
-            return Depth(o.optString("company").trim(), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(8),
-                o.optString("why").trim(), o.optString("unsure").trim(), trends.take(4), reasons.take(6))
+            return Depth(str(o, "company"), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(8),
+                str(o, "why"), str(o, "unsure"), trends.take(4), reasons.take(6))
         } catch (e: JSONException) {
             return null
         }
@@ -315,9 +315,74 @@ object MarketLogic {
 
     private val SLUG = Regex("\"slug\"\\s*:\\s*\"((?:\\\\)?/stocks(?:\\\\)?/[^\"]+)\"")
 
-    /** Tickertape search ke jawab mein se share ka page. */
-    fun tickertapeSlug(json: String): String? =
-        SLUG.find(json)?.groupValues?.get(1)?.replace("\\/", "/")?.takeIf { it.startsWith("/stocks/") && it.length > 9 }
+    /** Tickertape search ke jawab mein se share ka page. sid diya ho to wahi wala. */
+    fun tickertapeSlug(json: String, sid: String = ""): String? {
+        val all = SLUG.findAll(json).map { it.groupValues[1].replace("\\/", "/") }.filter { it.startsWith("/stocks/") && it.length > 9 }.toList()
+        return all.firstOrNull { sid.isNotEmpty() && it.endsWith("-$sid") } ?: all.firstOrNull()
+    }
+
+    // ---------- Tickertape ka scorecard ----------
+
+    data class Stock(val sid: String, val name: String, val ticker: String, val slug: String)
+
+    /** JSON null ko khaali maano (Android "null" likh deta hai). */
+    private fun str(o: JSONObject, key: String): String = if (o.isNull(key)) "" else o.optString(key).trim()
+
+    /** Screener ka jawab: shares ki list, sabse badi company pehle. */
+    fun parseScreener(json: String): List<Stock> {
+        try {
+            val rows = JSONObject(json).optJSONObject("data")?.optJSONArray("results") ?: return emptyList()
+            val out = mutableListOf<Stock>()
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                val stock = row.optJSONObject("stock")
+                val info = stock?.optJSONObject("info")
+                val sid = str(row, "sid").ifEmpty { stock?.let { str(it, "sid") }.orEmpty() }
+                if (sid.isEmpty()) continue
+                val ticker = info?.let { str(it, "ticker") }.orEmpty()
+                val name = info?.let { str(it, "name") }.orEmpty().ifEmpty { ticker }.ifEmpty { sid }
+                val slug = stock?.let { str(it, "slug") }.orEmpty().ifEmpty { str(row, "slug") }
+                out.add(Stock(sid, name, ticker, if (slug.startsWith("/stocks/")) slug else ""))
+            }
+            return out
+        } catch (e: JSONException) {
+            return emptyList()
+        }
+    }
+
+    /** Scorecard ki ek line hari hai ya nahi. Rang likha ho to wahi, warna tag se. */
+    fun isGreen(name: String, tag: String, colour: String): Boolean {
+        when (colour.lowercase(Locale.ENGLISH)) {
+            "green" -> return true
+            "red", "yellow", "orange", "amber" -> return false
+        }
+        val n = name.lowercase(Locale.ENGLISH)
+        val t = tag.lowercase(Locale.ENGLISH)
+        return when {
+            n.contains("valuation") || n.contains("red flag") -> t == "low"
+            n.contains("entry") -> t == "good"
+            else -> t == "high"
+        }
+    }
+
+    /** Scorecard ka jawab: (kitni hari, kul kitni). Samajh na aaye to null. */
+    fun parseScorecard(json: String): Pair<Int, Int>? {
+        try {
+            val items = JSONObject(json).optJSONArray("data") ?: return null
+            var green = 0
+            var total = 0
+            for (i in 0 until items.length()) {
+                val item = items.optJSONObject(i) ?: continue
+                val tag = str(item, "tag")
+                if (tag.isEmpty()) continue
+                total++
+                if (isGreen(str(item, "name"), tag, str(item, "colour").ifEmpty { str(item, "color") })) green++
+            }
+            return green to total
+        } catch (e: JSONException) {
+            return null
+        }
+    }
 
     private val AMOUNT = Regex("""(?i)([0-9][0-9,]*(?:\.[0-9]+)?)\s*(lakh crore|crore|cr|lakh|billion|bn|million|mn)\b""")
 

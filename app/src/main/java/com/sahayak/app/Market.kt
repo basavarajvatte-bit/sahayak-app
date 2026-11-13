@@ -5,7 +5,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -60,6 +62,24 @@ object Market {
         client.newCall(Request.Builder().url(url).header("User-Agent", UA).header("Accept", "*/*").build()).execute().use { r ->
             if (!r.isSuccessful) {
                 lastError = "Server answered " + r.code
+                null
+            } else {
+                r.body?.string()?.take(MAX_BODY)
+            }
+        }
+    } catch (e: IOException) {
+        lastError = "No internet"
+        null
+    }
+
+    /** Tickertape ke khule pages. Wo browser jaisa Referer maangte hain. */
+    fun tape(url: String, body: String? = null): String? = try {
+        val request = Request.Builder().url(url).header("User-Agent", UA).header("Accept", "application/json, text/plain, */*")
+            .header("Referer", "https://www.tickertape.in/")
+        if (body != null) request.post(body.toRequestBody("application/json".toMediaType()))
+        client.newCall(request.build()).execute().use { r ->
+            if (!r.isSuccessful) {
+                lastError = "Tickertape answered " + r.code
                 null
             } else {
                 r.body?.string()?.take(MAX_BODY)
@@ -378,10 +398,10 @@ object Market {
     }
 
     /** Tickertape par is share ka page. Na mile to Google se dhoondhne ka link. */
-    fun tickertapeLink(name: String): String {
+    fun tickertapeLink(name: String, sid: String = ""): String {
         val q = MarketLogic.companyQuery(name)
-        val slug = get("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
-            ?.let { MarketLogic.tickertapeSlug(it) }
+        val slug = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
+            ?.let { MarketLogic.tickertapeSlug(it, sid) }
         return if (slug != null) "https://www.tickertape.in$slug"
         else "https://www.google.com/search?q=" + URLEncoder.encode("tickertape $q share", "UTF-8")
     }
