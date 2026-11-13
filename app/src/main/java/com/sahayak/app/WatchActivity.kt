@@ -104,6 +104,7 @@ class WatchActivity : Activity() {
                 main.post { render() }
             }.start()
         })
+        page.addView(button("Test alert") { Watcher.testAlert(this) })
         status = text("", 15f, true)
         page.addView(status)
         page.addView(text("Results", 18f, true))

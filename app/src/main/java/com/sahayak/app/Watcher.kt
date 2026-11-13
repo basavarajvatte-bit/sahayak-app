@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Kisi khabar par nazar: website aur Google, tay samay par, nateeje list mein. */
 object Watcher {
     private const val PREFS = "sahayak_watch"
+    private const val NEWS_CHANNEL = "sahayak_news_alerts"
     const val ACTION_RUN = "com.sahayak.app.RUN_WATCH"
     private const val NOTE_ID = 7_801
     private const val MAX_RESULTS = 150
@@ -180,7 +181,7 @@ object Watcher {
             // Kai topic hon to batao notice kis topic ka hai
             val index = WatchLogic.topicOf(hot.first(), keys)
             val about = if (topics.size > 1 && index >= 0) " (" + topics[index].take(TOPIC_LABEL) + ")" else ""
-            WorkList.notifyText(c, NOTE_ID, "New on website$about: " + hot.first().take(120))
+            alertNow(c, NOTE_ID, "New notice on website$about", hot.first().take(200), url)
         }
     }
 
@@ -233,8 +234,44 @@ object Watcher {
             return
         }
         add(c, source, "Found", "• " + fresh.take(SHOW_LINES).joinToString("\n• ") { it.title }, fresh.first().link, true)
-        WorkList.notifyText(c, noteId, "News found: " + fresh.first().title.take(140))
+        alertNow(c, noteId, "News found" + (if (source.contains("·")) ": " + source.substringAfter("· ") else ""), fresh.first().title.take(200), fresh.first().link)
     }
+
+    /** Upar se girne wali (heads-up) notification, awaaz aur vibration ke saath. Dabao to khabar khule. */
+    private fun alertNow(c: Context, id: Int, title: String, text: String, link: String) {
+        val manager = c.getSystemService(android.app.NotificationManager::class.java)
+        val channel = android.app.NotificationChannel(NEWS_CHANNEL, "News Watch alerts", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Pops down from the top when your news is found"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 400, 200, 400)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+        }
+        manager.createNotificationChannel(channel)
+        val openWatch = PendingIntent.getActivity(c, id, Intent(c, WatchActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val builder = android.app.Notification.Builder(c, NEWS_CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(android.app.Notification.BigTextStyle().bigText(text))
+            .setCategory(android.app.Notification.CATEGORY_MESSAGE)
+            .setVisibility(android.app.Notification.VISIBILITY_PUBLIC)
+            .setContentIntent(openWatch)
+            .setAutoCancel(true)
+        if (link.startsWith("http")) {
+            val openLink = PendingIntent.getActivity(c, id + 500, Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            builder.addAction(android.app.Notification.Action.Builder(null, "Open news", openLink).build())
+        }
+        try {
+            manager.notify(id, builder.build())
+        } catch (e: SecurityException) {
+            // Notification ki permission band hai
+        }
+    }
+
+    /** Test ke liye: abhi ek alert dikhao. */
+    fun testAlert(c: Context) = alertNow(c, NOTE_ID + 99, "News Watch test", "This is how your news alert will look.", "")
 
     /** Kuch sarkari sites ka certificate adhoora hota hai. Sirf padhne ke liye, phir bhi khol lo. */
     private fun looseClient(): okhttp3.OkHttpClient {
