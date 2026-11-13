@@ -44,7 +44,7 @@ class MarketActivity : Activity() {
     private lateinit var greenFresh: Button
     private lateinit var greenBox: LinearLayout
     private var greenOpen = false
-    private var almostOpen = false
+    private val greenGroups = mutableSetOf(GreenList.MAX_GREEN, GreenList.MAX_GREEN - 1)
     private val greenTick = object : Runnable {
         override fun run() {
             if (!GreenList.running()) return
@@ -156,7 +156,7 @@ class MarketActivity : Activity() {
 
         // ----- Hara scorecard -----
         page.addView(text("Green scorecard", 18f, true))
-        page.addView(text("Shares whose whole Tickertape scorecard is green. Tap a share to open it in Tickertape.", 13f))
+        page.addView(text("Shares by how much of their Tickertape scorecard is green: 6 of 6, 5 of 6, 4 of 6. Tap a share to open it in Tickertape.", 13f))
         page.addView(HorizontalScrollView(this).apply {
             addView(RadioGroup(context).apply {
                 orientation = RadioGroup.HORIZONTAL
@@ -320,25 +320,26 @@ class MarketActivity : Activity() {
         }
         val rows = saved.optJSONArray("rows") ?: org.json.JSONArray()
         val all = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
-        val full = all.filter { it.optInt("green") == it.optInt("total") }
-        val almost = all.filter { it.optInt("green") < it.optInt("total") }
-        greenBox.addView(text("List made " + time.format(Date(saved.optLong("at"))) + ". Checked " + saved.optInt("checked") + " companies. All green: " + full.size, 13f, false, GREY))
-        if (full.isEmpty()) greenBox.addView(text("No share is fully green right now.", 14f))
-        fun show(row: org.json.JSONObject, color: Int) {
-            val box = card()
-            val ticker = row.optString("ticker")
-            box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
-            box.addView(text(row.optInt("green").toString() + " of " + row.optInt("total") + " green  ·  Open in Tickertape", 13f, true, color))
-            box.setOnClickListener { openGreen(row) }
-            greenBox.addCard(box)
-        }
-        full.forEach { show(it, GREEN) }
-        if (almost.isNotEmpty()) {
-            greenBox.addView(button(if (almostOpen) "Hide one short of full green" else "One short of full green (" + almost.size + ")") {
-                almostOpen = !almostOpen
+        val full = all.count { it.optInt("green") >= GreenList.MAX_GREEN }
+        greenBox.addView(text("List made " + time.format(Date(saved.optLong("at"))) + ". Checked " + saved.optInt("checked") + " companies. All green: " + full, 13f, false, GREY))
+        // 6 of 6, phir 5 of 6, phir 4 of 6: har list apne button se khulti hai
+        for (count in GreenList.MAX_GREEN downTo GreenList.MIN_GREEN) {
+            val group = all.filter { minOf(it.optInt("green"), GreenList.MAX_GREEN) == count }
+            val open = count in greenGroups
+            greenBox.addView(button((if (open) "▲ " else "▼ ") + count + " of " + GreenList.MAX_GREEN + " green  (" + group.size + ")") {
+                if (open) greenGroups.remove(count) else greenGroups.add(count)
                 render()
             })
-            if (almostOpen) almost.forEach { show(it, TEAL) }
+            if (!open) continue
+            if (group.isEmpty()) greenBox.addView(text("No share here right now.", 14f, false, GREY))
+            group.forEach { row ->
+                val box = card()
+                val ticker = row.optString("ticker")
+                box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
+                box.addView(text(row.optInt("green").toString() + " of " + row.optInt("total") + " green  ·  Open in Tickertape", 13f, true, if (count == GreenList.MAX_GREEN) GREEN else TEAL))
+                box.setOnClickListener { openGreen(row) }
+                greenBox.addCard(box)
+            }
         }
     }
 

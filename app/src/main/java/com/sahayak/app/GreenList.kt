@@ -11,6 +11,8 @@ object GreenList {
     private const val PAGE = 100
     private const val GAP_MS = 250L
     private const val MIN_ITEMS = 5
+    const val MIN_GREEN = 4
+    const val MAX_GREEN = 6
     private const val GIVE_UP = 12
     val SIZES = listOf(100, 300, 500)
 
@@ -81,7 +83,7 @@ object GreenList {
                     checked++
                     val (green, total) = card
                     if (total < MIN_ITEMS) thin++
-                    if (total >= MIN_ITEMS && green >= total - 1) {
+                    if (total >= MIN_ITEMS && green >= MIN_GREEN) {
                         if (green == total) full++
                         rows.put(JSONObject().put("sid", s.sid).put("name", s.name).put("ticker", s.ticker).put("slug", s.slug)
                             .put("green", green).put("total", total))
