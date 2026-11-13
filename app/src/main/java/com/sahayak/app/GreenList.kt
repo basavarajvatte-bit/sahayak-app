@@ -14,7 +14,16 @@ object GreenList {
     const val MIN_GREEN = 4
     const val MAX_GREEN = 6
     private const val GIVE_UP = 12
-    val SIZES = listOf(100, 300, 500)
+
+    /** Market cap ke hisaab se teen group: rank 1-100, 101-250, 251-750. */
+    data class Cap(val id: String, val label: String, val from: Int, val count: Int)
+
+    val CAPS = listOf(Cap("small", "Smallcap", 250, 500), Cap("mid", "Midcap", 100, 150), Cap("large", "Largecap", 0, 100))
+
+    /** Abhi kis group ki list ban rahi hai. Khaali matlab koi nahi. */
+    @Volatile
+    var runningCap = ""
+        private set
 
     private val busy = AtomicBoolean(false)
 
@@ -34,12 +43,8 @@ object GreenList {
 
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun size(c: Context) = prefs(c).getInt("size", 300)
-
-    fun setSize(c: Context, size: Int) = prefs(c).edit().putInt("size", size).apply()
-
     /** Pichhli bani list: at, checked, rows [{sid,name,ticker,slug,green,total}]. */
-    fun saved(c: Context): JSONObject? = prefs(c).getString("list", null)?.let {
+    fun saved(c: Context, cap: Cap): JSONObject? = prefs(c).getString("list_" + cap.id, null)?.let {
         try {
             JSONObject(it)
         } catch (e: org.json.JSONException) {
@@ -48,14 +53,15 @@ object GreenList {
     }
 
     /** Sabse badi companies ka scorecard ek-ek karke dekho. Jawab user ko dikhane ke liye. */
-    fun run(c: Context): String {
-        if (!busy.compareAndSet(false, true)) return "List is already being made"
+    fun run(c: Context, cap: Cap): String {
+        if (!busy.compareAndSet(false, true)) return "A list is already being made. Wait for it or tap Stop"
         stop = false
+        runningCap = cap.id
         try {
-            val want = size(c)
-            progress = "Getting the list of companies"
+            val want = cap.count
+            progress = "Getting the list of " + cap.label + " companies"
             val stocks = mutableListOf<MarketLogic.Stock>()
-            var offset = 0
+            var offset = cap.from
             while (stocks.size < want && !stop) {
                 val body = JSONObject().put("match", JSONObject()).put("sortBy", "mrktCapf").put("sortOrder", -1)
                     .put("project", JSONArray().put("subindustry").put("mrktCapf").put("lastPrice"))
@@ -74,7 +80,7 @@ object GreenList {
             var thin = 0
             for (s in list) {
                 if (stop) break
-                progress = "Checked $checked of " + list.size + ". All green so far: $full"
+                progress = cap.label + ": checked $checked of " + list.size + ". All green so far: $full"
                 val card = Market.tape("https://analyze.api.tickertape.in/stocks/scorecard/" + s.sid)?.let { MarketLogic.parseScorecard(it) }
                 if (card == null) {
                     failed++
@@ -96,14 +102,15 @@ object GreenList {
                 }
             }
             if (checked == 0) return "Tickertape did not give the scorecard. " + Market.lastError
-            prefs(c).edit().putString("list", JSONObject().put("at", System.currentTimeMillis()).put("checked", checked)
+            prefs(c).edit().putString("list_" + cap.id, JSONObject().put("at", System.currentTimeMillis()).put("checked", checked)
                 .put("rows", rows).toString()).apply()
             if (thin == checked) return "Tickertape gave only a part of the scorecard, so the list cannot be made. Send a screenshot of this"
-            return (if (stop) "Stopped. " else "") + "Checked $checked companies. All green: $full"
+            return (if (stop) "Stopped. " else "") + cap.label + ": checked $checked companies. All green: $full"
         } catch (e: org.json.JSONException) {
             return "Something went wrong. Try again"
         } finally {
             progress = ""
+            runningCap = ""
             busy.set(false)
         }
     }

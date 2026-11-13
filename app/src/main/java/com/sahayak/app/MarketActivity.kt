@@ -44,6 +44,8 @@ class MarketActivity : Activity() {
     private lateinit var greenFresh: Button
     private lateinit var greenBox: LinearLayout
     private var greenOpen = false
+    private var greenCap = GreenList.CAPS[0]
+    private val capButtons = mutableMapOf<String, Button>()
     private val greenGroups = mutableSetOf(GreenList.MAX_GREEN, GreenList.MAX_GREEN - 1)
     private val greenTick = object : Runnable {
         override fun run() {
@@ -157,24 +159,22 @@ class MarketActivity : Activity() {
         // ----- Hara scorecard -----
         page.addView(text("Green scorecard", 18f, true))
         page.addView(text("Shares by how much of their Tickertape scorecard is green: 6 of 6, 5 of 6, 4 of 6. Tap a share to open it in Tickertape.", 13f))
-        page.addView(HorizontalScrollView(this).apply {
-            addView(RadioGroup(context).apply {
-                orientation = RadioGroup.HORIZONTAL
-                GreenList.SIZES.forEachIndexed { i, n ->
-                    addView(RadioButton(context).apply { id = GREEN_IDS + i; text = "Top $n companies"; textSize = 14f })
+        val capRow = LinearLayout(this)
+        GreenList.CAPS.forEach { cap ->
+            val b = button(cap.label) {
+                // Wahi button dobara: list band. Naya button: uski list, na ho to banao
+                if (greenCap == cap && greenOpen) greenOpen = false else {
+                    greenCap = cap
+                    greenOpen = true
+                    if (GreenList.saved(this, cap) == null && !GreenList.running()) makeGreen()
                 }
-                check(GREEN_IDS + GreenList.SIZES.indexOf(GreenList.size(this@MarketActivity)).coerceAtLeast(0))
-                setOnCheckedChangeListener { _, id ->
-                    GreenList.setSize(this@MarketActivity, GreenList.SIZES[(id - GREEN_IDS).coerceIn(0, GreenList.SIZES.lastIndex)])
-                }
-            })
-        })
-        page.addView(button("Green scorecard") {
-            if (GreenList.saved(this) == null && !GreenList.running()) makeGreen() else {
-                greenOpen = !greenOpen
                 render()
             }
-        })
+            capButtons[cap.id] = b
+            capRow.addView(b, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        page.addView(capRow)
+        page.addView(text("Largecap: biggest 100 companies. Midcap: next 150. Smallcap: next 500.", 12f, false, GREY))
         greenFresh = button("") { if (GreenList.running()) GreenList.stop() else makeGreen() }
         page.addView(greenFresh)
         greenStatus = text("", 14f, true)
@@ -278,10 +278,11 @@ class MarketActivity : Activity() {
     /** Tickertape se sab companies ka scorecard dekhna: kuch minute lagte hain. */
     private fun makeGreen() {
         val app = applicationContext
+        val cap = greenCap
         greenOpen = true
         greenStatus.text = "Starting"
         Thread {
-            val answer = GreenList.run(app)
+            val answer = GreenList.run(app, cap)
             main.post {
                 if (isDestroyed) return@post
                 greenStatus.text = answer
@@ -310,14 +311,23 @@ class MarketActivity : Activity() {
 
     private fun renderGreen() {
         val running = GreenList.running()
-        greenFresh.text = if (running) "Stop" else "Make fresh list (takes a few minutes)"
+        greenFresh.text = if (running) "Stop" else "Make fresh " + greenCap.label + " list (takes a few minutes)"
+        greenFresh.visibility = if (greenOpen || running) android.view.View.VISIBLE else android.view.View.GONE
+        capButtons.forEach { (id, b) ->
+            val cap = GreenList.CAPS.first { it.id == id }
+            b.text = (if (greenOpen && cap == greenCap) "● " else "") + cap.label
+        }
         greenBox.removeAllViews()
         if (!greenOpen) return
-        val saved = GreenList.saved(this)
+        val saved = GreenList.saved(this, greenCap)
         if (saved == null) {
-            if (!running) greenBox.addView(text("No list yet.", 14f, false, GREY))
+            greenBox.addView(text(
+                if (GreenList.runningCap == greenCap.id) "Making the " + greenCap.label + " list" else if (running) "Another list is being made. Wait or tap Stop" else "No " + greenCap.label + " list yet.",
+                14f, false, GREY
+            ))
             return
         }
+        greenBox.addView(text(greenCap.label, 16f, true))
         val rows = saved.optJSONArray("rows") ?: org.json.JSONArray()
         val all = (0 until rows.length()).mapNotNull { rows.optJSONObject(it) }
         val full = all.count { it.optInt("green") >= GreenList.MAX_GREEN }
@@ -470,7 +480,6 @@ class MarketActivity : Activity() {
 
     companion object {
         private const val IDS = 6_000
-        private const val GREEN_IDS = 6_100
         private const val REFRESH_MS = 15_000L
         private const val NEWS_ROWS = 10
         private const val INK = 0xFF1D2433.toInt()
