@@ -259,6 +259,17 @@ class MarketActivity : Activity() {
             ))
             box.addView(text("Price checked " + time.format(Date(s.optLong("lastAt"))), 12f, false, GREY))
             val row = LinearLayout(this).apply { gravity = Gravity.END }
+            row.addView(button("Tickertape") {
+                val name = s.optString("name")
+                shareStatus.text = "Opening $name in Tickertape"
+                Thread {
+                    val link = Market.tickertapeLink(name)
+                    main.post {
+                        if (isDestroyed) return@post
+                        shareStatus.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
+                    }
+                }.start()
+            })
             row.addView(button("News") {
                 open("https://news.google.com/search?q=" + URLEncoder.encode(MarketLogic.companyQuery(s.optString("name")) + " share", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en")
             })

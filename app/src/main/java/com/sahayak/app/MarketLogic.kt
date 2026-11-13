@@ -177,7 +177,11 @@ object MarketLogic {
     // ---------- Khabar ki gehrai ----------
 
     data class Num(val what: String, val before: Double, val after: Double, val unit: String, val period: String)
-    data class Depth(val company: String, val level: Int, val what: String, val numbers: List<Num>, val past: List<String>, val why: String, val unsure: String)
+    data class Trend(val what: String, val unit: String, val points: List<Pair<String, Double>>)
+    data class Depth(
+        val company: String, val level: Int, val what: String, val numbers: List<Num>, val past: List<String>, val why: String, val unsure: String,
+        val trends: List<Trend> = emptyList(), val reasons: List<String> = emptyList()
+    )
 
     /** AI ke jawab mein se JSON wala hissa. */
     fun jsonBlock(text: String): String {
@@ -203,10 +207,29 @@ object MarketLogic {
             val past = mutableListOf<String>()
             val old = o.optJSONArray("past")
             if (old != null) for (i in 0 until old.length()) old.optString(i).trim().takeIf { it.isNotEmpty() }?.let { past.add(it) }
+            val trends = mutableListOf<Trend>()
+            val rows = o.optJSONArray("trend")
+            if (rows != null) {
+                for (i in 0 until rows.length()) {
+                    val row = rows.optJSONObject(i) ?: continue
+                    val points = mutableListOf<Pair<String, Double>>()
+                    val list = row.optJSONArray("points") ?: continue
+                    for (j in 0 until list.length()) {
+                        val p = list.optJSONObject(j) ?: continue
+                        val v = p.optDouble("value", Double.NaN)
+                        if (v.isNaN() || v.isInfinite() || p.optString("period").isBlank()) continue
+                        points.add(p.optString("period").trim() to v)
+                    }
+                    if (points.size >= 2) trends.add(Trend(row.optString("what").trim(), row.optString("unit"), points.take(8)))
+                }
+            }
+            val reasons = mutableListOf<String>()
+            val why = o.optJSONArray("reasons")
+            if (why != null) for (i in 0 until why.length()) why.optString(i).trim().takeIf { it.isNotEmpty() }?.let { reasons.add(it) }
             val what = o.optString("what").trim()
-            if (what.isEmpty() && numbers.isEmpty()) return null
-            return Depth(o.optString("company").trim(), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(5),
-                o.optString("why").trim(), o.optString("unsure").trim())
+            if (what.isEmpty() && numbers.isEmpty() && trends.isEmpty()) return null
+            return Depth(o.optString("company").trim(), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(8),
+                o.optString("why").trim(), o.optString("unsure").trim(), trends.take(4), reasons.take(6))
         } catch (e: JSONException) {
             return null
         }
@@ -259,6 +282,8 @@ object MarketLogic {
         "to", "gets", "reports", "posts", "board", "india", "indian", "sensex", "nifty", "rbi", "sebi", "gst", "why", "how", "what", "these", "top", "breaking"
     )
 
+    private val PERIOD = Regex("(q[1-4].*|fy ?[0-9].*|h[12].*|[0-9].*)")
+
     /** Heading ki shuruaat ke bade akshar wale shabd: aksar company ka naam. */
     fun companyGuess(title: String): String {
         val out = mutableListOf<String>()
@@ -266,26 +291,33 @@ object MarketLogic {
             val w = word.trim(',', ':', ';', '\'', '"', '(', ')')
             if (w.isEmpty() || out.size >= 4) break
             val plain = w.lowercase(Locale.ENGLISH).removeSuffix("'s").removeSuffix("’s")
-            if (plain in NOT_NAME || !(w[0].isUpperCase() || w == "&")) break
+            if (plain in NOT_NAME || PERIOD.matches(plain) || !(w[0].isUpperCase() || w == "&")) break
             out.add(w.removeSuffix("'s").removeSuffix("’s"))
             if (w.endsWith("'s") || w.endsWith("’s")) break
         }
         return out.joinToString(" ").trimEnd('&', ' ')
     }
 
-    /** Purani khabrein dhoondhne ke liye sawaal. */
-    fun relatedQuery(title: String, kind: String): String {
+    /** Purani khabrein dhoondhne ke liye sawaal: company ho to sirf usi ka naam. */
+    fun relatedQuery(title: String): String {
         val company = companyGuess(title)
         if (company.isEmpty()) return BrainLogic.tokens(cleanTitle(title)).filter { it.length > 2 }.take(6).joinToString(" ")
-        val about = when (kind) {
-            "Results" -> "results profit"
-            "Management" -> "CEO"
-            "Deal" -> "order deal"
-            "Trade war" -> "tariff"
-            else -> ""
-        }
-        return "$company $about".trim()
+        return "\"" + companyQuery(company) + "\""
     }
+
+    /** Kya ye heading isi company ki hai: naam ke saare shabd hone chahiye. */
+    fun aboutCompany(title: String, company: String): Boolean {
+        val need = BrainLogic.tokens(companyQuery(company))
+        if (need.isEmpty()) return true
+        val words = BrainLogic.tokens(cleanTitle(title)).toSet()
+        return need.all { it in words }
+    }
+
+    private val SLUG = Regex("\"slug\"\\s*:\\s*\"((?:\\\\)?/stocks(?:\\\\)?/[^\"]+)\"")
+
+    /** Tickertape search ke jawab mein se share ka page. */
+    fun tickertapeSlug(json: String): String? =
+        SLUG.find(json)?.groupValues?.get(1)?.replace("\\/", "/")?.takeIf { it.startsWith("/stocks/") && it.length > 9 }
 
     private val AMOUNT = Regex("""(?i)([0-9][0-9,]*(?:\.[0-9]+)?)\s*(lakh crore|crore|cr|lakh|billion|bn|million|mn)\b""")
 

@@ -100,6 +100,12 @@ class MarketLogicTest {
         assertEquals("₹300 crore", MarketLogic.numText(n.after, n.unit))
         assertEquals("12.0 times bigger  (▲ 1,100%)" to 1, MarketLogic.jumpText(n.before, n.after))
         assertNull(MarketLogic.parseDepth("Sorry, no idea"))
+        val deep = MarketLogic.parseDepth("""{"company":"Axel Polymers","level":3,"what":"x","trend":[{"what":"Revenue","unit":"₹ crore",
+            "points":[{"period":"Q2 FY25","value":40},{"period":"Q2 FY26","value":50},{"period":"","value":1},{"period":"Q2 FY27","value":75}]},
+            {"what":"One point","points":[{"period":"FY26","value":3}]}],"reasons":["Naya order mila", " "]}""")!!
+        assertEquals(1, deep.trends.size)
+        assertEquals(listOf("Q2 FY25" to 40.0, "Q2 FY26" to 50.0, "Q2 FY27" to 75.0), deep.trends[0].points)
+        assertEquals(listOf("Naya order mila"), deep.reasons)
     }
 
     @Test fun describesOtherChanges() {
@@ -116,7 +122,14 @@ class MarketLogicTest {
         assertEquals("Tata Motors", MarketLogic.companyGuess("Tata Motors Q2 net profit falls 20% - Mint"))
         assertEquals("L&T", MarketLogic.companyGuess("L&T bags Rs 5,000 crore order"))
         assertEquals("", MarketLogic.companyGuess("Sensex falls 500 points"))
-        assertEquals("Tata Motors results profit", MarketLogic.relatedQuery("Tata Motors Q2 net profit falls 20%", "Results"))
+        assertEquals("\"Tata Motors\"", MarketLogic.relatedQuery("Tata Motors Q2 net profit falls 20%"))
+        val axel = "Axel Polymers Q2FY27 Results: Revenue up 50% YoY, faces ₹86 cr GST demand - scanx.trade"
+        assertEquals("Axel Polymers", MarketLogic.companyGuess(axel))
+        assertTrue(MarketLogic.aboutCompany("Axel Polymers Ltd Q2 FY24 net profit at Rs. 49.95 lakhs - EquityBulls", "Axel Polymers"))
+        assertFalse(MarketLogic.aboutCompany("Krishna GVK Hotels Q2 net profit falls to ₹26.6 crore - scanx.trade", "Axel Polymers"))
+        assertEquals("/stocks/axel-polymers-AXEL", MarketLogic.tickertapeSlug("""{"data":{"stocks":[{"sid":"AXEL","slug":"\/stocks\/axel-polymers-AXEL"}]}}"""))
+        assertEquals("/stocks/reliance-industries-RELI", MarketLogic.tickertapeSlug("""{"slug": "/stocks/reliance-industries-RELI"}"""))
+        assertNull(MarketLogic.tickertapeSlug("""{"data":{"stocks":[]}}"""))
         val a = MarketLogic.headlineJump("ABC net profit jumps to Rs 300 crore from Rs 25 crore")!!
         assertEquals(25.0, a.before, 0.001)
         assertEquals(300.0, a.after, 0.001)

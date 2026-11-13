@@ -320,7 +320,7 @@ object Market {
     // ---------- Khabar ki gehrai ----------
 
     private const val MAX_DEPTH = 40
-    private const val RELATED = 12
+    private const val RELATED = 20
 
     private fun cachedDepth(c: Context, link: String): JSONObject? {
         val a = JSONArray(prefs(c).getString("depth", "[]"))
@@ -340,8 +340,11 @@ object Market {
         val out = JSONObject().put("link", link).put("at", System.currentTimeMillis())
         lastError = ""
         val mine = MarketLogic.key(title)
-        val older = get(rssAll(MarketLogic.relatedQuery(title, kind)))?.let { xml ->
+        val company = MarketLogic.companyGuess(title)
+        // Company ki khabar ho to sirf usi company ki purani khabrein
+        val older = get(rssAll(MarketLogic.relatedQuery(title)))?.let { xml ->
             WatchLogic.news(xml).filter { MarketLogic.cleanTitle(it.title) != title && MarketLogic.key(it.title) != mine }
+                .filter { company.isEmpty() || MarketLogic.aboutCompany(it.title, company) }
                 .sortedByDescending { MarketLogic.pubTime(it.date) }.take(RELATED)
         }.orEmpty()
         val day = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH)
@@ -353,7 +356,8 @@ object Market {
         out.put("related", related)
         val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
         if (key.isEmpty()) return out.put("error", "Add your Gemini key in Sahayak to get the full research")
-        val text = "Today: " + day.format(Date()) + "\nType: " + kind + "\nHeadline: " + title + "\nOlder related headlines:\n" +
+        val text = "Today: " + day.format(Date()) + "\nType: " + kind + "\nHeadline: " + title +
+            (if (company.isNotEmpty()) "\nCompany: $company (write only about this company)" else "") + "\nOlder headlines about it:\n" +
             (if (older.isEmpty()) "(none found)" else older.joinToString("\n") { n ->
                 val at = MarketLogic.pubTime(n.date)
                 "- " + (if (at > 0) day.format(Date(at)) + ": " else "") + n.title
@@ -361,7 +365,7 @@ object Market {
         val planner = Planner(GeminiLive.newClient(), key, 60L)
         val answer = planner.depth(text)
         if (answer == null || MarketLogic.parseDepth(answer.first) == null) {
-            return out.put("error", planner.lastError.ifEmpty { "AI did not give a clear answer. Tap Research again" })
+            return out.put("error", planner.lastError.ifEmpty { "AI did not give a clear answer. Tap Depth again" })
         }
         out.put("ai", MarketLogic.jsonBlock(answer.first)).put("searched", answer.second)
         synchronized(this) {
@@ -371,6 +375,34 @@ object Market {
             prefs(c).edit().putString("depth", JSONArray(list.take(MAX_DEPTH)).toString()).apply()
         }
         return out
+    }
+
+    /** Tickertape par is share ka page. Na mile to Google se dhoondhne ka link. */
+    fun tickertapeLink(name: String): String {
+        val q = MarketLogic.companyQuery(name)
+        val slug = get("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
+            ?.let { MarketLogic.tickertapeSlug(it) }
+        return if (slug != null) "https://www.tickertape.in$slug"
+        else "https://www.google.com/search?q=" + URLEncoder.encode("tickertape $q share", "UTF-8")
+    }
+
+    /** Tickertape app mein kholo. App na ho ya link uska na ho to browser mein. */
+    fun openTickertape(a: android.app.Activity, link: String): Boolean {
+        val uri = android.net.Uri.parse(link)
+        if (link.startsWith("https://www.tickertape.in")) {
+            try {
+                a.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage("in.tickertape"))
+                return true
+            } catch (e: android.content.ActivityNotFoundException) {
+                // App nahi hai ya ye link nahi kholta
+            }
+        }
+        return try {
+            a.startActivity(Intent(Intent.ACTION_VIEW, uri))
+            true
+        } catch (e: android.content.ActivityNotFoundException) {
+            false
+        }
     }
 
     private fun rssAll(query: String) =

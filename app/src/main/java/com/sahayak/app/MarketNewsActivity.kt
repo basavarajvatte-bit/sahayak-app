@@ -24,6 +24,8 @@ class MarketNewsActivity : Activity() {
     private var headline = ""
     private var link = ""
     private var kind = ""
+    private var company = ""
+    private lateinit var tape: Button
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -77,25 +79,29 @@ class MarketNewsActivity : Activity() {
         ).filter { it.isNotEmpty() }.joinToString("  ·  ")
         page.addView(text(meta, 13f, true, TEAL))
         page.addView(text(headline, 19f, true))
+        company = MarketLogic.companyGuess(headline)
+        tape = button("") { tickertape() }
+        page.addView(tape)
+        showTape()
         status = text("", 14f, true)
         page.addView(status)
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(body)
         page.addView(button("Open full news") { open(link) })
-        page.addView(button("Research again") { research(true) })
+        page.addView(button("Depth") { research(true) })
         page.addView(text("AI reads the news and can make mistakes. Open the full news and check before you decide anything.", 12f, false, GREY))
         research(false)
     }
 
     private fun research(force: Boolean) {
-        status.text = "Researching this news. It can take up to a minute"
+        status.text = "Doing depth research. It can take up to a minute"
         body.removeAllViews()
         val app = applicationContext
         Thread {
             val result = try {
                 Market.depth(app, headline, link, kind, force)
             } catch (e: org.json.JSONException) {
-                JSONObject().put("error", "Something went wrong. Tap Research again")
+                JSONObject().put("error", "Something went wrong. Tap Depth again")
             }
             main.post {
                 if (!isDestroyed) show(result)
@@ -123,7 +129,18 @@ class MarketNewsActivity : Activity() {
             level.addView(text("●".repeat(depth.level) + "○".repeat(5 - depth.level) + "   " + MarketLogic.levelWord(depth.level) + "  (" + depth.level + " of 5)", 19f, true, color))
             if (depth.what.isNotEmpty()) level.addView(text(depth.what, 15f))
             body.addCard(level)
+            if (depth.company.isNotEmpty()) {
+                company = depth.company
+                showTape()
+            }
             numbers(depth.numbers)
+            trends(depth.trends)
+            if (depth.reasons.isNotEmpty()) {
+                val reasons = card()
+                reasons.addView(text("Why it changed", 13f, true, GREY))
+                depth.reasons.forEach { reasons.addView(text("• $it", 15f)) }
+                body.addCard(reasons)
+            }
             if (depth.past.isNotEmpty()) {
                 val past = card()
                 past.addView(text("What happened before", 13f, true, GREY))
@@ -174,6 +191,44 @@ class MarketNewsActivity : Activity() {
             if (jump.isNotEmpty()) box.addView(text(jump, 16f, true, if (way > 0) GREEN else if (way < 0) RED else INK))
         }
         body.addCard(box)
+    }
+
+    /** Pichhle saal aur usse pehle ke aankde, har kadam par kitna badla. */
+    private fun trends(list: List<MarketLogic.Trend>) {
+        if (list.isEmpty()) return
+        val box = card()
+        box.addView(text("Earlier years and quarters", 13f, true, GREY))
+        list.forEach { t ->
+            if (t.what.isNotEmpty()) box.addView(text(t.what, 15f, true))
+            t.points.forEachIndexed { i, point ->
+                val row = LinearLayout(this)
+                row.addView(text(point.first, 14f, false, GREY), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                row.addView(text(MarketLogic.numText(point.second, t.unit), 15f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                val (jump, way) = if (i > 0) MarketLogic.jumpText(t.points[i - 1].second, point.second) else "" to 0
+                row.addView(text(jump.substringBefore("  ("), 13f, true, if (way > 0) GREEN else if (way < 0) RED else INK),
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f))
+                box.addView(row)
+            }
+        }
+        body.addCard(box)
+    }
+
+    private fun showTape() {
+        tape.text = "Tickertape:  $company"
+        tape.visibility = if (company.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+    }
+
+    /** Is company ka page Tickertape app mein. */
+    private fun tickertape() {
+        val name = company
+        status.text = "Opening $name in Tickertape"
+        Thread {
+            val link = Market.tickertapeLink(name)
+            main.post {
+                if (isDestroyed) return@post
+                status.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
+            }
+        }.start()
     }
 
     private fun watchButton(company: String) {
