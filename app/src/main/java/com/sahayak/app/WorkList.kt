@@ -186,6 +186,12 @@ class WorkReceiver : BroadcastReceiver() {
             Thread { Watcher.run(app, true) }.start()
             return
         }
+        if (intent.action == Market.ACTION_NEWS || intent.action == Market.ACTION_REPORT) {
+            val app = context.applicationContext
+            val report = intent.action == Market.ACTION_REPORT
+            Thread { if (report) Market.report(app, true) else Market.runNews(app, true) }.start()
+            return
+        }
         val queue = listOf(ShortsQueue, ReelsQueue).firstOrNull { it.actionRun == intent.action }
         if (queue != null) {
             // Upload do minute tak chalta hai, phone control ka service app ko zinda rakhta hai
@@ -203,6 +209,7 @@ class WorkReceiver : BroadcastReceiver() {
                     ShortsQueue.rearm(context)
                     ReelsQueue.rearm(context)
                     Watcher.rearm(context)
+                    Market.rearm(context)
                 }
             } finally {
                 result.finish()

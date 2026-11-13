@@ -53,6 +53,11 @@
         </activity>
 
         <activity
+            android:name=".MarketActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".WatchActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

@@ -238,7 +238,7 @@ object Watcher {
     }
 
     /** Upar se girne wali (heads-up) notification, awaaz aur vibration ke saath. Dabao to khabar khule. */
-    private fun alertNow(c: Context, id: Int, title: String, text: String, link: String) {
+    fun alertNow(c: Context, id: Int, title: String, text: String, link: String, screen: Class<*> = WatchActivity::class.java) {
         val manager = c.getSystemService(android.app.NotificationManager::class.java)
         val channel = android.app.NotificationChannel(NEWS_CHANNEL, "News Watch alerts", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Pops down from the top when your news is found"
@@ -247,7 +247,7 @@ object Watcher {
             lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
         }
         manager.createNotificationChannel(channel)
-        val openWatch = PendingIntent.getActivity(c, id, Intent(c, WatchActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        val openWatch = PendingIntent.getActivity(c, id, Intent(c, screen).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val builder = android.app.Notification.Builder(c, NEWS_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
