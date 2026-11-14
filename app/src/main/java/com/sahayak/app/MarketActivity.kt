@@ -293,6 +293,26 @@ class MarketActivity : Activity() {
         main.postDelayed({ if (!isDestroyed) render() }, 600L)
     }
 
+    /** Green list ka share aaj ke bhaav par My shares mein. */
+    private fun lockGreen(row: org.json.JSONObject, count: Int) {
+        val name = row.optString("name")
+        greenStatus.text = "Locking $name at today's price"
+        val app = applicationContext
+        val from = greenCap.label + " green scorecard: " + count + " of " + row.optInt("total") + " green"
+        Thread {
+            val answer = try {
+                Market.lockSymbol(app, row.optString("ticker"), name, from)
+            } catch (e: org.json.JSONException) {
+                "Something went wrong. Try again"
+            }
+            main.post {
+                if (isDestroyed) return@post
+                greenStatus.text = answer
+                render()
+            }
+        }.start()
+    }
+
     private fun openGreen(row: org.json.JSONObject) {
         val slug = row.optString("slug")
         if (slug.startsWith("/stocks/")) {
@@ -348,6 +368,12 @@ class MarketActivity : Activity() {
                 box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
                 box.addView(text(row.optInt("green").toString() + " of " + row.optInt("total") + " green  ·  Open in Tickertape", 13f, true, if (count == GreenList.MAX_GREEN) GREEN else TEAL))
                 box.setOnClickListener { openGreen(row) }
+                val locked = Market.shares(this).any { it.optString("symbol").substringBefore('.') == ticker && ticker.isNotEmpty() }
+                val actions = LinearLayout(this).apply { gravity = Gravity.END }
+                actions.addView(button(if (locked) "✓ Locked" else "🔒 Lock at today's price") {
+                    if (!locked) lockGreen(row, count)
+                }.apply { isEnabled = !locked })
+                box.addView(actions)
                 greenBox.addCard(box)
             }
         }
@@ -379,7 +405,8 @@ class MarketActivity : Activity() {
                 14f, true, if (change > 0.004) GREEN else if (change < -0.004) RED else INK
             ))
             s.optString("fromTitle").takeIf { it.isNotEmpty() }?.let { from ->
-                box.addView(text("🔒 Locked from news: $from", 13f, false, BLUE).apply {
+                val news = s.optString("fromLink").isNotEmpty()
+                box.addView(text((if (news) "🔒 Locked from news: " else "🔒 Locked from ") + from, 13f, false, if (news) BLUE else GREY).apply {
                     setOnClickListener { s.optString("fromLink").takeIf { it.isNotEmpty() }?.let { l -> open(l) } }
                 })
             }

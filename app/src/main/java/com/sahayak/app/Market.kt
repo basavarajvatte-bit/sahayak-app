@@ -108,15 +108,19 @@ object Market {
 
     private fun find(typed: String): MarketLogic.Quote? {
         val q = URLEncoder.encode(typed, "UTF-8")
-        val found = get("https://query2.finance.yahoo.com/v1/finance/search?q=$q&quotesCount=8&newsCount=0")
-            ?.let { MarketLogic.best(MarketLogic.parseSearch(it)) }
-        if (found != null) {
-            val got = quote(found.symbol)
-            if (got != null) return got.copy(name = found.name.ifEmpty { got.name })
+        val all = get("https://query2.finance.yahoo.com/v1/finance/search?q=$q&quotesCount=8&newsCount=0")
+            ?.let { MarketLogic.parseSearch(it) }.orEmpty()
+        // Pehle Indian share (NSE/BSE). Videshi share sirf tab, jab Indian bilkul na mile
+        val indian = all.filter { it.symbol.endsWith(".NS") || it.symbol.endsWith(".BO") }
+        MarketLogic.best(indian)?.let { found ->
+            quote(found.symbol)?.let { return it.copy(name = found.name.ifEmpty { it.name }) }
         }
         for (symbol in MarketLogic.guessSymbols(typed)) {
             val got = quote(symbol)
             if (got != null) return got
+        }
+        MarketLogic.best(all)?.let { found ->
+            quote(found.symbol)?.let { return it.copy(name = found.name.ifEmpty { it.name }) }
         }
         return null
     }
@@ -143,6 +147,20 @@ object Market {
         lastError = ""
         val q = find(name)
             ?: return if (lastError == "No internet") "No internet. Try again" else "Could not find \"$name\". Try the exact NSE code, e.g. RELIANCE"
+        return save(c, q, fromTitle, fromLink)
+    }
+
+    /** NSE code pata ho (jaise green list mein) to seedha usi ka bhaav, bina dhoondhe. */
+    fun lockSymbol(c: Context, ticker: String, name: String, fromTitle: String): String {
+        if (shares(c).size >= MAX_SHARES) return "List is full. Remove one share first"
+        lastError = ""
+        val code = ticker.trim().uppercase(Locale.ENGLISH)
+        val q = (if (code.isEmpty()) null else quote("$code.NS") ?: quote("$code.BO")) ?: find(name)
+            ?: return if (lastError == "No internet") "No internet. Try again" else "Could not get the price of $name. Try again"
+        return save(c, q.copy(name = name.ifEmpty { q.name }), fromTitle, "")
+    }
+
+    private fun save(c: Context, q: MarketLogic.Quote, fromTitle: String, fromLink: String): String {
         if (shares(c).any { it.optString("symbol") == q.symbol }) return q.name + " is already in your list"
         val now = System.currentTimeMillis()
         val item = JSONObject().put("id", now.toString()).put("symbol", q.symbol).put("name", q.name).put("currency", q.currency)
