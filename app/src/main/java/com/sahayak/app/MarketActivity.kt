@@ -301,7 +301,7 @@ class MarketActivity : Activity() {
         val from = greenCap.label + " green scorecard: " + count + " of " + row.optInt("total") + " green"
         Thread {
             val answer = try {
-                Market.lockSymbol(app, row.optString("ticker"), name, from)
+                Market.lockSymbol(app, row.optString("ticker"), name, from, row.optString("slug"))
             } catch (e: org.json.JSONException) {
                 "Something went wrong. Try again"
             }
@@ -315,19 +315,21 @@ class MarketActivity : Activity() {
 
     private fun openGreen(row: org.json.JSONObject) {
         val slug = row.optString("slug")
+        val code = row.optString("ticker")
         if (slug.startsWith("/stocks/")) {
-            if (!Market.openTickertape(this, "https://www.tickertape.in$slug")) greenStatus.text = "Could not open Tickertape"
+            greenStatus.text = Market.openTickertape(this, "https://www.tickertape.in$slug", code)
             return
         }
         greenStatus.text = "Opening " + row.optString("name") + " in Tickertape"
         Thread {
-            val link = Market.tickertapeLink(row.optString("name"), row.optString("sid"), row.optString("ticker"))
+            val link = Market.tickertapeLink(row.optString("name"), row.optString("sid"), code)
             main.post {
                 if (isDestroyed) return@post
-                greenStatus.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
+                greenStatus.text = Market.openTickertape(this, link, code)
             }
         }.start()
     }
+
 
     private fun renderGreen() {
         val running = GreenList.running()
@@ -418,12 +420,18 @@ class MarketActivity : Activity() {
             val row = LinearLayout(this).apply { gravity = Gravity.END }
             if (indian) row.addView(button("Tickertape") {
                 val name = s.optString("name")
+                val code = s.optString("symbol")
+                val slug = s.optString("slug")
+                if (slug.startsWith("/stocks/")) {
+                    shareStatus.text = Market.openTickertape(this, "https://www.tickertape.in$slug", code)
+                    return@button
+                }
                 shareStatus.text = "Opening $name in Tickertape"
                 Thread {
-                    val link = Market.tickertapeLink(name, "", s.optString("symbol"))
+                    val link = Market.tickertapeLink(name, "", code)
                     main.post {
                         if (isDestroyed) return@post
-                        shareStatus.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
+                        shareStatus.text = Market.openTickertape(this, link, code)
                     }
                 }.start()
             })

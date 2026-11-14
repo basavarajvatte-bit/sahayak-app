@@ -232,7 +232,7 @@ class MarketNewsActivity : Activity() {
             val link = Market.tickertapeLink(name)
             main.post {
                 if (isDestroyed) return@post
-                status.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
+                status.text = Market.openTickertape(this, link, "")
             }
         }.start()
     }

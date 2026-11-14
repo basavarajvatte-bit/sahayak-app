@@ -75,7 +75,7 @@ object Market {
     /** Tickertape ke khule pages. Wo browser jaisa Referer maangte hain. */
     fun tape(url: String, body: String? = null): String? = try {
         val request = Request.Builder().url(url).header("User-Agent", UA).header("Accept", "application/json, text/plain, */*")
-            .header("Referer", "https://www.tickertape.in/")
+            .header("Referer", "https://www.tickertape.in/").header("accept-version", "7.9.0")
         if (body != null) request.post(body.toRequestBody("application/json".toMediaType()))
         client.newCall(request.build()).execute().use { r ->
             if (!r.isSuccessful) {
@@ -150,22 +150,23 @@ object Market {
     }
 
     /** NSE code pata ho (jaise green list mein) to seedha usi ka bhaav, bina dhoondhe. */
-    fun lockSymbol(c: Context, ticker: String, name: String, fromTitle: String): String {
+    fun lockSymbol(c: Context, ticker: String, name: String, fromTitle: String, slug: String = ""): String {
         if (shares(c).size >= MAX_SHARES) return "List is full. Remove one share first"
         lastError = ""
         val code = ticker.trim().uppercase(Locale.ENGLISH)
         val q = (if (code.isEmpty()) null else quote("$code.NS") ?: quote("$code.BO")) ?: find(name)
             ?: return if (lastError == "No internet") "No internet. Try again" else "Could not get the price of $name. Try again"
-        return save(c, q.copy(name = name.ifEmpty { q.name }), fromTitle, "")
+        return save(c, q.copy(name = name.ifEmpty { q.name }), fromTitle, "", slug)
     }
 
-    private fun save(c: Context, q: MarketLogic.Quote, fromTitle: String, fromLink: String): String {
+    private fun save(c: Context, q: MarketLogic.Quote, fromTitle: String, fromLink: String, slug: String = ""): String {
         if (shares(c).any { it.optString("symbol") == q.symbol }) return q.name + " is already in your list"
         val now = System.currentTimeMillis()
         val item = JSONObject().put("id", now.toString()).put("symbol", q.symbol).put("name", q.name).put("currency", q.currency)
             .put("savedPrice", q.price).put("savedAt", now).put("lastPrice", q.price).put("lastAt", now).put("marketAt", q.timeMs)
         q.prevClose?.let { item.put("prevClose", it) }
         if (fromTitle.isNotEmpty()) item.put("fromTitle", fromTitle).put("fromLink", fromLink)
+        if (slug.startsWith("/stocks/")) item.put("slug", slug)
         change(c) { it.add(item) }
         rearm(c)
         return "Locked " + q.name + " at " + MarketLogic.money(q.price, q.currency) + ". See it in My shares"
@@ -419,7 +420,7 @@ object Market {
 
     /** Tickertape par is share ka page. Na mile to Google se dhoondhne ka link. */
     /** Tickertape par wahi share: pehle NSE code se, phir naam se. Pakka na mile to Tickertape ki search. */
-    fun tickertapeLink(name: String, sid: String = "", ticker: String = ""): String {
+    fun tickertapeLink(name: String, sid: String = "", ticker: String = ""): String? {
         val q = MarketLogic.companyQuery(name)
         val code = ticker.substringBefore('.')
         var slug: String? = null
@@ -435,27 +436,37 @@ object Market {
             slug = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
                 ?.let { MarketLogic.tickertapeMatch(it, "", q) }
         }
-        return if (slug != null) "https://www.tickertape.in$slug"
-        else "https://www.google.com/search?q=" + URLEncoder.encode("tickertape $q share price", "UTF-8")
+        return slug?.let { "https://www.tickertape.in$it" }
     }
 
-    /** Tickertape app mein kholo. App na ho ya link uska na ho to browser mein. */
-    fun openTickertape(a: android.app.Activity, link: String): Boolean {
-        val uri = android.net.Uri.parse(link)
-        if (link.startsWith("https://www.tickertape.in")) {
+    private const val TICKERTAPE = "in.tickertape"
+
+    /**
+     * Tickertape APP mein kholo, Chrome mein nahi. Jawab: khaali matlab khul gaya, warna user ke liye sandesh.
+     * 1) Share ka link seedha app mein. 2) Na chale to app kholo aur NSE code copy kar do, search mein paste karne ke liye.
+     */
+    fun openTickertape(a: android.app.Activity, link: String?, code: String): String {
+        if (link != null && link.startsWith("https://www.tickertape.in/")) {
             try {
-                a.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage("in.tickertape"))
-                return true
+                a.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)).setPackage(TICKERTAPE)
+                    .addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return ""
             } catch (e: android.content.ActivityNotFoundException) {
-                // App nahi hai ya ye link nahi kholta
+                // App ye link seedha nahi kholta, to app ka home kholenge
             }
         }
-        return try {
-            a.startActivity(Intent(Intent.ACTION_VIEW, uri))
-            true
-        } catch (e: android.content.ActivityNotFoundException) {
-            false
+        val launch = a.packageManager.getLaunchIntentForPackage(TICKERTAPE)
+        if (launch != null) {
+            val name = code.substringBefore('.')
+            if (name.isNotEmpty()) {
+                val clip = a.getSystemService(android.content.ClipboardManager::class.java)
+                clip?.setPrimaryClip(android.content.ClipData.newPlainText("share", name))
+            }
+            a.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return if (name.isEmpty()) "Tickertape opened. Search the share there"
+            else "Tickertape opened. Tap its search, long-press and Paste: $name"
         }
+        return "Tickertape app is not installed on this phone. Install it from Play Store"
     }
 
     private fun rssAll(query: String) =
