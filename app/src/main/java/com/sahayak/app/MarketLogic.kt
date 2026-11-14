@@ -180,7 +180,7 @@ object MarketLogic {
     data class Trend(val what: String, val unit: String, val points: List<Pair<String, Double>>)
     data class Depth(
         val company: String, val level: Int, val what: String, val numbers: List<Num>, val past: List<String>, val why: String, val unsure: String,
-        val trends: List<Trend> = emptyList(), val reasons: List<String> = emptyList()
+        val trends: List<Trend> = emptyList(), val reasons: List<String> = emptyList(), val stocks: List<String> = emptyList()
     )
 
     /** AI ke jawab mein se JSON wala hissa. */
@@ -226,10 +226,16 @@ object MarketLogic {
             val reasons = mutableListOf<String>()
             val why = o.optJSONArray("reasons")
             if (why != null) for (i in 0 until why.length()) why.optString(i).trim().takeIf { it.isNotEmpty() }?.let { reasons.add(it) }
+            val stocks = mutableListOf<String>()
+            val named = o.optJSONArray("stocks")
+            if (named != null) for (i in 0 until named.length()) {
+                val n = if (named.isNull(i)) "" else named.optString(i).trim()
+                if (n.isNotEmpty() && stocks.none { it.equals(n, true) }) stocks.add(n)
+            }
             val what = str(o, "what")
             if (what.isEmpty() && numbers.isEmpty() && trends.isEmpty()) return null
             return Depth(str(o, "company"), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(8),
-                str(o, "why"), str(o, "unsure"), trends.take(4), reasons.take(6))
+                str(o, "why"), str(o, "unsure"), trends.take(4), reasons.take(6), stocks.take(6))
         } catch (e: JSONException) {
             return null
         }
@@ -292,6 +298,8 @@ object MarketLogic {
             if (w.isEmpty() || out.size >= 4) break
             val plain = w.lowercase(Locale.ENGLISH).removeSuffix("'s").removeSuffix("’s")
             if (plain in NOT_NAME || PERIOD.matches(plain) || !(w[0].isUpperCase() || w == "&")) break
+            // "Infra, power & defence stocks": comma ke baad chhota shabd matlab sector ki list, company nahi
+            if (word.trimEnd().endsWith(",")) return ""
             out.add(w.removeSuffix("'s").removeSuffix("’s"))
             if (w.endsWith("'s") || w.endsWith("’s")) break
         }

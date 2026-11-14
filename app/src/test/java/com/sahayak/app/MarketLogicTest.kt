@@ -164,4 +164,11 @@ class MarketLogicTest {
         assertNull(MarketLogic.parseScorecard("<html>"))
         assertEquals("/stocks/b-TCS", MarketLogic.tickertapeSlug("""{"a":[{"slug":"/stocks/a-AAA"},{"slug":"/stocks/b-TCS"}]}""", "TCS"))
     }
+
+    @Test fun sectorNewsHasNoSingleCompanyButListsStocks() {
+        assertEquals("", MarketLogic.companyGuess("Infra, power & defence stocks bag Rs 4,000 crore orders: What it means for investors - The Financial Express"))
+        assertEquals("Axel Polymers", MarketLogic.companyGuess("Axel Polymers Q2FY27 Results: Revenue up 50% YoY"))
+        val d = MarketLogic.parseDepth("""{"company":"","level":3,"what":"Orders mile.","stocks":["Larsen & Toubro","BEL","bel",null,""]}""")!!
+        assertEquals(listOf("Larsen & Toubro", "BEL"), d.stocks)
+    }
 }

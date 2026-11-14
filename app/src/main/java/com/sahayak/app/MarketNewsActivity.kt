@@ -7,7 +7,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -26,6 +28,9 @@ class MarketNewsActivity : Activity() {
     private var kind = ""
     private var company = ""
     private lateinit var tape: Button
+    private lateinit var lockName: EditText
+    private lateinit var lockStatus: TextView
+    private lateinit var lockPicks: LinearLayout
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -83,6 +88,7 @@ class MarketNewsActivity : Activity() {
         tape = button("") { tickertape() }
         page.addView(tape)
         showTape()
+        lockSection(page)
         status = text("", 14f, true)
         page.addView(status)
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -133,6 +139,7 @@ class MarketNewsActivity : Activity() {
                 company = depth.company
                 showTape()
             }
+            showPicks((listOf(depth.company) + depth.stocks).filter { it.isNotEmpty() }.distinctBy { it.lowercase(Locale.ENGLISH) })
             numbers(depth.numbers)
             trends(depth.trends)
             if (depth.reasons.isNotEmpty()) {
@@ -159,7 +166,6 @@ class MarketNewsActivity : Activity() {
                 unsure.addView(text(depth.unsure, 15f))
                 body.addCard(unsure)
             }
-            if (depth.company.isNotEmpty()) watchButton(depth.company)
         } else {
             // AI na chale to heading se jo aankde mil jayein
             MarketLogic.headlineJump(headline)?.let { numbers(listOf(it)) }
@@ -231,19 +237,49 @@ class MarketNewsActivity : Activity() {
         }.start()
     }
 
-    private fun watchButton(company: String) {
+    /** Share ko aaj ke bhaav par lock karo, taaki aage dekh sako kitna badla. */
+    private fun lockSection(page: LinearLayout) {
+        val box = card()
+        box.addView(text("🔒 Lock at today's price", 16f, true))
+        box.addView(text("Save a share from this news at today's price. Then watch in My shares how it moves.", 13f, false, GREY))
+        lockPicks = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(lockPicks)
+        lockName = EditText(this).apply {
+            setText(company)
+            hint = "Share name, e.g. Larsen & Toubro"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        box.addView(lockName)
+        box.addView(button("Lock at today's price") { lock(lockName.text.toString()) })
+        lockStatus = text("", 14f, true, TEAL)
+        box.addView(lockStatus)
+        page.addCard(box)
+    }
+
+    /** AI ne jo companies batayi, unke seedhe button. */
+    private fun showPicks(names: List<String>) {
+        lockPicks.removeAllViews()
+        if (names.isEmpty()) return
+        lockPicks.addView(text("Shares in this news:", 13f, true, GREY))
+        names.forEach { name -> lockPicks.addView(button("🔒 Lock $name") { lock(name) }) }
+        if (lockName.text.isBlank()) lockName.setText(names.first())
+    }
+
+    private fun lock(name: String) {
+        if (name.isBlank()) {
+            lockStatus.text = "Type a share name first"
+            return
+        }
+        lockStatus.text = "Finding $name and today's price"
         val app = applicationContext
-        body.addView(button("Save $company share to My shares") {
-            status.text = "Finding the share and its price"
-            Thread {
-                val answer = try {
-                    Market.addShare(app, company)
-                } catch (e: org.json.JSONException) {
-                    "Something went wrong. Try again"
-                }
-                main.post { if (!isDestroyed) status.text = answer }
-            }.start()
-        })
+        Thread {
+            val answer = try {
+                Market.addShare(app, name, headline, link)
+            } catch (e: org.json.JSONException) {
+                "Something went wrong. Try again"
+            }
+            main.post { if (!isDestroyed) lockStatus.text = answer }
+        }.start()
     }
 
     companion object {

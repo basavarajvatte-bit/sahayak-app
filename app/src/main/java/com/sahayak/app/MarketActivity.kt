@@ -134,11 +134,11 @@ class MarketActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
         }
         page.addView(name)
-        page.addView(button("Save share at today's price") {
+        page.addView(button("Lock at today's price") {
             val typed = name.text.toString()
             work(shareStatus, "Finding the share and its price") {
                 val answer = Market.addShare(app, typed)
-                if (answer.startsWith("Saved")) main.post { name.setText("") }
+                if (answer.startsWith("Locked")) main.post { name.setText("") }
                 answer
             }
         })
@@ -374,10 +374,15 @@ class MarketActivity : Activity() {
             val today = if (s.has("prevClose")) "  ·  Today " + MarketLogic.pctText(price, s.optDouble("prevClose")) else ""
             box.addView(text("Now " + MarketLogic.money(price, currency) + today, 15f))
             box.addView(text(
-                "Saved " + day.format(Date(s.optLong("savedAt"))) + " at " + MarketLogic.money(saved, currency) +
+                "Locked " + day.format(Date(s.optLong("savedAt"))) + " at " + MarketLogic.money(saved, currency) +
                     "  ·  Since then " + MarketLogic.pctText(price, saved),
                 14f, true, if (change > 0.004) GREEN else if (change < -0.004) RED else INK
             ))
+            s.optString("fromTitle").takeIf { it.isNotEmpty() }?.let { from ->
+                box.addView(text("🔒 Locked from news: $from", 13f, false, BLUE).apply {
+                    setOnClickListener { s.optString("fromLink").takeIf { it.isNotEmpty() }?.let { l -> open(l) } }
+                })
+            }
             box.addView(text("Price checked " + time.format(Date(s.optLong("lastAt"))), 12f, false, GREY))
             val row = LinearLayout(this).apply { gravity = Gravity.END }
             row.addView(button("Tickertape") {

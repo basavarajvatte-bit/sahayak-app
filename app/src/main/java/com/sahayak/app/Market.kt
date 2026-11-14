@@ -136,7 +136,7 @@ object Market {
     }
 
     /** Naam se share dhoondho, abhi ka bhaav yaad rakho. Jawab user ko dikhane ke liye. */
-    fun addShare(c: Context, typed: String): String {
+    fun addShare(c: Context, typed: String, fromTitle: String = "", fromLink: String = ""): String {
         val name = typed.trim()
         if (name.isEmpty()) return "Type a share name first"
         if (shares(c).size >= MAX_SHARES) return "List is full. Remove one share first"
@@ -148,9 +148,10 @@ object Market {
         val item = JSONObject().put("id", now.toString()).put("symbol", q.symbol).put("name", q.name).put("currency", q.currency)
             .put("savedPrice", q.price).put("savedAt", now).put("lastPrice", q.price).put("lastAt", now).put("marketAt", q.timeMs)
         q.prevClose?.let { item.put("prevClose", it) }
+        if (fromTitle.isNotEmpty()) item.put("fromTitle", fromTitle).put("fromLink", fromLink)
         change(c) { it.add(item) }
         rearm(c)
-        return "Saved " + q.name + " at " + MarketLogic.money(q.price, q.currency)
+        return "Locked " + q.name + " at " + MarketLogic.money(q.price, q.currency) + ". See it in My shares"
     }
 
     fun removeShare(c: Context, id: String) {
