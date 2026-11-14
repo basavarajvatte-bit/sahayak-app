@@ -184,6 +184,12 @@ class MarketLogicTest {
         assertTrue(MarketLogic.foreignNews("Spectrum Brands Holdings Inc. (NYSE:SPB) Stock Now Rated Hold - MarketBeat"))
         assertFalse(MarketLogic.foreignNews("Sammaan Capital Q2 FY27 results: Net profit rises 1.25% to ₹312 crore - scanx.trade"))
         assertFalse(MarketLogic.foreignNews("Trump threatens 50% tariff on India - The Economic Times"))
+        // America ki khabar sirf tab, jab India par asar ho
+        assertFalse(MarketLogic.foreignNews("Fed cuts rates by 25 bps, signals more easing - Reuters"))
+        assertFalse(MarketLogic.foreignNews("Nvidia results lift Indian IT stocks - Mint"))
+        assertTrue(MarketLogic.foreignNews("Nvidia shares surge on record revenue - Mint"))
+        assertTrue(MarketLogic.foreignNews("Wall Street ends higher as tech rallies - CNBC"))
+        assertFalse(MarketLogic.foreignNews("Crude oil prices jump 4% after OPEC cut - Business Standard"))
         assertTrue(MarketLogic.indianSymbol("CHENNPETRO.NS"))
         assertFalse(MarketLogic.indianSymbol("SPB"))
     }

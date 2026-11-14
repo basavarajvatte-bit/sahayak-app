@@ -370,8 +370,25 @@ object MarketLogic {
     )
     private val FOREIGN_WORDS = Regex("""(?i)\((nyse|nasdaq|otc|tsx|lse|asx)\s*:|\b(nyse|nasdaq)\b|\$[0-9]""")
 
-    fun foreignNews(fullTitle: String): Boolean =
-        publisher(fullTitle).lowercase(Locale.ENGLISH) in FOREIGN_SOURCES || FOREIGN_WORDS.containsMatchIn(cleanTitle(fullTitle))
+    /** India ka seedha zikr: aisi khabar hamesha rakho. */
+    private val INDIA_WORDS = Regex("""(?i)\b(india|indian|indias|sensex|nifty|rupee|rbi|sebi|nse|bse|dalal street|d-street|crore|lakh|gift nifty)\b|₹|\brs\.?\s?[0-9]""")
+
+    /** Duniya ki aisi baatein jo Indian bazaar ko bhi hilati hain. */
+    private val GLOBAL_MOVERS = Regex("""(?i)\b(fed|federal reserve|powell|us rate|interest rates?|crude|oil prices?|brent|opec|tariffs?|trade war|trade deal|sanctions?|dollar index|recession|us inflation|treasury yields?|bond yields?|war|ceasefire)\b""")
+
+    /** Sirf America ke bazaar ki baat. */
+    private val US_ONLY = Regex("""(?i)\b(wall street|s&p 500|dow jones|the dow|apple|microsoft|nvidia|tesla|amazon|alphabet|google|meta|netflix|broadcom|intel|amd|berkshire|jpmorgan|walmart|boeing)\b""")
+
+    /**
+     * Khabar chhodni hai ya nahi. India ka zikr ho to rakho. Fed, crude, tariff jaisi duniya ki badi baat rakho.
+     * Baaki America ki company ya bazaar wali khabar chhodo.
+     */
+    fun foreignNews(fullTitle: String): Boolean {
+        val title = cleanTitle(fullTitle)
+        if (INDIA_WORDS.containsMatchIn(title)) return false
+        if (GLOBAL_MOVERS.containsMatchIn(title)) return false
+        return publisher(fullTitle).lowercase(Locale.ENGLISH) in FOREIGN_SOURCES || FOREIGN_WORDS.containsMatchIn(title) || US_ONLY.containsMatchIn(title)
+    }
 
     fun indianSymbol(symbol: String): Boolean = symbol.endsWith(".NS") || symbol.endsWith(".BO")
 
