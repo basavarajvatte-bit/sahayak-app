@@ -171,4 +171,20 @@ class MarketLogicTest {
         val d = MarketLogic.parseDepth("""{"company":"","level":3,"what":"Orders mile.","stocks":["Larsen & Toubro","BEL","bel",null,""]}""")!!
         assertEquals(listOf("Larsen & Toubro", "BEL"), d.stocks)
     }
+
+    @Test fun opensOnlyTheRightShareAndSkipsForeignNews() {
+        val search = """{"data":{"stocks":[{"sid":"SPEC","ticker":"SPECTRUM","name":"Spectrum Electrical Industries Ltd","slug":"/stocks/spectrum-electrical-industries-SPEC"},
+            {"sid":"CHPE","ticker":"CHENNPETRO","name":"Chennai Petroleum Corporation Ltd","slug":"/stocks/chennai-petroleum-corporation-CHPE"}]}}"""
+        // Spectrum Brands (America) ko Spectrum Electrical se nahi milana
+        assertNull(MarketLogic.tickertapeMatch(search, "", "Spectrum Brands Holdings, Inc."))
+        assertEquals("/stocks/chennai-petroleum-corporation-CHPE", MarketLogic.tickertapeMatch(search, "CHENNPETRO.NS", ""))
+        assertEquals("/stocks/chennai-petroleum-corporation-CHPE", MarketLogic.tickertapeMatch(search, "", "Chennai Petroleum Corporation Ltd"))
+        assertEquals("/stocks/spectrum-electrical-industries-SPEC", MarketLogic.tickertapeMatch(search, "", "Spectrum Electrical"))
+        assertTrue(MarketLogic.foreignNews("Spectrum Brands' Q4 Earnings Beat Estimates on Margin Gains - Zacks Investment Research"))
+        assertTrue(MarketLogic.foreignNews("Spectrum Brands Holdings Inc. (NYSE:SPB) Stock Now Rated Hold - MarketBeat"))
+        assertFalse(MarketLogic.foreignNews("Sammaan Capital Q2 FY27 results: Net profit rises 1.25% to ₹312 crore - scanx.trade"))
+        assertFalse(MarketLogic.foreignNews("Trump threatens 50% tariff on India - The Economic Times"))
+        assertTrue(MarketLogic.indianSymbol("CHENNPETRO.NS"))
+        assertFalse(MarketLogic.indianSymbol("SPB"))
+    }
 }

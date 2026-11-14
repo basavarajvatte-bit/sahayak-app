@@ -119,9 +119,7 @@ object Market {
             val got = quote(symbol)
             if (got != null) return got
         }
-        MarketLogic.best(all)?.let { found ->
-            quote(found.symbol)?.let { return it.copy(name = found.name.ifEmpty { it.name }) }
-        }
+        // Sirf Indian share bazaar (NSE/BSE). Videshi share kabhi nahi
         return null
     }
 
@@ -146,7 +144,8 @@ object Market {
         if (shares(c).size >= MAX_SHARES) return "List is full. Remove one share first"
         lastError = ""
         val q = find(name)
-            ?: return if (lastError == "No internet") "No internet. Try again" else "Could not find \"$name\". Try the exact NSE code, e.g. RELIANCE"
+            ?: return if (lastError == "No internet") "No internet. Try again"
+            else "\"$name\" is not on NSE or BSE. It may be a foreign company. Try the exact NSE code, e.g. RELIANCE"
         return save(c, q, fromTitle, fromLink)
     }
 
@@ -329,6 +328,8 @@ object Market {
                     if (n.link in links) return@forEach
                     links.add(n.link)
                     val title = MarketLogic.cleanTitle(n.title)
+                    // Sirf Indian bazaar ki khabar: America ki company wali khabar chhod do
+                    if (MarketLogic.foreignNews(n.title)) return@forEach
                     val tag = MarketLogic.classify(title) ?: return@forEach
                     val at = MarketLogic.pubTime(n.date).takeIf { it in 1..now } ?: now
                     if (!first && now - at > FRESH_MS) return@forEach
@@ -417,12 +418,25 @@ object Market {
     }
 
     /** Tickertape par is share ka page. Na mile to Google se dhoondhne ka link. */
-    fun tickertapeLink(name: String, sid: String = ""): String {
+    /** Tickertape par wahi share: pehle NSE code se, phir naam se. Pakka na mile to Tickertape ki search. */
+    fun tickertapeLink(name: String, sid: String = "", ticker: String = ""): String {
         val q = MarketLogic.companyQuery(name)
-        val slug = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
-            ?.let { MarketLogic.tickertapeSlug(it, sid) }
+        val code = ticker.substringBefore('.')
+        var slug: String? = null
+        if (code.isNotEmpty()) {
+            slug = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(code, "UTF-8") + "&types=stock&pageNumber=0")
+                ?.let { MarketLogic.tickertapeMatch(it, code, "") }
+        }
+        if (slug == null && sid.isNotEmpty()) {
+            slug = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
+                ?.let { MarketLogic.tickertapeSlug(it, sid)?.takeIf { s -> s.endsWith("-$sid") } }
+        }
+        if (slug == null) {
+            slug = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(q, "UTF-8") + "&types=stock&pageNumber=0")
+                ?.let { MarketLogic.tickertapeMatch(it, "", q) }
+        }
         return if (slug != null) "https://www.tickertape.in$slug"
-        else "https://www.google.com/search?q=" + URLEncoder.encode("tickertape $q share", "UTF-8")
+        else "https://www.google.com/search?q=" + URLEncoder.encode("tickertape $q share price", "UTF-8")
     }
 
     /** Tickertape app mein kholo. App na ho ya link uska na ho to browser mein. */

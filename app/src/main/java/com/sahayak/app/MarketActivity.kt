@@ -321,7 +321,7 @@ class MarketActivity : Activity() {
         }
         greenStatus.text = "Opening " + row.optString("name") + " in Tickertape"
         Thread {
-            val link = Market.tickertapeLink(row.optString("ticker").ifEmpty { row.optString("name") }, row.optString("sid"))
+            val link = Market.tickertapeLink(row.optString("name"), row.optString("sid"), row.optString("ticker"))
             main.post {
                 if (isDestroyed) return@post
                 greenStatus.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"
@@ -411,12 +411,16 @@ class MarketActivity : Activity() {
                 })
             }
             box.addView(text("Price checked " + time.format(Date(s.optLong("lastAt"))), 12f, false, GREY))
+            val indian = MarketLogic.indianSymbol(s.optString("symbol"))
+            if (!indian) {
+                box.addView(text("⚠ This is a foreign share, not on the Indian market, so its price is not in rupees. Tap Remove.", 14f, true, RED))
+            }
             val row = LinearLayout(this).apply { gravity = Gravity.END }
-            row.addView(button("Tickertape") {
+            if (indian) row.addView(button("Tickertape") {
                 val name = s.optString("name")
                 shareStatus.text = "Opening $name in Tickertape"
                 Thread {
-                    val link = Market.tickertapeLink(name)
+                    val link = Market.tickertapeLink(name, "", s.optString("symbol"))
                     main.post {
                         if (isDestroyed) return@post
                         shareStatus.text = if (Market.openTickertape(this, link)) "" else "Could not open Tickertape"

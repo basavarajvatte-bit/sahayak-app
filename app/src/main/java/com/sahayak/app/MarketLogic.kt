@@ -329,6 +329,52 @@ object MarketLogic {
         return all.firstOrNull { sid.isNotEmpty() && it.endsWith("-$sid") } ?: all.firstOrNull()
     }
 
+    /**
+     * Tickertape search mein se SAHI share: NSE code diya ho to wahi code, warna naam ke saare shabd milne chahiye.
+     * Galat company (jaise Spectrum Brands ki jagah Spectrum Electrical) se behtar hai kuch na kholna.
+     */
+    fun tickertapeMatch(json: String, ticker: String, name: String): String? {
+        val items = mutableListOf<JSONObject>()
+        fun walk(v: Any?) {
+            when (v) {
+                is JSONObject -> {
+                    if (str(v, "slug").startsWith("/stocks/")) items.add(v)
+                    v.keys().forEach { walk(v.opt(it)) }
+                }
+                is org.json.JSONArray -> for (i in 0 until v.length()) walk(v.opt(i))
+            }
+        }
+        try {
+            walk(JSONObject(json))
+        } catch (e: JSONException) {
+            return null
+        }
+        val code = ticker.trim().uppercase(Locale.ENGLISH).substringBefore('.')
+        if (code.isNotEmpty()) {
+            items.firstOrNull { str(it, "ticker").equals(code, true) }?.let { return str(it, "slug") }
+        }
+        val need = BrainLogic.tokens(companyQuery(name))
+        if (need.isEmpty()) return null
+        return items.firstOrNull { item ->
+            val have = BrainLogic.tokens(str(item, "name") + " " + str(item, "slug").replace('-', ' ')).toSet()
+            need.all { it in have }
+        }?.let { str(it, "slug") }
+    }
+
+    /** Videshi (America wali) share khabar ki pehchaan: aise akhbaar aur NYSE/Nasdaq ka naam. */
+    private val FOREIGN_SOURCES = setOf(
+        "zacks", "zacks investment research", "zacks.com", "marketbeat", "the motley fool", "motley fool", "seeking alpha", "nasdaq", "yahoo finance", "investorplace",
+        "barron's", "barrons", "tipranks", "gurufocus", "simply wall st", "stocktitan", "stock titan", "insidermonkey", "insider monkey",
+        "globenewswire", "business wire", "pr newswire", "accesswire", "benzinga", "marketwatch", "investing.com", "fxstreet", "moomoo",
+        "ad hoc news", "defense world", "the globe and mail", "morningstar"
+    )
+    private val FOREIGN_WORDS = Regex("""(?i)\((nyse|nasdaq|otc|tsx|lse|asx)\s*:|\b(nyse|nasdaq)\b|\$[0-9]""")
+
+    fun foreignNews(fullTitle: String): Boolean =
+        publisher(fullTitle).lowercase(Locale.ENGLISH) in FOREIGN_SOURCES || FOREIGN_WORDS.containsMatchIn(cleanTitle(fullTitle))
+
+    fun indianSymbol(symbol: String): Boolean = symbol.endsWith(".NS") || symbol.endsWith(".BO")
+
     // ---------- Tickertape ka scorecard ----------
 
     data class Stock(val sid: String, val name: String, val ticker: String, val slug: String)
