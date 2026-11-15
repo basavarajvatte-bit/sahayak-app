@@ -174,6 +174,7 @@ class PatternActivity : Activity() {
     }
 
     private fun render() {
+        val app = applicationContext
         val locks = Patterns.locks(this)
         val last = Patterns.lastScan(this)
         val next = Market.nextPattern(this)
@@ -185,18 +186,36 @@ class PatternActivity : Activity() {
         PatternLogic.ALL.forEach { pattern ->
             val list = groups[pattern.id].orEmpty().sortedByDescending { it.optLong("lockAt") }
             val shown = pattern.id in open
-            box.addView(TextView(this).apply {
+            val head = LinearLayout(this).apply {
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                background = rounded(if (list.isEmpty()) 0xFF667085.toInt() else INK, 8)
+                setPadding(0, 0, dp(6), 0)
+            }
+            head.addView(TextView(this).apply {
                 text = (if (shown) "▼ " else "▶ ") + pattern.label + "  (" + list.size + ")"
                 textSize = 17f
                 setTextColor(0xFFFFFFFF.toInt())
                 setTypeface(typeface, Typeface.BOLD)
-                setPadding(dp(12), dp(9), dp(12), dp(9))
-                background = rounded(if (list.isEmpty()) 0xFF667085.toInt() else INK, 8)
+                setPadding(dp(12), dp(9), dp(8), dp(9))
                 setOnClickListener {
                     if (shown) open.remove(pattern.id) else open.add(pattern.id)
                     render()
                 }
-            }, wide(10))
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            // Isi pattern ka scan: khabar padho aur share lock karo (Dividend mein list bhi)
+            head.addView(TextView(this).apply {
+                text = "🔍 Scan"
+                textSize = 14f
+                setTextColor(INK)
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(dp(12), dp(6), dp(12), dp(6))
+                background = rounded(0xFFFFFFFF.toInt(), 6)
+                setOnClickListener {
+                    open.add(pattern.id)
+                    work("Scanning " + pattern.label) { Patterns.scanOne(app, pattern.id) }
+                }
+            })
+            box.addView(head, wide(10))
             if (!shown) return@forEach
             box.addView(text(pattern.about, 13f, false, GREY))
             if (list.isEmpty()) {
@@ -227,7 +246,7 @@ class PatternActivity : Activity() {
         card.addView(text("Upcoming dividends (next 14 days)", 15f, true, 0xFFB54700.toInt()))
         val rows = Patterns.dividendList(this)
         val note = Patterns.dividendListNote(this)
-        card.addView(text(if (note.isEmpty()) "Not fetched yet. Tap Get dividend list." else note, 12f, false, GREY))
+        card.addView(text(if (note.isEmpty()) "Not fetched yet. Tap 🔍 Scan." else note, 12f, false, GREY))
         val shown = if ("divlist" in full) rows else rows.take(DIV_ROWS)
         shown.forEach { r ->
             val amount = r.optDouble("amount", 0.0)
@@ -244,7 +263,7 @@ class PatternActivity : Activity() {
             })
         }
         val app = applicationContext
-        card.addView(button("Get dividend list now") { work("Reading the dividend list") { Patterns.syncDividends(app) } })
+        card.addView(button("🔍 Scan dividends now (list + news)") { work("Scanning dividends") { Patterns.syncDividends(app) } })
         box.addView(card, wide(6))
     }
 

@@ -23,6 +23,7 @@ object Patterns {
     private const val OPEN_TOLERANCE = 1.0
     private const val CLOSED_TOLERANCE = 0.3
     private const val NIFTY = "^NSEI"
+    private const val WAIT_LIMIT = 90
 
     private val busy = AtomicBoolean(false)
 
@@ -118,15 +119,16 @@ object Patterns {
         }
     }
 
-    private fun scan(c: Context): Int {
+    private fun scan(c: Context, only: String = ""): Int {
         val p = prefs(c)
         val now = System.currentTimeMillis()
         val seen = p.getStringSet("seen", null).orEmpty().toMutableSet()
         val found = mutableListOf<Candidate>()
         val keys = mutableListOf<Pair<String, Set<String>>>()
         var reached = false
-        PatternLogic.ALL.forEachIndexed { i, pattern ->
-            progress = "Reading news: " + pattern.label + " (" + (i + 1) + " of " + PatternLogic.ALL.size + ")"
+        val patterns = PatternLogic.ALL.filter { only.isEmpty() || it.id == only }
+        patterns.forEachIndexed { i, pattern ->
+            progress = "Reading news: " + pattern.label + (if (patterns.size > 1) " (" + (i + 1) + " of " + patterns.size + ")" else "")
             val xml = Market.web(rss(pattern.query)) ?: return@forEachIndexed
             reached = true
             WatchLogic.news(xml).forEach { n ->
@@ -314,11 +316,37 @@ object Patterns {
     }
 
     /** Sirf dividend list dobara lao (button se). */
-    fun syncDividends(c: Context): String {
-        if (!busy.compareAndSet(false, true)) return "Pattern study is already running"
+    fun syncDividends(c: Context): String = scanOne(c, "dividend")
+
+    /**
+     * Ek hi pattern ka scan (uske naam ke saath wala Scan button). Dividend mein list aur khabar dono.
+     * Pehle se scan chal raha ho to uske khatam hone ka intezaar.
+     */
+    fun scanOne(c: Context, id: String): String {
+        val pattern = PatternLogic.byId(id) ?: return "Choose a pattern"
+        var waited = 0
+        while (!busy.compareAndSet(false, true)) {
+            if (waited >= WAIT_LIMIT) return "Another scan is still running. Try again in a minute"
+            try {
+                Thread.sleep(1_000L)
+            } catch (e: InterruptedException) {
+                return "Stopped"
+            }
+            waited++
+        }
         try {
-            val n = dividends(c)
-            return if (n < 0) "Could not get the dividend list. Check internet" else "Dividend list updated. $n new shares locked"
+            var listNote = ""
+            var added = 0
+            if (id == "dividend") {
+                val n = dividends(c)
+                listNote = if (n < 0) "Dividend list did not open. " else ""
+                added += n.coerceAtLeast(0)
+            }
+            val news = scan(c, id)
+            if (news < 0 && listNote.isNotEmpty()) return "No internet. Try again"
+            added += news.coerceAtLeast(0)
+            track(c)
+            return listNote + pattern.label + " scan done: " + (if (added == 0) "no new share" else "$added new " + (if (added == 1) "share" else "shares")) + " locked"
         } catch (e: org.json.JSONException) {
             return "Something went wrong. Try again"
         } finally {
