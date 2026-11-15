@@ -75,6 +75,23 @@ class MarketActivity : Activity() {
         setPadding(0, dp(5), 0, dp(3))
     }
 
+    /** Badha to hara dabba, gira to laal, barabar to grey. Safed akshar. */
+    private fun chip(words: String, change: Double) = TextView(this).apply {
+        text = words
+        textSize = 13f
+        setTextColor(0xFFFFFFFF.toInt())
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setPadding(dp(8), dp(3), dp(8), dp(3))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(if (change > 0.004) CHIP_GREEN else if (change < -0.004) CHIP_RED else CHIP_GREY)
+            cornerRadius = dp(6).toFloat()
+        }
+    }
+
+    private fun chipSpace() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        leftMargin = dp(10)
+    }
+
     private fun button(words: String, action: () -> Unit) = Button(this).apply {
         text = words
         isAllCaps = false
@@ -404,13 +421,18 @@ class MarketActivity : Activity() {
             box.addView(text(s.optString("name") + "  (" + s.optString("symbol") + ")", 16f, true))
             box.addView(text("Tap for chart: 1D, 1W, 1M, 1Y, 5Y, Max", 12f, true, TEAL))
             box.setOnClickListener { startActivity(ShareActivity.forShare(this, s.optString("id"))) }
-            val today = if (s.has("prevClose")) "  ·  Today " + MarketLogic.pctText(price, s.optDouble("prevClose")) else ""
-            box.addView(text("Now " + MarketLogic.money(price, currency) + today, 15f))
-            box.addView(text(
-                "Locked " + day.format(Date(s.optLong("savedAt"))) + " at " + MarketLogic.money(saved, currency) +
-                    "  ·  Since then " + MarketLogic.pctText(price, saved),
-                14f, true, if (change > 0.004) GREEN else if (change < -0.004) RED else INK
-            ))
+            // Bhaav ke saath hara/laal dabba, share market apps jaisa
+            val nowRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            nowRow.addView(text(MarketLogic.money(price, currency), 20f, true))
+            if (s.has("prevClose")) {
+                val prev = s.optDouble("prevClose")
+                nowRow.addView(chip("Today " + MarketLogic.pctText(price, prev), MarketLogic.pct(price, prev)), chipSpace())
+            }
+            box.addView(nowRow)
+            val lockRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            lockRow.addView(text("Locked " + day.format(Date(s.optLong("savedAt"))) + " at " + MarketLogic.money(saved, currency), 14f, true))
+            lockRow.addView(chip("Since then " + MarketLogic.pctText(price, saved), change), chipSpace())
+            box.addView(lockRow)
             s.optString("fromTitle").takeIf { it.isNotEmpty() }?.let { from ->
                 val news = s.optString("fromLink").isNotEmpty()
                 box.addView(text((if (news) "🔒 Locked from news: " else "🔒 Locked from ") + from, 13f, false, if (news) BLUE else GREY).apply {
@@ -538,6 +560,9 @@ class MarketActivity : Activity() {
         private const val REFRESH_MS = 15_000L
         private const val NEWS_ROWS = 10
         private const val SHARE_ROWS = 1
+        private const val CHIP_GREEN = 0xFF16A34A.toInt()
+        private const val CHIP_RED = 0xFFDC2626.toInt()
+        private const val CHIP_GREY = 0xFF98A2B3.toInt()
         private const val INK = 0xFF1D2433.toInt()
         private const val GREY = 0xFF667085.toInt()
         private const val GREEN = 0xFF1B7F3B.toInt()

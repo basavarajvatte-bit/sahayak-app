@@ -33,6 +33,7 @@ class ShareActivity : Activity() {
     private lateinit var startLabel: TextView
     private lateinit var endLabel: TextView
     private lateinit var lockLine: TextView
+    private lateinit var lockBadge: TextView
     private lateinit var status: TextView
     private val tabs = mutableListOf<TextView>()
     private val cache = mutableMapOf<String, MarketLogic.Series>()
@@ -59,6 +60,13 @@ class ShareActivity : Activity() {
     private fun rounded(color: Int, radius: Int) = GradientDrawable().apply {
         setColor(color)
         cornerRadius = dp(radius).toFloat()
+    }
+
+    /** Hara ya laal dabba, safed akshar. */
+    private fun badge(view: TextView, change: Double) {
+        view.setTextColor(0xFFFFFFFF.toInt())
+        view.setPadding(dp(8), dp(3), dp(8), dp(3))
+        view.background = rounded(if (change > 0.004) 0xFF16A34A.toInt() else if (change < -0.004) 0xFFDC2626.toInt() else 0xFF98A2B3.toInt(), 6)
     }
 
     private fun wide() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -163,6 +171,8 @@ class ShareActivity : Activity() {
         locked.addView(text("🔒 Your lock", 13f, true, 0xFFB54700.toInt()))
         lockLine = text("", 16f, true)
         locked.addView(lockLine)
+        lockBadge = text("", 15f, true)
+        locked.addView(lockBadge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
         share.optString("fromTitle").takeIf { it.isNotEmpty() }?.let { why ->
             val link = share.optString("fromLink")
             locked.addView(text((if (link.isNotEmpty()) "From news: " else "From ") + why, 13f, false, if (link.isNotEmpty()) BLUE else GREY).apply {
@@ -212,6 +222,8 @@ class ShareActivity : Activity() {
         lockLine.text = "Locked " + SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(share.optLong("savedAt"))) + " at " +
             MarketLogic.money(saved, currency) + "\nSince then " + MarketLogic.moveText(now, saved)
         lockLine.setTextColor(if (change > 0.004) GREEN else if (change < -0.004) RED else INK)
+        lockBadge.text = "Since lock " + MarketLogic.pctText(now, saved)
+        badge(lockBadge, change)
     }
 
     /** 1D, 1W ... ka button. */
@@ -251,7 +263,7 @@ class ShareActivity : Activity() {
         val up = now >= base
         price.text = MarketLogic.money(now, currency)
         move.text = MarketLogic.moveText(now, base)
-        move.setTextColor(if (up) GREEN else RED)
+        badge(move, MarketLogic.pct(now, base))
         high.text = MarketLogic.money(maxOf(series.high, now), currency)
         low.text = MarketLogic.money(minOf(series.low, now), currency)
         returns.text = MarketLogic.pctText(now, base)
