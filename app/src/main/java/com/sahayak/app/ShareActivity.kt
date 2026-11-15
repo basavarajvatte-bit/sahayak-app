@@ -187,6 +187,10 @@ class ShareActivity : Activity() {
             open("https://news.google.com/search?q=" + URLEncoder.encode(MarketLogic.companyQuery(share.optString("name")) + " share", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en")
         }, part())
         page.addView(row, wide().apply { topMargin = dp(10) })
+        page.addView(button("Remove from My shares") {
+            Market.removeShare(this, share.optString("id"))
+            finish()
+        })
         page.addView(text("Prices come from a free source and can be 10 to 15 minutes late while the market is open.", 12f, false, GREY))
 
         showLock(share.optDouble("lastPrice", 0.0))

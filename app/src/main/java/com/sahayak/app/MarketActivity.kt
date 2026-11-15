@@ -409,76 +409,67 @@ class MarketActivity : Activity() {
     private fun renderShares() {
         sharesBox.removeAllViews()
         val shares = Market.shares(this)
-        if (shares.isEmpty()) sharesBox.addView(text("No share saved yet.", 14f, false, GREY))
-        // Naya lock kiya share sabse upar. Pehla share dikhao, baaki More ke andar
-        val ordered = shares.sortedByDescending { it.optLong("savedAt") }
-        ordered.take(if (sharesOpen) ordered.size else SHARE_ROWS).forEach { s ->
-            val currency = s.optString("currency")
-            val price = s.optDouble("lastPrice", 0.0)
-            val saved = s.optDouble("savedPrice", 0.0)
-            val change = MarketLogic.pct(price, saved)
-            val box = card()
-            box.addView(text(s.optString("name") + "  (" + s.optString("symbol") + ")", 16f, true))
-            box.addView(text("Tap for chart: 1D, 1W, 1M, 1Y, 5Y, Max", 12f, true, TEAL))
-            box.setOnClickListener { startActivity(ShareActivity.forShare(this, s.optString("id"))) }
-            // Bhaav ke saath hara/laal dabba, share market apps jaisa
-            val nowRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            nowRow.addView(text(MarketLogic.money(price, currency), 20f, true))
-            if (s.has("prevClose")) {
-                val prev = s.optDouble("prevClose")
-                nowRow.addView(chip("Today " + MarketLogic.pctText(price, prev), MarketLogic.pct(price, prev)), chipSpace())
-            }
-            box.addView(nowRow)
-            val lockRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            lockRow.addView(text("Locked " + day.format(Date(s.optLong("savedAt"))) + " at " + MarketLogic.money(saved, currency), 14f, true))
-            lockRow.addView(chip("Since then " + MarketLogic.pctText(price, saved), change), chipSpace())
-            box.addView(lockRow)
-            s.optString("fromTitle").takeIf { it.isNotEmpty() }?.let { from ->
-                val news = s.optString("fromLink").isNotEmpty()
-                box.addView(text((if (news) "🔒 Locked from news: " else "🔒 Locked from ") + from, 13f, false, if (news) BLUE else GREY).apply {
-                    setOnClickListener { s.optString("fromLink").takeIf { it.isNotEmpty() }?.let { l -> open(l) } }
-                })
-            }
-            box.addView(text("Price checked " + time.format(Date(s.optLong("lastAt"))), 12f, false, GREY))
-            val indian = MarketLogic.indianSymbol(s.optString("symbol"))
-            if (!indian) {
-                box.addView(text("⚠ This is a foreign share, not on the Indian market, so its price is not in rupees. Tap Remove.", 14f, true, RED))
-            }
-            val row = LinearLayout(this).apply { gravity = Gravity.END }
-            if (indian) row.addView(button("Tickertape") {
-                val name = s.optString("name")
-                val code = s.optString("symbol")
-                val slug = s.optString("slug")
-                if (slug.startsWith("/stocks/")) {
-                    shareStatus.text = Market.openTickertape(this, "https://www.tickertape.in$slug", code)
-                    return@button
-                }
-                shareStatus.text = "Opening $name in Tickertape"
-                Thread {
-                    val link = Market.tickertapeLink(name, "", code)
-                    main.post {
-                        if (isDestroyed) return@post
-                        shareStatus.text = Market.openTickertape(this, link, code)
-                    }
-                }.start()
-            })
-            row.addView(button("News") {
-                open("https://news.google.com/search?q=" + URLEncoder.encode(MarketLogic.companyQuery(s.optString("name")) + " share", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en")
-            })
-            row.addView(button("Remove") {
-                Market.removeShare(this, s.optString("id"))
-                shareStatus.text = "Removed " + s.optString("name")
-                render()
-            })
-            box.addView(row)
-            sharesBox.addCard(box)
+        if (shares.isEmpty()) {
+            sharesBox.addView(text("No share locked yet.", 14f, false, GREY))
+            return
         }
-        if (ordered.size > SHARE_ROWS) {
-            sharesBox.addView(button(if (sharesOpen) "▲ Less" else "▼ More (" + (ordered.size - SHARE_ROWS) + " shares)") {
+        // Naya lock kiya share sabse upar. Ek line mein 3 dabbe. Lock ka bhaav hi tulna ka point
+        val ordered = shares.sortedByDescending { it.optLong("savedAt") }
+        val shown = ordered.take(if (sharesOpen) ordered.size else TILE_ROWS * TILES)
+        var up = 0
+        var down = 0
+        ordered.forEach {
+            val c = MarketLogic.pct(it.optDouble("lastPrice", 0.0), it.optDouble("savedPrice", 0.0))
+            if (c > 0.004) up++ else if (c < -0.004) down++
+        }
+        sharesBox.addView(text(ordered.size.toString() + " locked  ·  ▲ $up up  ·  ▼ $down down since lock. Tap a box for its chart.", 13f, true, GREY))
+        shown.chunked(TILES).forEach { line ->
+            val row = LinearLayout(this)
+            line.forEach { s -> row.addView(tile(s), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) }) }
+            // Khaali jagah taaki aakhri line ke dabbe bhi same size ke rahein
+            repeat(TILES - line.size) { row.addView(android.view.View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { setMargins(dp(3), 0, dp(3), 0) }) }
+            sharesBox.addView(row)
+        }
+        if (ordered.size > TILE_ROWS * TILES) {
+            sharesBox.addView(button(if (sharesOpen) "▲ Less" else "▼ More (" + (ordered.size - TILE_ROWS * TILES) + " shares)") {
                 sharesOpen = !sharesOpen
                 render()
             })
         }
+    }
+
+    /** Ek share ka chhota dabba: lock se badha to poora hara, ghata to poora laal. */
+    private fun tile(s: org.json.JSONObject): LinearLayout {
+        val currency = s.optString("currency")
+        val price = s.optDouble("lastPrice", 0.0)
+        val saved = s.optDouble("savedPrice", 0.0)
+        val change = MarketLogic.pct(price, saved)
+        val plain = change in -0.004..0.004
+        val ink = if (plain) INK else 0xFFFFFFFF.toInt()
+        val soft = if (plain) GREY else 0xE6FFFFFF.toInt()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(if (change > 0.004) CHIP_GREEN else if (change < -0.004) CHIP_RED else 0xFFE4E7EC.toInt())
+                cornerRadius = dp(10).toFloat()
+            }
+            setOnClickListener { startActivity(ShareActivity.forShare(this@MarketActivity, s.optString("id"))) }
+        }
+        fun line(words: String, size: Float, bold: Boolean, color: Int) = TextView(this).apply {
+            text = words
+            textSize = size
+            setTextColor(color)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+        }
+        box.addView(line(s.optString("symbol").substringBefore('.'), 13f, true, ink))
+        box.addView(line(MarketLogic.money(price, currency), 14f, true, ink))
+        box.addView(line(MarketLogic.pctText(price, saved), 18f, true, ink))
+        box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))
+        box.addView(line(day.format(Date(s.optLong("savedAt"))) + if (MarketLogic.indianSymbol(s.optString("symbol"))) "" else "  ·  Foreign", 11f, false, soft))
+        return box
     }
 
     private fun renderReports() {
@@ -559,7 +550,8 @@ class MarketActivity : Activity() {
         private const val IDS = 6_000
         private const val REFRESH_MS = 15_000L
         private const val NEWS_ROWS = 10
-        private const val SHARE_ROWS = 1
+        private const val TILES = 3
+        private const val TILE_ROWS = 2
         private const val CHIP_GREEN = 0xFF16A34A.toInt()
         private const val CHIP_RED = 0xFFDC2626.toInt()
         private const val CHIP_GREY = 0xFF98A2B3.toInt()
