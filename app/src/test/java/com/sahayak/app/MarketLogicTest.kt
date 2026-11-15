@@ -247,4 +247,23 @@ class MarketLogicTest {
         assertEquals("-12.3K", MarketLogic.shortNumber(-12340.0))
         assertEquals("-₹12 cr", MarketLogic.crore(-12.0))
     }
+
+    @Test fun readsTickertapeChartPoints() {
+        val json = """{"success":true,"data":[{"sid":"CHPE","h":1677.5,"l":47.6,"r":519.07,"points":[
+            {"ts":"2005-03-01T00:00:00.000Z","lp":230.7,"v":10},{"ts":"2020-03-23T00:00:00.000Z","lp":47.6},{"ts":1794528000,"lp":1428.2},{"ts":"bad","lp":5}]}]}"""
+        val s = MarketLogic.parseTapeSeries(json, 1425.4)!!
+        assertEquals(3, s.values.size)
+        assertEquals("Tickertape", s.source)
+        assertEquals(1428.2, s.price, 0.001)
+        assertEquals(47.6, s.low, 0.001)
+        assertEquals(1794528000000L, s.times[2])
+        assertEquals("2005-03-01", MarketLogic.dayKey(s.times[0], TimeZone.getTimeZone("UTC")))
+        // Max mein shuru ke bhaav se: Tickertape jaisa 519%
+        assertEquals("▲ 519.07%", MarketLogic.pctText(s.price, MarketLogic.spanBase(s, MarketLogic.SPANS[5])))
+        assertEquals(1425.4, MarketLogic.spanBase(s, MarketLogic.SPANS[0]), 0.001)
+        assertEquals("max", MarketLogic.tapeDuration(MarketLogic.SPANS[5]))
+        assertEquals("1mo", MarketLogic.tapeDuration(MarketLogic.SPANS[2]))
+        assertNull(MarketLogic.parseTapeSeries("""{"data":[{"points":[{"ts":1,"lp":2}]}]}""", null))
+        assertNull(MarketLogic.parseTapeSeries("blocked", null))
+    }
 }

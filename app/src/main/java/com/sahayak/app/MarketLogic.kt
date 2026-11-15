@@ -63,7 +63,72 @@ object MarketLogic {
     )
 
     /** Chart ke bindu. prev = pichhle din ka band bhaav (sirf 1D mein kaam ka). */
-    class Series(val times: LongArray, val values: DoubleArray, val high: Double, val low: Double, val prev: Double?, val price: Double, val currency: String)
+    class Series(
+        val times: LongArray, val values: DoubleArray, val high: Double, val low: Double, val prev: Double?, val price: Double, val currency: String,
+        val source: String = "Yahoo Finance"
+    )
+
+    /** Tickertape ke chart ka samay: 1d, 1w, 1mo, 1y, 5y, max. */
+    fun tapeDuration(span: Span): String = when (span.label) {
+        "1D" -> "1d"
+        "1W" -> "1w"
+        "1M" -> "1mo"
+        "1Y" -> "1y"
+        "5Y" -> "5y"
+        else -> "max"
+    }
+
+    private fun tapeTime(v: Any?): Long = when (v) {
+        is Number -> v.toLong().let { if (it < 100_000_000_000L) it * 1000L else it }
+        is String -> try {
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("UTC") }.parse(v)?.time ?: 0L
+        } catch (e: java.text.ParseException) {
+            0L
+        }
+        else -> 0L
+    }
+
+    /**
+     * Tickertape ke apne chart ke bindu, taaki graph aur Returns unki app jaise hi aayein.
+     * "points" naam ki list jisme har bindu ka samay (ts) aur bhaav (lp) ho.
+     */
+    fun parseTapeSeries(json: String, prev: Double?): Series? {
+        var points: org.json.JSONArray? = null
+        fun walk(v: Any?, key: String) {
+            if (points != null) return
+            when (v) {
+                is JSONObject -> {
+                    val keys = v.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        walk(v.opt(k), k)
+                    }
+                }
+                is org.json.JSONArray -> {
+                    val first = v.optJSONObject(0)
+                    if (key == "points" && first != null && first.has("lp")) points = v else for (i in 0 until v.length()) walk(v.opt(i), key)
+                }
+            }
+        }
+        try {
+            walk(JSONObject(json), "")
+        } catch (e: JSONException) {
+            return null
+        }
+        val list = points ?: return null
+        val times = mutableListOf<Long>()
+        val values = mutableListOf<Double>()
+        for (i in 0 until list.length()) {
+            val p = list.optJSONObject(i) ?: continue
+            val v = p.optDouble("lp", Double.NaN)
+            val t = tapeTime(p.opt("ts"))
+            if (v.isNaN() || v <= 0.0 || t <= 0L) continue
+            times.add(t)
+            values.add(v)
+        }
+        if (values.size < 2) return null
+        return Series(times.toLongArray(), values.toDoubleArray(), values.maxOrNull() ?: 0.0, values.minOrNull() ?: 0.0, prev, values.last(), "INR", "Tickertape")
+    }
 
     /** Yahoo chart ka jawab: samay ke saath bhaav. Khaali bindu chhod do. */
     fun parseSeries(json: String): Series? {

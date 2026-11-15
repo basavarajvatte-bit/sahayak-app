@@ -111,8 +111,17 @@ object Market {
         return MarketLogic.Quote(symbol, symbol.substringBefore('.'), "INR", price, null, System.currentTimeMillis())
     }
 
-    /** Chart ke liye bhaav ka itihaas. */
-    fun series(symbol: String, span: MarketLogic.Span): MarketLogic.Series? {
+    /** Chart ke liye bhaav ka itihaas. Pehle Tickertape ka apna chart (taaki unki app jaisa hi dikhe), na mile to Yahoo. */
+    fun series(c: Context, share: JSONObject, span: MarketLogic.Span): MarketLogic.Series? {
+        val symbol = share.optString("symbol")
+        if (MarketLogic.indianSymbol(symbol)) {
+            val sid = slugOf(c, share).substringAfterLast('-', "")
+            if (sid.isNotEmpty()) {
+                val prev = share.optDouble("prevClose", Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
+                tape("https://api.tickertape.in/stocks/charts/inter/$sid?duration=" + MarketLogic.tapeDuration(span))
+                    ?.let { MarketLogic.parseTapeSeries(it, prev) }?.let { return it }
+            }
+        }
         val enc = URLEncoder.encode(symbol, "UTF-8")
         for (host in listOf("query1", "query2")) {
             val got = get("https://$host.finance.yahoo.com/v8/finance/chart/$enc?interval=" + span.interval + "&range=" + span.range)

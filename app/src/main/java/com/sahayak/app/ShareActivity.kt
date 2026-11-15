@@ -44,6 +44,9 @@ class ShareActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private var span = MarketLogic.SPANS[0]
     private var shown: MarketLogic.Series? = null
+    private var latest = 0.0
+    private var dayBase = Double.NaN
+    private lateinit var sourceLine: TextView
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -170,8 +173,12 @@ class ShareActivity : Activity() {
         }
         page.addView(bar, wide().apply { topMargin = dp(12) })
 
+        sourceLine = text("", 12f, false, GREY)
+        page.addView(sourceLine)
         status = text("", 14f, true, GREY)
         page.addView(status)
+        latest = share.optDouble("lastPrice", 0.0)
+        dayBase = share.optDouble("prevClose", Double.NaN)
 
         val locked = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -311,9 +318,14 @@ class ShareActivity : Activity() {
             return
         }
         status.text = "Getting the " + next.label + " chart"
-        val symbol = share.optString("symbol")
+        val app = applicationContext
+        val item = share
         Thread {
-            val got = Market.series(symbol, next)
+            val got = try {
+                Market.series(app, item, next)
+            } catch (e: org.json.JSONException) {
+                null
+            }
             main.post {
                 if (isDestroyed) return@post
                 if (got == null) {
@@ -331,17 +343,25 @@ class ShareActivity : Activity() {
         status.text = ""
         val currency = series.currency
         val base = MarketLogic.spanBase(series, span)
-        val now = series.price
+        val day = span.range == "1d"
+        if (day) {
+            latest = series.price
+            series.prev?.let { dayBase = it }
+        }
+        // Upar hamesha AAJ ka badlav (Tickertape jaisa). Chune hue samay ka badlav "Returns" mein
+        val now = if (day || latest <= 0.0) series.price else latest
         val up = now >= base
         price.text = MarketLogic.money(now, currency)
-        move.text = MarketLogic.moveText(now, base)
-        badge(move, MarketLogic.pct(now, base))
+        val today = if (dayBase.isNaN() || dayBase <= 0.0) base else dayBase
+        move.text = MarketLogic.moveText(now, today)
+        badge(move, MarketLogic.pct(now, today))
+        sourceLine.text = "Chart from " + series.source + (if (day || dayBase.isNaN()) "" else "  ·  Badge shows today's change") +
+            "  ·  " + span.label + " starts " + stamp(series.times.first())
         high.text = MarketLogic.money(maxOf(series.high, now), currency)
         low.text = MarketLogic.money(minOf(series.low, now), currency)
         returns.text = MarketLogic.pctText(now, base)
         returns.setTextColor(if (up) GREEN else RED)
         pick.text = " "
-        val day = span.range == "1d"
         val saved = share.optDouble("savedPrice", Double.NaN)
         chart.show(
             series.values, base, if (day) "Prev. Close " + MarketLogic.money(base, currency) else "",
