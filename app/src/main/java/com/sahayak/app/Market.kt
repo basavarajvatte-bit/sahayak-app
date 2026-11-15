@@ -106,6 +106,17 @@ object Market {
         return MarketLogic.Quote(symbol, symbol.substringBefore('.'), "INR", price, null, System.currentTimeMillis())
     }
 
+    /** Chart ke liye bhaav ka itihaas. */
+    fun series(symbol: String, span: MarketLogic.Span): MarketLogic.Series? {
+        val enc = URLEncoder.encode(symbol, "UTF-8")
+        for (host in listOf("query1", "query2")) {
+            val got = get("https://$host.finance.yahoo.com/v8/finance/chart/$enc?interval=" + span.interval + "&range=" + span.range)
+                ?.let { MarketLogic.parseSeries(it) }
+            if (got != null) return got
+        }
+        return null
+    }
+
     private fun find(typed: String): MarketLogic.Quote? {
         val q = URLEncoder.encode(typed, "UTF-8")
         val all = get("https://query2.finance.yahoo.com/v1/finance/search?q=$q&quotesCount=8&newsCount=0")

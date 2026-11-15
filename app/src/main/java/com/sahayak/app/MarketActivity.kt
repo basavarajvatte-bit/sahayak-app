@@ -402,6 +402,8 @@ class MarketActivity : Activity() {
             val change = MarketLogic.pct(price, saved)
             val box = card()
             box.addView(text(s.optString("name") + "  (" + s.optString("symbol") + ")", 16f, true))
+            box.addView(text("Tap for chart: 1D, 1W, 1M, 1Y, 5Y, Max", 12f, true, TEAL))
+            box.setOnClickListener { startActivity(ShareActivity.forShare(this, s.optString("id"))) }
             val today = if (s.has("prevClose")) "  ·  Today " + MarketLogic.pctText(price, s.optDouble("prevClose")) else ""
             box.addView(text("Now " + MarketLogic.money(price, currency) + today, 15f))
             box.addView(text(

@@ -193,4 +193,23 @@ class MarketLogicTest {
         assertTrue(MarketLogic.indianSymbol("CHENNPETRO.NS"))
         assertFalse(MarketLogic.indianSymbol("SPB"))
     }
+
+    @Test fun readsChartPointsAndRangeMove() {
+        val json = """{"chart":{"result":[{"meta":{"currency":"INR","symbol":"WELCORP.NS","regularMarketPrice":2230.4,"chartPreviousClose":2155.9},
+            "timestamp":[100,200,300,400],"indicators":{"quote":[{"close":[2140.0,null,2250.0,2230.4],"high":[2145.0,null,2250.0,2235.0],"low":[2138.0,null,2200.0,2225.0]}]}}],"error":null}}"""
+        val s = MarketLogic.parseSeries(json)!!
+        assertEquals(3, s.values.size)
+        assertEquals(300000L, s.times[1])
+        assertEquals(2250.0, s.high, 0.001)
+        assertEquals(2138.0, s.low, 0.001)
+        assertEquals(2155.9, s.prev!!, 0.001)
+        val day = MarketLogic.SPANS[0]
+        val month = MarketLogic.SPANS[2]
+        assertEquals(2155.9, MarketLogic.spanBase(s, day), 0.001)
+        assertEquals(2140.0, MarketLogic.spanBase(s, month), 0.001)
+        assertEquals("▲ 3.46% (+74.50)", MarketLogic.moveText(2230.4, 2155.9))
+        assertEquals("▼ 2.00% (-2.00)", MarketLogic.moveText(98.0, 100.0))
+        assertNull(MarketLogic.parseSeries("""{"chart":{"result":[{"meta":{},"timestamp":[1],"indicators":{"quote":[{"close":[5.0]}]}}]}}"""))
+        assertNull(MarketLogic.parseSeries("blocked"))
+    }
 }

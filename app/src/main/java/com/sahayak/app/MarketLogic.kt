@@ -41,6 +41,63 @@ object MarketLogic {
         }
     }
 
+    // ---------- Chart ----------
+
+    /** Chart ka ek button: naam, Yahoo ka range aur har bindu ka antar. */
+    data class Span(val label: String, val range: String, val interval: String)
+
+    val SPANS = listOf(
+        Span("1D", "1d", "5m"), Span("1W", "5d", "15m"), Span("1M", "1mo", "1d"),
+        Span("1Y", "1y", "1d"), Span("5Y", "5y", "1wk"), Span("Max", "max", "1mo")
+    )
+
+    /** Chart ke bindu. prev = pichhle din ka band bhaav (sirf 1D mein kaam ka). */
+    class Series(val times: LongArray, val values: DoubleArray, val high: Double, val low: Double, val prev: Double?, val price: Double, val currency: String)
+
+    /** Yahoo chart ka jawab: samay ke saath bhaav. Khaali bindu chhod do. */
+    fun parseSeries(json: String): Series? {
+        try {
+            val r = JSONObject(json).getJSONObject("chart").getJSONArray("result").getJSONObject(0)
+            val meta = r.getJSONObject("meta")
+            val stamps = r.optJSONArray("timestamp") ?: return null
+            val quote = r.optJSONObject("indicators")?.optJSONArray("quote")?.optJSONObject(0) ?: return null
+            val closes = quote.optJSONArray("close") ?: return null
+            val highs = quote.optJSONArray("high")
+            val lows = quote.optJSONArray("low")
+            val times = mutableListOf<Long>()
+            val values = mutableListOf<Double>()
+            var high = Double.NEGATIVE_INFINITY
+            var low = Double.POSITIVE_INFINITY
+            for (i in 0 until minOf(stamps.length(), closes.length())) {
+                val v = closes.optDouble(i, Double.NaN)
+                if (v.isNaN() || v <= 0.0) continue
+                times.add(stamps.optLong(i) * 1000L)
+                values.add(v)
+                val h = highs?.optDouble(i, Double.NaN) ?: Double.NaN
+                val l = lows?.optDouble(i, Double.NaN) ?: Double.NaN
+                high = maxOf(high, if (h.isNaN() || h <= 0.0) v else h)
+                low = minOf(low, if (l.isNaN() || l <= 0.0) v else l)
+            }
+            if (values.size < 2) return null
+            val prev = meta.optDouble("chartPreviousClose", Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
+                ?: meta.optDouble("previousClose", Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
+            val price = meta.optDouble("regularMarketPrice", Double.NaN).takeIf { !it.isNaN() && it > 0.0 } ?: values.last()
+            return Series(times.toLongArray(), values.toDoubleArray(), high, low, prev, price, meta.optString("currency").ifEmpty { "INR" })
+        } catch (e: JSONException) {
+            return null
+        }
+    }
+
+    /** Is range ka badlav kisse ginna hai: 1D mein pichhle din ke band bhaav se, baaki mein range ke pehle bhaav se. */
+    fun spanBase(series: Series, span: Span): Double = if (span.range == "1d" && series.prev != null) series.prev else series.values.first()
+
+    /** "▲ 3.45% (+74.50)" */
+    fun moveText(now: Double, base: Double): String {
+        val diff = now - base
+        val sign = if (diff > 0.004) "+" else if (diff < -0.004) "-" else ""
+        return pctText(now, base) + " (" + sign + String.format(Locale.ENGLISH, "%,.2f", Math.abs(diff)) + ")"
+    }
+
     /** Yahoo search ka jawab: naam se share ka code. */
     fun parseSearch(json: String): List<Found> {
         try {
