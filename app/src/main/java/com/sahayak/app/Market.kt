@@ -445,6 +445,53 @@ object Market {
         return changed
     }
 
+    private const val BUFFETT_KEEP_MS = 7 * 86_400_000L
+
+    /** Buffett jaanch ka kaccha data (Yahoo, saalana). Hafte bhar yaad. Jawab: JSON text ya null. */
+    fun buffettData(c: Context, symbol: String, fresh: Boolean = false): String? {
+        val key = "buffett_$symbol"
+        if (!fresh) {
+            prefs(c).getString(key, null)?.let { saved ->
+                try {
+                    val o = JSONObject(saved)
+                    if (System.currentTimeMillis() - o.optLong("at") < BUFFETT_KEEP_MS) return o.optString("json")
+                } catch (e: org.json.JSONException) {
+                    // Purana kharab data, dobara laao
+                }
+            }
+        }
+        val enc = URLEncoder.encode(symbol, "UTF-8")
+        val now = System.currentTimeMillis() / 1000
+        val types = BuffettLogic.TYPES.joinToString(",")
+        val json = get("https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/$enc?symbol=$enc&type=$types&period1=946684800&period2=$now")
+            ?: get("https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/$enc?symbol=$enc&type=$types&period1=946684800&period2=$now")
+            ?: return null
+        if (BuffettLogic.parse(json).isEmpty()) return null
+        prefs(c).edit().putString(key, JSONObject().put("at", System.currentTimeMillis()).put("json", json).toString()).apply()
+        return json
+    }
+
+    /** Locked shares ka Buffett score ("5/7"), hafte mein ek baar. Kuch badla ho to true. */
+    fun fillBuffett(c: Context): Boolean {
+        var changed = false
+        val now = System.currentTimeMillis()
+        shares(c).forEach { s ->
+            if (!MarketLogic.indianSymbol(s.optString("symbol")) || now - s.optLong("bufAt") < BUFFETT_KEEP_MS) return@forEach
+            val json = buffettData(c, s.optString("symbol"))
+            if (json == null && lastError == "No internet") return changed
+            setField(c, s.optString("id"), "bufAt", now)
+            val text = json?.let {
+                val (pass, total) = BuffettLogic.score(BuffettLogic.evaluate(BuffettLogic.parse(it), s.optString("sector").equals("Financials", true)))
+                "$pass/$total"
+            }.orEmpty()
+            if (text != s.optString("buffett")) {
+                setField(c, s.optString("id"), "buffett", text)
+                changed = true
+            }
+        }
+        return changed
+    }
+
     /**
      * Saal dar saal revenue aur profit (₹ crore). Pehle Tickertape, na mile to Yahoo.
      * Jawab: (saal, kahan se aaya). Hafte bhar yaad rakha jaata hai.

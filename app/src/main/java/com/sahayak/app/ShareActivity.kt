@@ -215,6 +215,11 @@ class ShareActivity : Activity() {
         page.addView(checkBox, wide().apply { topMargin = dp(12) })
         showCheck()
 
+        // ----- Buffett check -----
+        if (MarketLogic.indianSymbol(share.optString("symbol"))) {
+            page.addView(BuffettCard(this, share.optString("symbol"), share.optString("sector").equals("Financials", true)).view, wide().apply { topMargin = dp(16) })
+        }
+
         // ----- Saal dar saal revenue aur profit -----
         page.addView(text("Revenue and profit", 18f, true), wide().apply { topMargin = dp(18) })
         val legend = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }

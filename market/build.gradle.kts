@@ -9,7 +9,7 @@ val sharedCode = tasks.register<Copy>("sharedCode") {
         include(
             "Market.kt", "MarketLogic.kt", "MarketActivity.kt", "MarketNewsActivity.kt", "ShareActivity.kt", "ChartView.kt", "FinanceView.kt",
             "GreenList.kt", "Patterns.kt", "PatternLogic.kt", "PatternActivity.kt", "PatternLockActivity.kt",
-            "Funds.kt", "FundLogic.kt", "FundsActivity.kt", "FundActivity.kt", "BuyDialog.kt",
+            "Funds.kt", "FundLogic.kt", "FundsActivity.kt", "FundActivity.kt", "BuyDialog.kt", "BuffettLogic.kt", "BuffettCard.kt",
             "Planner.kt", "StoryLogic.kt", "ShortsLogic.kt", "BrainLogic.kt", "WatchLogic.kt", "Watcher.kt", "WatchActivity.kt",
             "SecureStore.kt", "GeminiLive.kt"
         )
@@ -25,8 +25,8 @@ android {
         applicationId = "com.sahayak.market"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {

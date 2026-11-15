@@ -1,0 +1,154 @@
+package com.sahayak.app
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+
+/** Share page par "Buffett check" ka dabba: 8 jaanch, har ek ke saath ⓘ (samjhaane wala) button. */
+class BuffettCard(private val a: Activity, private val symbol: String, private val financial: Boolean) {
+    val view = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+    private val main = Handler(Looper.getMainLooper())
+
+    private fun dp(v: Int) = (v * a.resources.displayMetrics.density).toInt()
+
+    private fun rounded(color: Int, radius: Int) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = dp(radius).toFloat()
+    }
+
+    private fun text(words: String, size: Float, bold: Boolean = false, color: Int = INK) = TextView(a).apply {
+        text = words
+        textSize = size
+        setTextColor(color)
+        if (bold) setTypeface(Typeface.DEFAULT, Typeface.BOLD) else typeface = Typeface.DEFAULT
+        setPadding(0, dp(2), 0, dp(2))
+    }
+
+    init {
+        view.background = rounded(0xFFF1F3F8.toInt(), 12)
+        view.setPadding(dp(14), dp(10), dp(14), dp(12))
+        load(false)
+    }
+
+    private fun header() {
+        view.removeAllViews()
+        val head = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
+        head.addView(text("🧓 Buffett check", 17f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        head.addView(infoButton {
+            show("Buffett check kya hai",
+                "Warren Buffett duniya ke sabse safal investors mein se hain. Wo share khareedne se pehle company ki balance sheet mein ye dekhte hain ki company " +
+                    "strong hai, karz kam hai, aur lagaataar paisa jod rahi hai.\n\nYahan 8 jaanch hain. Har jaanch ke aage ⓘ dabao, uska matlab, kab ✓ milta hai aur " +
+                    "kyun zaroori hai, sab likha hai.\n\n✓ = pass   ✗ = fail   ? = data nahi mila   — = is company par laagu nahi\n\n" +
+                    "Data Yahoo Finance se aata hai, aksar 4 saal ka. 10 saal ka poora hisaab Screener.in button se dekho.\n\nYe seekhne ke liye hai. Pass hone ka matlab ye nahi ki share zaroor badhega.")
+        })
+        view.addView(head)
+    }
+
+    private fun load(fresh: Boolean) {
+        header()
+        view.addView(text("Balance sheet laa raha hu…", 13f, false, GREY))
+        val app = a.applicationContext
+        Thread {
+            val json = Market.buffettData(app, symbol, fresh)
+            main.post { if (!a.isDestroyed) show(json) }
+        }.start()
+    }
+
+    private fun show(json: String?) {
+        header()
+        if (json == null) {
+            view.addView(text("Balance sheet ka data nahi mila. Internet check karo, ya Screener.in par dekho.", 14f, false, GREY))
+            buttons()
+            return
+        }
+        val data = BuffettLogic.parse(json)
+        val checks = BuffettLogic.evaluate(data, financial)
+        val (pass, total) = BuffettLogic.score(checks)
+        val good = pass * 2 >= total
+        view.addView(text("Buffett score: $pass / $total", 22f, true, if (pass * 4 >= total * 3) GREEN else if (good) AMBER else RED))
+        view.addView(text(BuffettLogic.years(data).toString() + " saal ke data se (Yahoo Finance)" + if (financial) " · Bank/NBFC: karz wali jaanch nahi" else "", 12f, false, GREY))
+        checks.forEach { c ->
+            val row = LinearLayout(a).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(6), 0, dp(2))
+            }
+            val (mark, color) = when (c.status) {
+                BuffettLogic.PASS -> "✓" to GREEN
+                BuffettLogic.FAIL -> "✗" to RED
+                BuffettLogic.SKIP -> "—" to GREY
+                else -> "?" to GREY
+            }
+            row.addView(text(mark, 20f, true, color), LinearLayout.LayoutParams(dp(28), LinearLayout.LayoutParams.WRAP_CONTENT))
+            val words = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+            words.addView(text(c.title, 15f, true))
+            words.addView(text(c.value, 13f, false, GREY))
+            row.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(infoButton { explain(c.id) })
+            view.addView(row)
+        }
+        buttons()
+    }
+
+    private fun buttons() {
+        val row = LinearLayout(a).apply { setPadding(0, dp(8), 0, 0) }
+        row.addView(Button(a).apply {
+            text = "Screener.in (10 saal)"
+            isAllCaps = false
+            setOnClickListener {
+                val code = symbol.substringBefore('.')
+                try {
+                    a.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.screener.in/company/$code/")))
+                } catch (e: android.content.ActivityNotFoundException) {
+                    // Browser nahi hai
+                }
+            }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(Button(a).apply {
+            text = "Dobara jaancho"
+            isAllCaps = false
+            setOnClickListener { load(true) }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        view.addView(row)
+    }
+
+    /** Gol ⓘ button. */
+    private fun infoButton(action: () -> Unit) = TextView(a).apply {
+        text = "i"
+        textSize = 16f
+        gravity = Gravity.CENTER
+        setTextColor(0xFFFFFFFF.toInt())
+        setTypeface(Typeface.SERIF, Typeface.BOLD_ITALIC)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(0xFF175CD3.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(dp(30), dp(30)).apply { leftMargin = dp(8) }
+        setOnClickListener { action() }
+    }
+
+    private fun explain(id: String) {
+        val info = BuffettLogic.INFO[id] ?: return
+        show(info.title, "📌 Kya dekhte hain\n" + info.what + "\n\n✓ Kab milta hai\n" + info.pass + "\n\n💡 Kyun zaroori hai\n" + info.why)
+    }
+
+    private fun show(title: String, body: String) {
+        AlertDialog.Builder(a).setTitle(title).setMessage(body).setPositiveButton("Samajh gaya", null).show()
+    }
+
+    companion object {
+        private const val INK = 0xFF1D2433.toInt()
+        private const val GREY = 0xFF667085.toInt()
+        private const val GREEN = 0xFF16A34A.toInt()
+        private const val AMBER = 0xFFB54700.toInt()
+        private const val RED = 0xFFDC2626.toInt()
+    }
+}

@@ -328,7 +328,7 @@ class MarketActivity : Activity() {
         val app = applicationContext
         Thread {
             val changed = try {
-                Market.fillSectors(app) or Market.fillValuations(app)
+                listOf(Market.fillSectors(app), Market.fillValuations(app), Market.fillBuffett(app)).any { it }
             } catch (e: org.json.JSONException) {
                 false
             }
@@ -630,6 +630,19 @@ class MarketActivity : Activity() {
         box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))
         box.addView(line(day.format(Date(s.optLong("savedAt"))) + if (MarketLogic.indianSymbol(s.optString("symbol"))) "" else "  ·  Foreign", 11f, false, soft))
         valueTag(s.optString("valuation"))?.let { box.addView(it) }
+        s.optString("buffett").takeIf { it.contains('/') }?.let { b ->
+            box.addView(TextView(this).apply {
+                text = "🧓 Buffett $b"
+                textSize = 11f
+                setTextColor(INK)
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setPadding(dp(5), dp(1), dp(5), dp(1))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFFE8F1FF.toInt())
+                    cornerRadius = dp(5).toFloat()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
+        }
         // Chhota Buy button: dummy fund mein kharido
         box.addView(TextView(this).apply {
             text = "🛒 Buy"
