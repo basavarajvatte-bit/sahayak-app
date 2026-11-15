@@ -113,6 +113,14 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
         return null
     }
 
+    /** Google search se share ka abhi ka NSE bhaav. Sirf tab, jab baaki jagah ke bhaav aapas mein na milein. */
+    fun priceCheck(name: String, code: String): Double? {
+        val prompt = "Use web search. What is the latest share price of " + name + " (NSE: " + code + ") on the National Stock Exchange of India, in rupees? " +
+            "Reply with JSON only: {\"price\": number, \"as_of\": \"date and time\", \"source\": \"site name\"}. " +
+            "If you cannot find a clear price, reply {\"price\": 0}. Never guess."
+        return grounded(prompt)?.let { MarketLogic.parseAiPrice(it) }
+    }
+
     private fun grounded(prompt: String): String? {
         val body = JSONObject()
             .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", prompt)))))

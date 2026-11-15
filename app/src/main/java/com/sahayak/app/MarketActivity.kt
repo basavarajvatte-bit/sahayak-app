@@ -48,6 +48,14 @@ class MarketActivity : Activity() {
     private var greenCap = GreenList.CAPS[0]
     private val capButtons = mutableMapOf<String, Button>()
     private val greenGroups = mutableSetOf(GreenList.MAX_GREEN, GreenList.MAX_GREEN - 1)
+    private lateinit var verifyLine: TextView
+    private val verifyTick = object : Runnable {
+        override fun run() {
+            if (!Market.verifying()) return
+            shareStatus.text = Market.verifyProgress
+            main.postDelayed(this, 1_000L)
+        }
+    }
     private val greenTick = object : Runnable {
         override fun run() {
             if (!GreenList.running()) return
@@ -164,15 +172,20 @@ class MarketActivity : Activity() {
         page.addView(shareStatus)
         sharesBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(sharesBox)
-        page.addView(button("Update prices now") {
-            work(shareStatus, "Getting prices") {
-                val total = Market.shares(app).size
-                if (total == 0) "Save a share first" else {
-                    val ok = Market.refresh(app)
-                    if (ok == total) "Prices updated" else "Got $ok of $total prices. " + Market.lastError
-                }
+        page.addView(button("Verify all prices now") {
+            main.postDelayed(verifyTick, 500L)
+            work(shareStatus, "Checking every price from 3 sources") { Market.verifyAll(app, false) }
+        })
+        page.addView(CheckBox(this).apply {
+            text = "Check prices every hour while the market is open"
+            isChecked = Market.verifyOn(this@MarketActivity)
+            setOnCheckedChangeListener { _, on ->
+                Market.setVerify(this@MarketActivity, on)
+                render()
             }
         })
+        verifyLine = text("", 13f, false, GREY)
+        page.addView(verifyLine)
 
         // ----- Hara scorecard -----
         page.addView(text("Green scorecard", 18f, true))
@@ -285,6 +298,7 @@ class MarketActivity : Activity() {
         super.onResume()
         main.post(refresh)
         if (GreenList.running()) main.post(greenTick)
+        if (Market.verifying()) main.post(verifyTick)
         // Jin locked shares ka sector nahi pata, peeche se dhoondh lo
         val app = applicationContext
         Thread {
@@ -301,6 +315,7 @@ class MarketActivity : Activity() {
         super.onPause()
         main.removeCallbacks(refresh)
         main.removeCallbacks(greenTick)
+        main.removeCallbacks(verifyTick)
     }
 
     /** Tickertape se sab companies ka scorecard dekhna: kuch minute lagte hain. */
@@ -466,6 +481,13 @@ class MarketActivity : Activity() {
             if (c > 0.004) up++ else if (c < -0.004) down++
         }
         sharesBox.addView(text(ordered.size.toString() + " locked  ·  ▲ $up up  ·  ▼ $down down since lock. Tap a box for its chart.", 13f, true, GREY))
+        val sure = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == true }
+        val doubt = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == false }
+        val last = Market.lastVerify(this)
+        val next = Market.nextVerify(this)
+        verifyLine.text = "✓ $sure verified by 2 or more sources" + (if (doubt > 0) "  ·  ⚠ $doubt need a look" else "") +
+            (if (last > 0) "\nLast check " + time.format(Date(last)) else "") +
+            (if (Market.verifyOn(this) && next > 0) "  ·  Next " + time.format(Date(next)) else "")
         val groups = ordered.groupBy { MarketLogic.lockGroup(it.optString("fromTitle")) }
         val sections = listOf("Smallcap", "Midcap", "Largecap").map { cap ->
             cap to (GreenList.MAX_GREEN downTo GreenList.MIN_GREEN).map { n -> n to groups[cap to n].orEmpty() }
@@ -548,7 +570,9 @@ class MarketActivity : Activity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
             if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
         }
-        box.addView(line(s.optString("symbol").substringBefore('.'), 13f, true, ink))
+        val check = s.optJSONObject("check")
+        val mark = if (check == null) "" else if (check.optBoolean("ok")) " ✓" else " ⚠"
+        box.addView(line(s.optString("symbol").substringBefore('.') + mark, 13f, true, ink))
         box.addView(line(MarketLogic.money(price, currency), 14f, true, ink))
         box.addView(line(MarketLogic.pctText(price, saved), 18f, true, ink))
         box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))

@@ -100,15 +100,160 @@ object Market {
 
     // ---------- Bhaav ----------
 
-    fun quote(symbol: String): MarketLogic.Quote? {
+    private fun yahooQuote(symbol: String): MarketLogic.Quote? {
         val enc = URLEncoder.encode(symbol, "UTF-8")
         for (host in listOf("query1", "query2")) {
             val q = get("https://$host.finance.yahoo.com/v8/finance/chart/$enc?interval=1d&range=5d")?.let { MarketLogic.parseQuote(it) }
             if (q != null) return q
         }
+        return null
+    }
+
+    private fun googlePrice(symbol: String): Double? {
         val code = MarketLogic.googleCode(symbol) ?: return null
-        val price = get("https://www.google.com/finance/quote/$code")?.let { MarketLogic.parseGooglePrice(it) } ?: return null
+        return get("https://www.google.com/finance/quote/$code")?.let { MarketLogic.parseGooglePrice(it) }
+    }
+
+    fun quote(symbol: String): MarketLogic.Quote? {
+        yahooQuote(symbol)?.let { return it }
+        val price = googlePrice(symbol) ?: return null
         return MarketLogic.Quote(symbol, symbol.substringBefore('.'), "INR", price, null, System.currentTimeMillis())
+    }
+
+    // ---------- Teen jagah se jaanch ----------
+
+    const val ACTION_VERIFY = "com.sahayak.app.MARKET_VERIFY"
+    private const val VERIFY_NOTE = 7_903
+    private const val OPEN_TOLERANCE = 1.0
+    private const val CLOSED_TOLERANCE = 0.3
+    private const val AI_CHECKS = 5
+    private const val QUOTE_BATCH = 40
+    private val verifyBusy = AtomicBoolean(false)
+
+    /** Screen par dikhane ke liye: jaanch kahan tak pahunchi. */
+    @Volatile
+    var verifyProgress = ""
+        private set
+
+    fun verifying() = verifyBusy.get()
+
+    fun verifyOn(c: Context) = prefs(c).getBoolean("verify_on", true)
+
+    fun lastVerify(c: Context) = prefs(c).getLong("verify_last", 0L)
+
+    fun nextVerify(c: Context) = prefs(c).getLong("verify_next", 0L)
+
+    fun setVerify(c: Context, on: Boolean) {
+        prefs(c).edit().putBoolean("verify_on", on).apply()
+        armVerify(c)
+    }
+
+    private fun armVerify(c: Context) {
+        if (verifyOn(c) && shares(c).isNotEmpty()) arm(c, ACTION_VERIFY, VERIFY_NOTE, "verify_next", MarketLogic.nextVerifyAt(System.currentTimeMillis()))
+        else cancel(c, ACTION_VERIFY, VERIFY_NOTE, "verify_next")
+    }
+
+    /** Tickertape ka seedha bhaav kai shares ka ek saath. */
+    private fun tapeQuotes(sids: List<String>): Map<String, Pair<Double, Double?>> {
+        val out = mutableMapOf<String, Pair<Double, Double?>>()
+        sids.distinct().filter { it.isNotEmpty() }.chunked(QUOTE_BATCH).forEach { part ->
+            tape("https://quotes-api.tickertape.in/quotes?sids=" + URLEncoder.encode(part.joinToString(","), "UTF-8"))
+                ?.let { out.putAll(MarketLogic.parseTapeQuotes(it)) }
+        }
+        return out
+    }
+
+    /**
+     * Har locked share ka bhaav teen jagah se (Tickertape, Yahoo, Google) lao aur milao.
+     * Do jagah mile to pakka. Koi na mile to AI se Google search karwa kar dekho kaunsi jagah sahi hai.
+     * only = sirf is id ka share; fresh = abhi lock hua hai, lock ka bhaav bhi jaanche hue bhaav par rakho.
+     */
+    fun verifyAll(c: Context, scheduled: Boolean, only: String = "", fresh: Boolean = false): String {
+        if (scheduled) {
+            if (!verifyOn(c)) return ""
+            armVerify(c)
+        }
+        val list = shares(c).filter { (only.isEmpty() || it.optString("id") == only) && MarketLogic.indianSymbol(it.optString("symbol")) }
+        if (list.isEmpty()) return "Lock a share first"
+        if (!verifyBusy.compareAndSet(false, true)) return "Prices are already being checked"
+        try {
+            val now = System.currentTimeMillis()
+            val tolerance = if (MarketLogic.marketOpen(now)) OPEN_TOLERANCE else CLOSED_TOLERANCE
+            verifyProgress = "Finding the shares on Tickertape"
+            val sidOf = list.associate { it.optString("id") to slugOf(c, it).substringAfterLast('-', "") }
+            val tapes = tapeQuotes(sidOf.values.toList())
+            val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
+            var aiLeft = if (key.isEmpty()) 0 else AI_CHECKS
+            var good = 0
+            var bad = 0
+            var fixed = 0
+            list.forEachIndexed { i, s ->
+                verifyProgress = "Checked $i of " + list.size + " shares"
+                val id = s.optString("id")
+                val symbol = s.optString("symbol")
+                val sid = sidOf[id].orEmpty()
+                var tapeQuote = tapes[sid]
+                if (tapeQuote == null && sid.isNotEmpty()) {
+                    tapeQuote = tape("https://api.tickertape.in/stocks/charts/inter/$sid?duration=1d")
+                        ?.let { MarketLogic.parseTapeSeries(it, null) }?.let { it.price to null }
+                }
+                val yahoo = yahooQuote(symbol)
+                val prices = mutableMapOf<String, Double>()
+                tapeQuote?.let { prices[MarketLogic.TAPE] = it.first }
+                yahoo?.let { prices[MarketLogic.YAHOO] = it.price }
+                // Google ka page bhaari hota hai (mobile data). Poori list ki jaanch mein use tabhi kholo
+                // jab pehli do jagah aapas mein na milein; ek share ki jaanch mein hamesha
+                if (only.isNotEmpty() || MarketLogic.verify(prices, tolerance)?.ok != true) {
+                    googlePrice(symbol)?.let { prices[MarketLogic.GOOGLE] = it }
+                }
+                var verdict = MarketLogic.verify(prices, tolerance) ?: return@forEachIndexed
+                var ai: Double? = null
+                if (!verdict.ok && prices.size >= 2 && aiLeft > 0) {
+                    aiLeft--
+                    verifyProgress = "Sources differ for " + s.optString("name") + ". Asking AI to check"
+                    ai = Planner(GeminiLive.newClient(), key, 40L).priceCheck(s.optString("name"), symbol.substringBefore('.'))
+                    val seen = ai
+                    if (seen != null) {
+                        val match = prices.entries.minByOrNull { Math.abs(it.value - seen) }
+                        if (match != null && Math.abs(match.value - seen) / seen * 100.0 <= tolerance * 2) {
+                            verdict = MarketLogic.Verdict(match.value, true, "Sources differed. AI checked with Google search and it matched " + match.key, match.key)
+                        }
+                    }
+                }
+                if (verdict.ok) good++ else bad++
+                val check = JSONObject().put("at", System.currentTimeMillis()).put("ok", verdict.ok).put("status", verdict.status).put("used", verdict.used)
+                prices.forEach { (name, p) -> check.put(name, p) }
+                if (ai != null) check.put("AI", ai)
+                change(c) { all ->
+                    val item = all.firstOrNull { it.optString("id") == id } ?: return@change
+                    val old = item.optDouble("lastPrice", 0.0)
+                    if (Math.abs(old - verdict.price) > 0.005) check.put("was", old)
+                    item.put("lastPrice", verdict.price).put("lastAt", System.currentTimeMillis())
+                    if (yahoo != null) item.put("marketAt", yahoo.timeMs)
+                    // Pichhla band bhaav: Tickertape ka badlav mile to usse, warna Yahoo ka
+                    val delta = tapeQuote?.second
+                    val yahooPrev = yahoo?.prevClose
+                    if (verdict.used == MarketLogic.TAPE && delta != null) item.put("prevClose", verdict.price - delta)
+                    else if (yahooPrev != null) item.put("prevClose", yahooPrev)
+                    // Lock ke baad bazaar khula hi nahi (ya abhi lock hua): lock ka bhaav bhi wahi sahi bhaav hona chahiye
+                    val saved = item.optDouble("savedPrice", 0.0)
+                    if (verdict.ok && (fresh || !MarketLogic.sessionSince(item.optLong("savedAt"), System.currentTimeMillis())) &&
+                        Math.abs(saved - verdict.price) > 0.005
+                    ) {
+                        item.put("savedPrice", verdict.price)
+                        check.put("lockWas", saved)
+                        fixed++
+                    }
+                    item.put("check", check)
+                }
+            }
+            if (only.isEmpty()) prefs(c).edit().putLong("verify_last", System.currentTimeMillis()).putInt("verify_good", good).putInt("verify_bad", bad).apply()
+            return "Checked " + (good + bad) + " shares: $good verified" + (if (bad > 0) ", $bad need a look" else "") +
+                (if (fixed > 0) ". Corrected $fixed lock prices" else "")
+        } finally {
+            verifyProgress = ""
+            verifyBusy.set(false)
+        }
     }
 
     /** Chart ke liye bhaav ka itihaas. Pehle Tickertape ka apna chart (taaki unki app jaisa hi dikhe), na mile to Yahoo. */
@@ -195,7 +340,12 @@ object Market {
         if (sector.isNotBlank()) item.put("sector", sector.trim())
         change(c) { it.add(item) }
         rearm(c)
-        return "Locked " + q.name + " at " + MarketLogic.money(q.price, q.currency) + ". See it in My shares"
+        // Lock ka bhaav turant teen jagah se jaancho
+        verifyAll(c, false, item.optString("id"), true)
+        val locked = shares(c).firstOrNull { it.optString("id") == item.optString("id") } ?: item
+        val sure = locked.optJSONObject("check")?.optBoolean("ok") == true
+        return "Locked " + q.name + " at " + MarketLogic.money(locked.optDouble("savedPrice", q.price), q.currency) +
+            (if (sure) " (price verified)" else "") + ". See it in My shares"
     }
 
     private fun setField(c: Context, id: String, key: String, value: Any) = change(c) { list ->
@@ -343,7 +493,8 @@ object Market {
         try {
             val started = System.currentTimeMillis()
             lastError = ""
-            refresh(c)
+            // Report se pehle bhaav ki poori jaanch; jaanch na chal sake to seedha bhaav
+            if (verifyAll(c, false).startsWith("Prices are already")) refresh(c)
             val zone = TimeZone.getDefault()
             val today = MarketLogic.dayKey(started, zone)
             val day = SimpleDateFormat("d MMM", Locale.ENGLISH)
@@ -625,6 +776,7 @@ object Market {
 
     /** Share jodne ya hatane ke baad, aur phone chalu hone par. */
     fun rearm(c: Context) {
+        armVerify(c)
         if (reportOn(c) && shares(c).isNotEmpty()) armReport(c) else cancel(c, ACTION_REPORT, REPORT_NOTE, "report_next")
         if (newsOn(c)) {
             val at = nextNews(c)

@@ -47,6 +47,7 @@ class ShareActivity : Activity() {
     private var latest = 0.0
     private var dayBase = Double.NaN
     private lateinit var sourceLine: TextView
+    private lateinit var checkBox: LinearLayout
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -198,6 +199,15 @@ class ShareActivity : Activity() {
         }
         page.addView(locked, wide().apply { topMargin = dp(14) })
 
+        // ----- Bhaav ki jaanch -----
+        checkBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0xFFF1F3F8.toInt(), 12)
+            setPadding(dp(14), dp(10), dp(14), dp(12))
+        }
+        page.addView(checkBox, wide().apply { topMargin = dp(12) })
+        showCheck()
+
         // ----- Saal dar saal revenue aur profit -----
         page.addView(text("Revenue and profit", 18f, true), wide().apply { topMargin = dp(18) })
         val legend = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -233,6 +243,48 @@ class ShareActivity : Activity() {
 
         showLock(share.optDouble("lastPrice", 0.0))
         choose(span)
+    }
+
+    /** Teen jagah ka bhaav aur faisla. */
+    private fun showCheck() {
+        checkBox.removeAllViews()
+        val check = share.optJSONObject("check")
+        val currency = share.optString("currency")
+        checkBox.addView(text("Price check", 13f, true, GREY))
+        if (check == null) {
+            checkBox.addView(text("Not checked yet.", 14f))
+        } else {
+            val ok = check.optBoolean("ok")
+            checkBox.addView(text((if (ok) "✓ " else "⚠ ") + check.optString("status"), 15f, true, if (ok) GREEN else 0xFFB54700.toInt()))
+            listOf(MarketLogic.TAPE, MarketLogic.YAHOO, MarketLogic.GOOGLE, "AI").forEach { name ->
+                if (!check.has(name)) return@forEach
+                val used = name == check.optString("used")
+                checkBox.addView(text(name + ":  " + MarketLogic.money(check.optDouble(name), currency) + (if (used) "   ← used" else ""), 14f, used))
+            }
+            if (check.has("was")) checkBox.addView(text("Price corrected from " + MarketLogic.money(check.optDouble("was"), currency), 13f, false, GREY))
+            if (check.has("lockWas")) checkBox.addView(text("Lock price corrected from " + MarketLogic.money(check.optDouble("lockWas"), currency), 13f, false, GREY))
+            checkBox.addView(text("Checked " + SimpleDateFormat("d MMM, h:mm a", Locale.ENGLISH).format(Date(check.optLong("at"))), 12f, false, GREY))
+        }
+        checkBox.addView(button("Check this price now") {
+            status.text = "Checking the price from 3 sources"
+            val app = applicationContext
+            val id = share.optString("id")
+            Thread {
+                val answer = try {
+                    Market.verifyAll(app, false, id)
+                } catch (e: org.json.JSONException) {
+                    "Something went wrong. Try again"
+                }
+                main.post {
+                    if (isDestroyed) return@post
+                    status.text = answer
+                    Market.shares(this).firstOrNull { it.optString("id") == id }?.let { share = it }
+                    latest = share.optDouble("lastPrice", latest)
+                    showCheck()
+                    showLock(latest)
+                }
+            }.start()
+        })
     }
 
     private fun loadFinance() {

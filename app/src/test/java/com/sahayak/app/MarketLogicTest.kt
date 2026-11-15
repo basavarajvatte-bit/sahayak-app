@@ -266,4 +266,47 @@ class MarketLogicTest {
         assertNull(MarketLogic.parseTapeSeries("""{"data":[{"points":[{"ts":1,"lp":2}]}]}""", null))
         assertNull(MarketLogic.parseTapeSeries("blocked", null))
     }
+
+    @Test fun crossChecksPricesFromThreeSources() {
+        val all = MarketLogic.verify(mapOf("Tickertape" to 1428.2, "Yahoo" to 1429.0, "Google" to 1428.2), 0.3)!!
+        assertTrue(all.ok)
+        assertEquals(1428.2, all.price, 0.001)
+        assertEquals("Verified by 3 sources", all.status)
+        assertEquals("Tickertape", all.used)
+        // Ek jagah galat: baaki do ki baat maano
+        val two = MarketLogic.verify(mapOf("Tickertape" to 87.85, "Yahoo" to 4508.7, "Google" to 4509.0), 0.3)!!
+        assertTrue(two.ok)
+        assertEquals(4508.7, two.price, 0.001)
+        assertEquals("2 of 3 sources agree. Tickertape shows ₹87.85", two.status)
+        val none = MarketLogic.verify(mapOf("Tickertape" to 100.0, "Yahoo" to 110.0, "Google" to 120.0), 0.3)!!
+        assertFalse(none.ok)
+        val one = MarketLogic.verify(mapOf("Yahoo" to 50.0), 0.3)!!
+        assertFalse(one.ok)
+        assertEquals(50.0, one.price, 0.001)
+        assertNull(MarketLogic.verify(emptyMap(), 0.3))
+        val quotes = MarketLogic.parseTapeQuotes("""{"success":true,"data":[{"sid":"CHPE","price":1428.2,"change":2.8},{"sid":"IOC","price":144.04},{"sid":"X","price":null}]}""")
+        assertEquals(2, quotes.size)
+        assertEquals(1428.2 to 2.8, quotes["CHPE"])
+        assertNull(quotes["IOC"]!!.second)
+        assertEquals(1428.2, MarketLogic.parseAiPrice("Here: {\"price\": 1428.2, \"source\": \"NSE\"}")!!, 0.001)
+        assertNull(MarketLogic.parseAiPrice("{\"price\": 0}"))
+    }
+
+    @Test fun knowsMarketHoursInIndia() {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ENGLISH).apply { timeZone = TimeZone.getTimeZone("Asia/Kolkata") }
+        fun at(text: String) = fmt.parse(text)!!.time
+        // 13 Nov 2026 shukravar, 14 shanivar, 15 ravivar, 16 somvar
+        assertTrue(MarketLogic.marketOpen(at("2026-11-13 10:00")))
+        assertFalse(MarketLogic.marketOpen(at("2026-11-13 16:00")))
+        assertFalse(MarketLogic.marketOpen(at("2026-11-14 11:00")))
+        assertEquals(at("2026-11-13 10:20"), MarketLogic.nextVerifyAt(at("2026-11-13 09:30")))
+        assertEquals(at("2026-11-13 15:45"), MarketLogic.nextVerifyAt(at("2026-11-13 15:21")))
+        assertEquals(at("2026-11-16 09:20"), MarketLogic.nextVerifyAt(at("2026-11-13 16:00")))
+        assertEquals(at("2026-11-16 09:20"), MarketLogic.nextVerifyAt(at("2026-11-15 13:00")))
+        // Shanivar ko lock kiya, ravivar ko dekha: beech mein bazaar nahi khula
+        assertFalse(MarketLogic.sessionSince(at("2026-11-14 16:48"), at("2026-11-15 13:00")))
+        assertFalse(MarketLogic.sessionSince(at("2026-11-13 17:00"), at("2026-11-16 09:00")))
+        assertTrue(MarketLogic.sessionSince(at("2026-11-13 17:00"), at("2026-11-16 09:30")))
+        assertTrue(MarketLogic.sessionSince(at("2026-11-13 11:00"), at("2026-11-13 11:01")))
+    }
 }

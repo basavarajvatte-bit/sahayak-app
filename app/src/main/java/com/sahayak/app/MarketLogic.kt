@@ -41,6 +41,124 @@ object MarketLogic {
         }
     }
 
+    // ---------- Bhaav ki teen jagah se jaanch ----------
+
+    const val TAPE = "Tickertape"
+    const val YAHOO = "Yahoo"
+    const val GOOGLE = "Google"
+    private val TRUST = listOf(TAPE, YAHOO, GOOGLE)
+
+    /** Jaanch ka nateeja: kaunsa bhaav maana, pakka hai ya nahi, aur kyun. */
+    data class Verdict(val price: Double, val ok: Boolean, val status: String, val used: String)
+
+    /**
+     * Alag-alag jagah ke bhaav milao. Jo sabse zyada jagah aapas mein mile (tolerance % ke andar) wahi sahi.
+     * Kam se kam do jagah mile tabhi "pakka". Bhaav Tickertape ka lo agar wo sehmat walon mein hai.
+     */
+    fun verify(prices: Map<String, Double>, tolerancePct: Double): Verdict? {
+        val all = TRUST.mapNotNull { name -> prices[name]?.takeIf { it > 0.0 && !it.isNaN() }?.let { name to it } }
+        if (all.isEmpty()) return null
+        if (all.size == 1) return Verdict(all[0].second, false, "Only " + all[0].first + " gave a price, so it could not be cross-checked", all[0].first)
+        fun near(a: Double, b: Double) = Math.abs(a - b) / minOf(a, b) * 100.0 <= tolerancePct
+        val best = all.map { anchor -> all.filter { near(anchor.second, it.second) } }.maxByOrNull { it.size } ?: return null
+        if (best.size < 2) {
+            return Verdict(all[0].second, false, "Sources do not agree: " + all.joinToString(", ") { it.first + " " + money(it.second, "INR") }, all[0].first)
+        }
+        val pick = best.first()
+        val odd = all.filter { it !in best }
+        val status = if (odd.isEmpty()) "Verified by " + best.size + " sources"
+        else best.size.toString() + " of " + all.size + " sources agree. " + odd.joinToString(", ") { it.first + " shows " + money(it.second, "INR") }
+        return Verdict(pick.second, true, status, pick.first)
+    }
+
+    private val IST: TimeZone = TimeZone.getTimeZone("Asia/Kolkata")
+    private const val OPEN_MIN = 9 * 60 + 15
+    private const val CLOSE_MIN = 15 * 60 + 30
+
+    /** Jaanch ke samay (IST): har ghante, aur band hone ke baad ek aakhri. */
+    private val CHECK_MINUTES = listOf(9 * 60 + 20, 10 * 60 + 20, 11 * 60 + 20, 12 * 60 + 20, 13 * 60 + 20, 14 * 60 + 20, 15 * 60 + 20, 15 * 60 + 45)
+
+    private fun weekday(cal: Calendar) = cal.get(Calendar.DAY_OF_WEEK).let { it != Calendar.SATURDAY && it != Calendar.SUNDAY }
+
+    /** Somvar se shukravar, 9:15 se 3:30 (chhutti ka pata nahi hota). */
+    fun marketOpen(ms: Long): Boolean {
+        val cal = Calendar.getInstance(IST).apply { timeInMillis = ms }
+        val minute = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        return weekday(cal) && minute in OPEN_MIN..CLOSE_MIN
+    }
+
+    /** Agli jaanch kab. */
+    fun nextVerifyAt(now: Long): Long {
+        val cal = Calendar.getInstance(IST).apply { timeInMillis = now }
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        for (day in 0..7) {
+            if (weekday(cal)) {
+                for (m in CHECK_MINUTES) {
+                    cal.set(Calendar.HOUR_OF_DAY, m / 60)
+                    cal.set(Calendar.MINUTE, m % 60)
+                    if (cal.timeInMillis > now) return cal.timeInMillis
+                }
+            }
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+        }
+        return now + 3_600_000L
+    }
+
+    /** Kya from aur to ke beech bazaar khula tha (ya abhi khula hai)? Nahi to bhaav wahi band wala hai. */
+    fun sessionSince(from: Long, to: Long): Boolean {
+        if (to <= from) return marketOpen(to)
+        val cal = Calendar.getInstance(IST).apply { timeInMillis = from }
+        for (day in 0..14) {
+            if (weekday(cal)) {
+                val open = (cal.clone() as Calendar).apply {
+                    set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 15); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val close = open + (CLOSE_MIN - OPEN_MIN) * 60_000L
+                if (open < to && close > from) return true
+            }
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            if (cal.timeInMillis > to) return false
+        }
+        return true
+    }
+
+    /** Tickertape ka seedha bhaav: sid se (bhaav, aaj ka badlav rupaye mein). */
+    fun parseTapeQuotes(json: String): Map<String, Pair<Double, Double?>> {
+        val out = mutableMapOf<String, Pair<Double, Double?>>()
+        fun walk(v: Any?) {
+            when (v) {
+                is JSONObject -> {
+                    val sid = str(v, "sid")
+                    val price = v.optDouble("price", Double.NaN).let { if (it.isNaN()) v.optDouble("lp", Double.NaN) else it }
+                    if (sid.isNotEmpty() && !price.isNaN() && price > 0.0) {
+                        out[sid] = price to v.optDouble("change", Double.NaN).takeIf { !it.isNaN() }
+                    }
+                    val keys = v.keys()
+                    while (keys.hasNext()) walk(v.opt(keys.next()))
+                }
+                is org.json.JSONArray -> for (i in 0 until v.length()) walk(v.opt(i))
+            }
+        }
+        try {
+            walk(JSONObject(json))
+        } catch (e: JSONException) {
+            return emptyMap()
+        }
+        return out
+    }
+
+    /** AI ke jawab mein se bhaav. */
+    fun parseAiPrice(text: String): Double? = try {
+        JSONObject(jsonBlock(text)).optDouble("price", Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
+    } catch (e: JSONException) {
+        null
+    }
+
     // ---------- Locked shares ke group ----------
 
     private val LOCK_FROM = Regex("(?i)^(smallcap|midcap|largecap) green scorecard: ([0-9]) of ([0-9])")
