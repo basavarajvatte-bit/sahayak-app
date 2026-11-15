@@ -219,4 +219,32 @@ class MarketLogicTest {
         assertNull(MarketLogic.lockGroup("Patanjali Foods Q2 results: Net profit falls 18.8%"))
         assertNull(MarketLogic.lockGroup(""))
     }
+
+    @Test fun readsSectorAndYearlyFigures() {
+        val screen = """{"data":{"results":[{"sid":"IOC","stock":{"info":{"name":"Indian Oil Corporation Ltd","ticker":"IOC","sector":"Energy"}}}]}}"""
+        assertEquals("Energy", MarketLogic.parseScreener(screen)[0].sector)
+        assertEquals("Other", MarketLogic.sectorName(" "))
+        val search = """{"data":{"stocks":[{"ticker":"ONGC","stock":{"info":{"sector":"Energy"}}},{"ticker":"TCS","sector":"Information Technology"}]}}"""
+        assertEquals("Information Technology", MarketLogic.findSector(search, "TCS.NS"))
+        assertEquals("Energy", MarketLogic.findSector(search, "ONGC"))
+        assertEquals("", MarketLogic.findSector(search, "INFY"))
+        assertEquals("Energy", MarketLogic.findSector(search, ""))
+
+        val page = """<html><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{
+            "income-normal-interim":[{"displayPeriod":"SEP 2025","incTrev":9,"incNinc":1}],
+            "income-normal-annual":[{"displayPeriod":"FY 2022","incTrev":100.5,"incNinc":-12},{"displayPeriod":"FY 2023","incTrev":150,"incNinc":20},
+            {"displayPeriod":"TTM","incTrev":170,"incNinc":25},{"displayPeriod":"FY 2024","incTrev":null,"incNinc":5}]}}}</script></html>"""
+        val years = MarketLogic.parseFinancials(MarketLogic.nextData(page))
+        assertEquals(listOf(MarketLogic.Year("2022", 100.5, -12.0), MarketLogic.Year("2023", 150.0, 20.0)), years)
+        assertEquals(1, MarketLogic.parseFinancials("""{"success":true,"data":[{"displayPeriod":"FY 2025","incTrev":5,"incNinc":1}]}""").size)
+        assertTrue(MarketLogic.parseFinancials("blocked").isEmpty())
+
+        val yahoo = """{"timeseries":{"result":[
+            {"meta":{"type":["annualNetIncome"]},"annualNetIncome":[{"asOfDate":"2024-03-31","reportedValue":{"raw":2.0E10}},null]},
+            {"meta":{"type":["annualTotalRevenue"]},"annualTotalRevenue":[{"asOfDate":"2023-03-31","reportedValue":{"raw":1.0E11}},{"asOfDate":"2024-03-31","reportedValue":{"raw":1.5E11}}]}]}}"""
+        assertEquals(listOf(MarketLogic.Year("2023", 10000.0, 0.0), MarketLogic.Year("2024", 15000.0, 2000.0)), MarketLogic.parseYahooFinancials(yahoo))
+        assertEquals("8.8L", MarketLogic.shortNumber(879468.0))
+        assertEquals("-12.3K", MarketLogic.shortNumber(-12340.0))
+        assertEquals("-₹12 cr", MarketLogic.crore(-12.0))
+    }
 }

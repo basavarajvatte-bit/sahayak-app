@@ -32,6 +32,9 @@ object Market {
     private const val MAX_REPORTS = 10
     private const val MAX_LINKS = 3_000
     private const val MAX_BODY = 2_000_000
+    private const val MAX_PAGE = 8_000_000
+    private const val FIN_KEEP_MS = 7 * 86_400_000L
+    private const val SECTOR_LOOKUPS = 12
     private const val FIRST_SHOW = 25
     private const val FRESH_MS = 6 * 3_600_000L
     private const val SHARE_NEWS = 3
@@ -74,16 +77,17 @@ object Market {
     }
 
     /** Tickertape ke khule pages. Wo browser jaisa Referer maangte hain. */
-    fun tape(url: String, body: String? = null): String? = try {
-        val request = Request.Builder().url(url).header("User-Agent", UA).header("Accept", "application/json, text/plain, */*")
-            .header("Referer", "https://www.tickertape.in/").header("accept-version", "7.9.0")
+    fun tape(url: String, body: String? = null, page: Boolean = false): String? = try {
+        val request = Request.Builder().url(url).header("User-Agent", UA).header("Referer", "https://www.tickertape.in/")
+        if (page) request.header("Accept", "text/html,application/xhtml+xml")
+        else request.header("Accept", "application/json, text/plain, */*").header("accept-version", "7.9.0")
         if (body != null) request.post(body.toRequestBody("application/json".toMediaType()))
         client.newCall(request.build()).execute().use { r ->
             if (!r.isSuccessful) {
                 lastError = "Tickertape answered " + r.code
                 null
             } else {
-                r.body?.string()?.take(MAX_BODY)
+                r.body?.string()?.take(if (page) MAX_PAGE else MAX_BODY)
             }
         }
     } catch (e: IOException) {
@@ -162,16 +166,16 @@ object Market {
     }
 
     /** NSE code pata ho (jaise green list mein) to seedha usi ka bhaav, bina dhoondhe. */
-    fun lockSymbol(c: Context, ticker: String, name: String, fromTitle: String, slug: String = ""): String {
+    fun lockSymbol(c: Context, ticker: String, name: String, fromTitle: String, slug: String = "", sector: String = ""): String {
         if (shares(c).size >= MAX_SHARES) return "List is full. Remove one share first"
         lastError = ""
         val code = ticker.trim().uppercase(Locale.ENGLISH)
         val q = (if (code.isEmpty()) null else quote("$code.NS") ?: quote("$code.BO")) ?: find(name)
             ?: return if (lastError == "No internet") "No internet. Try again" else "Could not get the price of $name. Try again"
-        return save(c, q.copy(name = name.ifEmpty { q.name }), fromTitle, "", slug)
+        return save(c, q.copy(name = name.ifEmpty { q.name }), fromTitle, "", slug, sector)
     }
 
-    private fun save(c: Context, q: MarketLogic.Quote, fromTitle: String, fromLink: String, slug: String = ""): String {
+    private fun save(c: Context, q: MarketLogic.Quote, fromTitle: String, fromLink: String, slug: String = "", sector: String = ""): String {
         if (shares(c).any { it.optString("symbol") == q.symbol }) return q.name + " is already in your list"
         val now = System.currentTimeMillis()
         val item = JSONObject().put("id", now.toString()).put("symbol", q.symbol).put("name", q.name).put("currency", q.currency)
@@ -179,9 +183,101 @@ object Market {
         q.prevClose?.let { item.put("prevClose", it) }
         if (fromTitle.isNotEmpty()) item.put("fromTitle", fromTitle).put("fromLink", fromLink)
         if (slug.startsWith("/stocks/")) item.put("slug", slug)
+        if (sector.isNotBlank()) item.put("sector", sector.trim())
         change(c) { it.add(item) }
         rearm(c)
         return "Locked " + q.name + " at " + MarketLogic.money(q.price, q.currency) + ". See it in My shares"
+    }
+
+    private fun setField(c: Context, id: String, key: String, value: Any) = change(c) { list ->
+        list.firstOrNull { it.optString("id") == id }?.put(key, value)
+    }
+
+    /** Share ka Tickertape page. Yaad na ho to NSE code se dhoondh kar yaad rakh lo. */
+    private fun slugOf(c: Context, share: JSONObject): String {
+        val known = share.optString("slug")
+        if (known.startsWith("/stocks/")) return known
+        val found = tickertapeLink(share.optString("name"), "", share.optString("symbol"))?.removePrefix("https://www.tickertape.in").orEmpty()
+        if (found.startsWith("/stocks/")) setField(c, share.optString("id"), "slug", found)
+        return found
+    }
+
+    /**
+     * Jin shares ka sector nahi pata, unka dhoondho: pehle bani hui green list mein, phir Tickertape par.
+     * Kuch badla ho to true.
+     */
+    fun fillSectors(c: Context): Boolean {
+        val lists = GreenList.CAPS.mapNotNull { GreenList.saved(c, it)?.optJSONArray("rows") }
+        var changed = false
+        var lookups = 0
+        shares(c).forEach { s ->
+            if (s.optString("sector").isNotEmpty() || !MarketLogic.indianSymbol(s.optString("symbol"))) return@forEach
+            val code = s.optString("symbol").substringBefore('.')
+            var sector = ""
+            for (rows in lists) {
+                for (i in 0 until rows.length()) {
+                    val row = rows.optJSONObject(i) ?: continue
+                    if (row.optString("ticker").equals(code, true) && row.optString("sector").isNotEmpty()) sector = row.optString("sector")
+                }
+            }
+            if (sector.isEmpty() && !s.optBoolean("sectorTried") && lookups < SECTOR_LOOKUPS) {
+                lookups++
+                sector = tape("https://api.tickertape.in/search?text=" + URLEncoder.encode(code, "UTF-8") + "&types=stock&pageNumber=0")
+                    ?.let { MarketLogic.findSector(it, code) }.orEmpty()
+                if (sector.isEmpty()) {
+                    val sid = slugOf(c, s).substringAfterLast('-', "")
+                    if (sid.isNotEmpty()) sector = tape("https://api.tickertape.in/stocks/info/$sid")?.let { MarketLogic.findSector(it, "") }.orEmpty()
+                }
+                if (sector.isEmpty() && lastError != "No internet") setField(c, s.optString("id"), "sectorTried", true)
+            }
+            if (sector.isNotEmpty()) {
+                setField(c, s.optString("id"), "sector", sector)
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    /**
+     * Saal dar saal revenue aur profit (₹ crore). Pehle Tickertape, na mile to Yahoo.
+     * Jawab: (saal, kahan se aaya). Hafte bhar yaad rakha jaata hai.
+     */
+    fun financials(c: Context, share: JSONObject): Pair<List<MarketLogic.Year>, String> {
+        val symbol = share.optString("symbol")
+        val key = "fin_$symbol"
+        prefs(c).getString(key, null)?.let { saved ->
+            try {
+                val o = JSONObject(saved)
+                val a = o.getJSONArray("years")
+                val years = List(a.length()) { i -> a.getJSONObject(i).let { MarketLogic.Year(it.getString("y"), it.getDouble("r"), it.getDouble("p")) } }
+                if (years.isNotEmpty() && System.currentTimeMillis() - o.optLong("at") < FIN_KEEP_MS) return years to o.optString("from")
+            } catch (e: org.json.JSONException) {
+                // Purana kharab data, dobara laao
+            }
+        }
+        lastError = ""
+        var years = emptyList<MarketLogic.Year>()
+        var from = "Tickertape"
+        val slug = slugOf(c, share)
+        val sid = slug.substringAfterLast('-', "")
+        if (sid.isNotEmpty()) {
+            years = tape("https://api.tickertape.in/stocks/financials/income/$sid/annual/normal?count=10")?.let { MarketLogic.parseFinancials(it) }.orEmpty()
+            if (years.size < 2) {
+                years = tape("https://www.tickertape.in$slug", null, true)?.let { MarketLogic.parseFinancials(MarketLogic.nextData(it)) }.orEmpty()
+            }
+        }
+        if (years.size < 2) {
+            from = "Yahoo Finance"
+            val enc = URLEncoder.encode(symbol, "UTF-8")
+            val now = System.currentTimeMillis() / 1000
+            years = get("https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/$enc?symbol=$enc" +
+                "&type=annualTotalRevenue,annualNetIncome&period1=946684800&period2=$now")?.let { MarketLogic.parseYahooFinancials(it) }.orEmpty()
+        }
+        if (years.isEmpty()) return years to ""
+        val a = JSONArray()
+        years.forEach { a.put(JSONObject().put("y", it.label).put("r", it.revenue).put("p", it.profit)) }
+        prefs(c).edit().putString(key, JSONObject().put("at", System.currentTimeMillis()).put("from", from).put("years", a).toString()).apply()
+        return years to from
     }
 
     fun removeShare(c: Context, id: String) {

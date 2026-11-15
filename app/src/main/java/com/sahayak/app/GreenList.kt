@@ -91,7 +91,7 @@ object GreenList {
                     if (total < MIN_ITEMS) thin++
                     if (total >= MIN_ITEMS && green >= MIN_GREEN) {
                         if (green == total) full++
-                        rows.put(JSONObject().put("sid", s.sid).put("name", s.name).put("ticker", s.ticker).put("slug", s.slug)
+                        rows.put(JSONObject().put("sid", s.sid).put("name", s.name).put("ticker", s.ticker).put("slug", s.slug).put("sector", s.sector)
                             .put("green", green).put("total", total))
                     }
                 }

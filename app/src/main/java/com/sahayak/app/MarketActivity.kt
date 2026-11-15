@@ -285,6 +285,16 @@ class MarketActivity : Activity() {
         super.onResume()
         main.post(refresh)
         if (GreenList.running()) main.post(greenTick)
+        // Jin locked shares ka sector nahi pata, peeche se dhoondh lo
+        val app = applicationContext
+        Thread {
+            val changed = try {
+                Market.fillSectors(app)
+            } catch (e: org.json.JSONException) {
+                false
+            }
+            if (changed) main.post { if (!isDestroyed) render() }
+        }.start()
     }
 
     override fun onPause() {
@@ -319,7 +329,7 @@ class MarketActivity : Activity() {
         val from = greenCap.label + " green scorecard: " + count + " of " + row.optInt("total") + " green"
         Thread {
             val answer = try {
-                Market.lockSymbol(app, row.optString("ticker"), name, from, row.optString("slug"))
+                Market.lockSymbol(app, row.optString("ticker"), name, from, row.optString("slug"), row.optString("sector"))
             } catch (e: org.json.JSONException) {
                 "Something went wrong. Try again"
             }
@@ -382,7 +392,13 @@ class MarketActivity : Activity() {
             })
             if (!open) continue
             if (group.isEmpty()) greenBox.addView(text("No share here right now.", 14f, false, GREY))
-            group.forEach { row ->
+            // Sector ke hisaab se: Energy (4), Financials (12) ...
+            val bySector = group.groupBy { MarketLogic.sectorName(it.optString("sector")) }.toSortedMap()
+            val named = bySector.size > 1 || bySector.keys.firstOrNull() != "Other"
+            if (!named && group.isNotEmpty()) greenBox.addView(text("To see sectors, tap Make fresh " + greenCap.label + " list.", 12f, false, GREY))
+            bySector.forEach { (sector, list) ->
+              if (named) greenBox.addView(sectorHead(sector, list.size))
+              list.forEach { row ->
                 val box = card()
                 val ticker = row.optString("ticker")
                 box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
@@ -395,7 +411,35 @@ class MarketActivity : Activity() {
                 }.apply { isEnabled = !locked })
                 box.addView(actions)
                 greenBox.addCard(box)
+              }
             }
+        }
+    }
+
+    /** Sector ki chhoti patti: naam aur ginti. */
+    private fun sectorHead(sector: String, count: Int) = TextView(this).apply {
+        text = "$sector  ($count)"
+        textSize = 14f
+        setTextColor(0xFF175CD3.toInt())
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setPadding(dp(10), dp(5), dp(10), dp(5))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFFE8F1FF.toInt())
+            cornerRadius = dp(6).toFloat()
+        }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) }
+    }
+
+    /** Dabbe sector ke hisaab se. Kisi ka sector pata na ho to seedhe dabbe. */
+    private fun sectorGrid(list: List<org.json.JSONObject>) {
+        val bySector = list.groupBy { MarketLogic.sectorName(it.optString("sector")) }.toSortedMap()
+        if (bySector.size == 1 && bySector.keys.first() == "Other") {
+            grid(list)
+            return
+        }
+        bySector.forEach { (sector, shares) ->
+            sharesBox.addView(sectorHead(sector, shares.size))
+            grid(shares)
         }
     }
 
@@ -437,8 +481,8 @@ class MarketActivity : Activity() {
             if (!open) return@forEach
             parts.forEach { (n, list) ->
                 if (list.isEmpty()) return@forEach
-                sharesBox.addView(text("$n of " + GreenList.MAX_GREEN + " green  (" + list.size + ")", 14f, true, if (n == GreenList.MAX_GREEN) GREEN else TEAL))
-                grid(list)
+                sharesBox.addView(text("$n of " + GreenList.MAX_GREEN + " green  (" + list.size + ")", 15f, true, if (n == GreenList.MAX_GREEN) GREEN else TEAL))
+                sectorGrid(list)
             }
         }
         val other = groups[null].orEmpty()
@@ -448,7 +492,7 @@ class MarketActivity : Activity() {
                 if (open) closedCaps.add(OTHER) else closedCaps.remove(OTHER)
                 render()
             })
-            if (open) grid(other)
+            if (open) sectorGrid(other)
         }
     }
 

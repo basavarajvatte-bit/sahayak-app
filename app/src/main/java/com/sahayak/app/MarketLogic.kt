@@ -462,7 +462,131 @@ object MarketLogic {
 
     // ---------- Tickertape ka scorecard ----------
 
-    data class Stock(val sid: String, val name: String, val ticker: String, val slug: String)
+    data class Stock(val sid: String, val name: String, val ticker: String, val slug: String, val sector: String = "")
+
+    /** Sector ka naam dikhane ke liye. Pata na ho to Other. */
+    fun sectorName(raw: String): String = raw.trim().ifEmpty { "Other" }
+
+    /**
+     * Tickertape ke kisi bhi jawab mein se sector. code diya ho to usi share (ticker) ke andar wala,
+     * warna jo pehla mile.
+     */
+    fun findSector(json: String, code: String): String {
+        val want = code.trim().substringBefore('.')
+        fun walk(v: Any?, inside: Boolean): String {
+            when (v) {
+                is JSONObject -> {
+                    val here = inside || want.isEmpty() || str(v, "ticker").equals(want, true)
+                    if (here) (v.opt("sector") as? String)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+                    val keys = v.keys()
+                    while (keys.hasNext()) walk(v.opt(keys.next()), here).takeIf { it.isNotEmpty() }?.let { return it }
+                }
+                is org.json.JSONArray -> for (i in 0 until v.length()) walk(v.opt(i), inside).takeIf { it.isNotEmpty() }?.let { return it }
+            }
+            return ""
+        }
+        return try {
+            walk(JSONObject(json), false)
+        } catch (e: JSONException) {
+            ""
+        }
+    }
+
+    // ---------- Saal dar saal revenue aur profit ----------
+
+    /** Ek saal: revenue aur profit, dono ₹ crore mein. */
+    data class Year(val label: String, val revenue: Double, val profit: Double)
+
+    private val YEAR = Regex("(19|20)[0-9]{2}")
+    private const val MAX_YEARS = 6
+
+    /** Tickertape ke page ke andar chhupa data. */
+    fun nextData(html: String): String {
+        val at = html.indexOf("__NEXT_DATA__")
+        if (at < 0) return ""
+        val start = html.indexOf('>', at)
+        val end = html.indexOf("</script>", at)
+        return if (start in 0 until end) html.substring(start + 1, end).trim() else ""
+    }
+
+    /**
+     * Tickertape ka income statement: jis list ke items mein incTrev (revenue) ho.
+     * Saalana wali list ko pehle chuno, timahi wali ko nahi.
+     */
+    fun parseFinancials(json: String): List<Year> {
+        val lists = mutableListOf<Pair<String, org.json.JSONArray>>()
+        fun walk(v: Any?, key: String) {
+            when (v) {
+                is JSONObject -> {
+                    val keys = v.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        walk(v.opt(k), k)
+                    }
+                }
+                is org.json.JSONArray -> {
+                    val first = v.optJSONObject(0)
+                    if (first != null && first.has("incTrev")) lists.add(key to v) else for (i in 0 until v.length()) walk(v.opt(i), key)
+                }
+            }
+        }
+        try {
+            walk(JSONObject(json), "")
+        } catch (e: JSONException) {
+            return emptyList()
+        }
+        val pick = lists.firstOrNull { it.first.contains("annual", true) }
+            ?: lists.firstOrNull { !it.first.contains("interim", true) && !it.first.contains("quarter", true) }
+            ?: return emptyList()
+        val byYear = sortedMapOf<String, Year>()
+        for (i in 0 until pick.second.length()) {
+            val o = pick.second.optJSONObject(i) ?: continue
+            val revenue = o.optDouble("incTrev", Double.NaN)
+            if (revenue.isNaN()) continue
+            val year = YEAR.find(str(o, "displayPeriod"))?.value ?: YEAR.find(str(o, "endDate"))?.value ?: continue
+            val profit = o.optDouble("incNinc", Double.NaN)
+            byYear[year] = Year(year, revenue, if (profit.isNaN()) 0.0 else profit)
+        }
+        return byYear.values.toList().takeLast(MAX_YEARS)
+    }
+
+    /** Yahoo ka saalana revenue aur profit (rupaye mein aata hai, crore mein badlo). */
+    fun parseYahooFinancials(json: String): List<Year> {
+        try {
+            val results = JSONObject(json).getJSONObject("timeseries").getJSONArray("result")
+            val revenue = sortedMapOf<String, Double>()
+            val profit = mutableMapOf<String, Double>()
+            for (i in 0 until results.length()) {
+                val r = results.optJSONObject(i) ?: continue
+                val type = r.optJSONObject("meta")?.optJSONArray("type")?.optString(0).orEmpty()
+                val rows = r.optJSONArray(type) ?: continue
+                for (j in 0 until rows.length()) {
+                    val row = rows.optJSONObject(j) ?: continue
+                    val year = YEAR.find(str(row, "asOfDate"))?.value ?: continue
+                    val raw = row.optJSONObject("reportedValue")?.optDouble("raw", Double.NaN) ?: Double.NaN
+                    if (raw.isNaN()) continue
+                    if (type == "annualTotalRevenue") revenue[year] = raw / 1e7 else if (type == "annualNetIncome") profit[year] = raw / 1e7
+                }
+            }
+            return revenue.map { Year(it.key, it.value, profit[it.key] ?: 0.0) }.takeLast(MAX_YEARS)
+        } catch (e: JSONException) {
+            return emptyList()
+        }
+    }
+
+    /** Graph ke upar chhota aankda: 879468 -> 8.8L, 12340 -> 12.3K. */
+    fun shortNumber(v: Double): String {
+        val a = Math.abs(v)
+        val sign = if (v < 0) "-" else ""
+        return sign + when {
+            a >= 100_000 -> String.format(Locale.ENGLISH, "%.1fL", a / 100_000)
+            a >= 1_000 -> String.format(Locale.ENGLISH, "%.1fK", a / 1_000)
+            a >= 10 -> String.format(Locale.ENGLISH, "%.0f", a)
+            else -> String.format(Locale.ENGLISH, "%.1f", a)
+        }
+    }
+
+    fun crore(v: Double): String = (if (v < 0) "-₹" else "₹") + String.format(Locale.ENGLISH, "%,.0f", Math.abs(v)) + " cr"
 
     /** JSON null ko khaali maano (Android "null" likh deta hai). */
     private fun str(o: JSONObject, key: String): String = if (o.isNull(key)) "" else o.optString(key).trim()
@@ -481,7 +605,8 @@ object MarketLogic {
                 val ticker = info?.let { str(it, "ticker") }.orEmpty()
                 val name = info?.let { str(it, "name") }.orEmpty().ifEmpty { ticker }.ifEmpty { sid }
                 val slug = stock?.let { str(it, "slug") }.orEmpty().ifEmpty { str(row, "slug") }
-                out.add(Stock(sid, name, ticker, if (slug.startsWith("/stocks/")) slug else ""))
+                val sector = info?.let { str(it, "sector") }.orEmpty().ifEmpty { stock?.let { str(it, "sector") }.orEmpty() }
+                out.add(Stock(sid, name, ticker, if (slug.startsWith("/stocks/")) slug else "", sector))
             }
             return out
         } catch (e: JSONException) {

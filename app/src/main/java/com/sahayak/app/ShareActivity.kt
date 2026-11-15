@@ -34,6 +34,10 @@ class ShareActivity : Activity() {
     private lateinit var endLabel: TextView
     private lateinit var lockLine: TextView
     private lateinit var lockBadge: TextView
+    private lateinit var finance: FinanceView
+    private lateinit var yearLine: TextView
+    private lateinit var growthLine: TextView
+    private var years: List<MarketLogic.Year> = emptyList()
     private lateinit var status: TextView
     private val tabs = mutableListOf<TextView>()
     private val cache = mutableMapOf<String, MarketLogic.Series>()
@@ -101,6 +105,12 @@ class ShareActivity : Activity() {
             background = rounded(0xFFEEF1F6.toInt(), 5)
             setPadding(dp(7), dp(2), dp(7), dp(2))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(10) })
+        share.optString("sector").takeIf { it.isNotEmpty() }?.let { sector ->
+            code.addView(text(sector, 12f, true, 0xFF175CD3.toInt()).apply {
+                background = rounded(0xFFE8F1FF.toInt(), 5)
+                setPadding(dp(7), dp(2), dp(7), dp(2))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) })
+        }
         page.addView(code)
 
         val top = LinearLayout(this).apply {
@@ -181,6 +191,27 @@ class ShareActivity : Activity() {
         }
         page.addView(locked, wide().apply { topMargin = dp(14) })
 
+        // ----- Saal dar saal revenue aur profit -----
+        page.addView(text("Revenue and profit", 18f, true), wide().apply { topMargin = dp(18) })
+        val legend = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        fun key(color: Int, words: String) {
+            legend.addView(android.view.View(this).apply { background = rounded(color, 3) },
+                LinearLayout.LayoutParams(dp(12), dp(12)).apply { rightMargin = dp(5) })
+            legend.addView(text(words, 13f, false, GREY), LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(14) })
+        }
+        key(FinanceView.REVENUE, "Revenue")
+        key(FinanceView.PROFIT, "Profit")
+        key(FinanceView.LOSS, "Loss")
+        page.addView(legend)
+        finance = FinanceView(this)
+        finance.onPick = { i -> yearPicked(i) }
+        page.addView(finance, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(230)).apply { topMargin = dp(6) })
+        yearLine = text("Getting revenue and profit", 14f, true)
+        page.addView(yearLine)
+        growthLine = text("", 13f, false, GREY)
+        page.addView(growthLine)
+        loadFinance()
+
         val row = LinearLayout(this)
         row.addView(button("Tickertape") { tickertape() }, part())
         row.addView(button("News") {
@@ -195,6 +226,43 @@ class ShareActivity : Activity() {
 
         showLock(share.optDouble("lastPrice", 0.0))
         choose(span)
+    }
+
+    private fun loadFinance() {
+        val app = applicationContext
+        val item = share
+        Thread {
+            val got = try {
+                Market.financials(app, item)
+            } catch (e: org.json.JSONException) {
+                emptyList<MarketLogic.Year>() to ""
+            }
+            main.post {
+                if (isDestroyed) return@post
+                years = got.first
+                if (years.isEmpty()) {
+                    yearLine.text = "Could not get revenue and profit for this share"
+                    growthLine.text = if (Market.lastError == "No internet") "Check internet and open this page again." else ""
+                    return@post
+                }
+                finance.show(years)
+                yearPicked(years.lastIndex)
+                growthLine.text = "Figures in ₹ crore, year ending March. Tap a year. Source: " + got.second
+            }
+        }.start()
+    }
+
+    /** Chune hue saal ke poore aankde aur pichhle saal se tulna. */
+    private fun yearPicked(i: Int) {
+        val y = years.getOrNull(i) ?: return
+        val words = StringBuilder(y.label + ":  Revenue " + MarketLogic.crore(y.revenue) + "  ·  " +
+            (if (y.profit >= 0) "Profit " else "Loss ") + MarketLogic.crore(Math.abs(y.profit)))
+        years.getOrNull(i - 1)?.let { before ->
+            words.append("\nFrom " + before.label + ":  Revenue " + MarketLogic.jumpText(before.revenue, y.revenue).first +
+                "  ·  Profit " + MarketLogic.jumpText(before.profit, y.profit).first)
+        }
+        yearLine.text = words
+        yearLine.setTextColor(if (y.profit >= 0) INK else RED)
     }
 
     private fun open(link: String) {
