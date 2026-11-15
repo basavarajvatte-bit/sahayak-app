@@ -154,6 +154,9 @@ class MarketActivity : Activity() {
         page.addView(text("See news that can move the market. Save a share to follow its price every day.", 14f))
 
         // ----- Mere shares -----
+        page.addView(button("💼 My portfolio: dummy funds") {
+            startActivity(Intent(this, FundsActivity::class.java))
+        })
         page.addView(button("📊 Pattern study: dividend, split, buyback and more") {
             startActivity(Intent(this, PatternActivity::class.java))
         })
