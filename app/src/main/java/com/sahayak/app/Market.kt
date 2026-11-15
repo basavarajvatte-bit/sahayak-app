@@ -26,9 +26,10 @@ object Market {
     const val ACTION_REPORT = "com.sahayak.app.MARKET_REPORT"
     private const val NEWS_NOTE = 7_901
     private const val REPORT_NOTE = 7_902
-    const val MAX_SHARES = 25
+    const val MAX_SHARES = 200
+    private const val NOTE_LINES = 8
     private const val MAX_NEWS = 200
-    private const val MAX_REPORTS = 30
+    private const val MAX_REPORTS = 10
     private const val MAX_LINKS = 3_000
     private const val MAX_BODY = 2_000_000
     private const val FIRST_SHOW = 25
@@ -283,7 +284,7 @@ object Market {
             list.add(0, JSONObject().put("at", started).put("items", items))
             prefs(c).edit().putString("reports", JSONArray(list.take(MAX_REPORTS)).toString()).apply()
             if (scheduled || got > 0) {
-                Watcher.alertNow(c, REPORT_NOTE, "Share report", note.joinToString("\n"), "", MarketActivity::class.java)
+                Watcher.alertNow(c, REPORT_NOTE, "Share report", note.take(NOTE_LINES).joinToString("\n") + (if (note.size > NOTE_LINES) "\n…and " + (note.size - NOTE_LINES) + " more in Sahayak" else ""), "", MarketActivity::class.java)
             }
             return if (got == 0) "Could not get prices. " + lastError else "Report ready"
         } finally {
