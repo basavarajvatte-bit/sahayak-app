@@ -117,6 +117,13 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
     fun patternCheck(text: String): String? =
         ask(PATTERN_RULES, JSONArray().put(JSONObject().put("text", text)), 0.0, PATTERN_TOKENS, json = true, models = DEPTH_MODELS)
 
+    /** Google search se aane wale dividend (website na chale tab). */
+    fun upcomingDividends(from: String, to: String): String? = grounded(
+        "Use web search. List every company listed on NSE or BSE in India whose dividend record date is from " + from + " to " + to +
+            " (both included). Reply with JSON only: {\"items\":[{\"company\":\"name\",\"amount\":rupees per share as a number or 0 if unknown," +
+            "\"record_date\":\"16 Nov 2026\"}]}. Use the date format exactly like 16 Nov 2026. Only include entries you found in search results. Never guess."
+    )
+
     /** Google search se share ka abhi ka NSE bhaav. Sirf tab, jab baaki jagah ke bhaav aapas mein na milein. */
     fun priceCheck(name: String, code: String): Double? {
         val prompt = "Use web search. What is the latest share price of " + name + " (NSE: " + code + ") on the National Stock Exchange of India, in rupees? " +

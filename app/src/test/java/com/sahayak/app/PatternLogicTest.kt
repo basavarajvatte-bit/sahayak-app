@@ -156,4 +156,27 @@ Shipping Corporation of India
         val saturday = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply { set(2026, Calendar.NOVEMBER, 14, 11, 0, 0) }.timeInMillis
         assertEquals("2026-11-13", PatternLogic.baseOn(d, saturday)!!.date)
     }
+
+    @Test fun readsTheUpcomingDividendTable() {
+        val html = """<html><head><script>var x = "<td>Fake Ltd</td>";</script></head><body>
+            <table><tr><th>Company Name</th><th>Ex-Date</th><th>Record Date</th><th>Dividend (₹)</th><th>Type</th></tr>
+            <tr><td><a href="/stocks/indag" title="Indag Rubber Ltd">Indag Rubber Ltd</a></td><td>16 Nov 2026</td><td>16 Nov 2026</td><td>Dividend (0.9/- per share)</td><td>Dividend</td></tr>
+            <tr><td><a href="/x">Shipping Corporation of India Ltd</a></td><td>16 Nov 2026</td><td>16 Nov 2026</td><td>Dividend (4/- per share)</td><td>Dividend</td></tr>
+            <tr><td><a href="/x">Page Industries Ltd</a></td><td>17 Nov 2026</td><td>18 Nov 2026</td><td>Dividend (150/- per share)</td><td>Dividend</td></tr>
+            <tr><td><a href="/x">Powergrid Infrastructure Investment Trust</a></td><td>17 Nov 2026</td><td>17 Nov 2026</td><td>Dividend (3/- per share)</td><td>Dividend</td></tr>
+            </table><div>Page 1 of 2</div></body></html>"""
+        val rows = PatternLogic.parseDividendPage(html)
+        assertEquals(4, rows.size)
+        assertEquals(PatternLogic.Div("Indag Rubber Ltd", 0.9, "16 Nov 2026"), rows[0])
+        assertEquals(PatternLogic.Div("Shipping Corporation of India Ltd", 4.0, "16 Nov 2026"), rows[1])
+        // Ex-date 17, record 18: record date lo
+        assertEquals(PatternLogic.Div("Page Industries Ltd", 150.0, "18 Nov 2026"), rows[2])
+        assertTrue(PatternLogic.isTrust(rows[3].company))
+        assertFalse(PatternLogic.isTrust("Shipping Corporation of India Ltd"))
+        assertTrue(PatternLogic.parseDividendPage("<html>blocked</html>").isEmpty())
+        assertTrue(PatternLogic.dateMs("16 Nov 2026") > 0)
+        assertEquals(0L, PatternLogic.dateMs("soon"))
+        val ai = PatternLogic.parseAiDividends("""{"items":[{"company":"MRF","amount":3,"record_date":"17 Nov 2026"},{"company":"X","record_date":"next week"}]}""")
+        assertEquals(listOf(PatternLogic.Div("MRF", 3.0, "17 Nov 2026")), ai)
+    }
 }

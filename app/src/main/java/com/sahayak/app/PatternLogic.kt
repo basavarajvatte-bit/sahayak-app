@@ -258,6 +258,85 @@ object PatternLogic {
 
     private const val MAX_PASTE = 60
 
+    // ---------- Aane wale dividend ki list (website se) ----------
+
+    /** Ek aane wala dividend: company, ₹ per share (0 = pata nahi), record date "16 Nov 2026". */
+    data class Div(val company: String, val amount: Double, val record: String)
+
+    private val SCRIPT = Regex("(?is)<(script|style|noscript)[^>]*>.*?</\\1>")
+    private val ANY_TAG = Regex("(?s)<[^>]+>")
+    private val FULL_DATE = Regex("""^\s*([0-9]{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* ([0-9]{4})\s*$""", RegexOption.IGNORE_CASE)
+    private val PER_SHARE = Regex("""dividend\s*\(\s*(?:rs\.?|₹)?\s*([0-9]+(?:\.[0-9]+)?)\s*/-\s*per share\s*\)""", RegexOption.IGNORE_CASE)
+    private val NOT_NAME = Regex("""(?i)^(dividend|type|company name|ex-?date|record date|interim|final|special|page \d|next|prev|←|→)""")
+
+    /** Web page ko lines mein todo (har tag ek nayi line). Dohrayi lines bhi rakho, table ke liye zaroori. */
+    fun pageLines(html: String): List<String> =
+        ANY_TAG.replace(SCRIPT.replace(html, " "), "\n")
+            .replace("&nbsp;", " ").replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").replace("&#x27;", "'")
+            .lines().map { it.replace(Regex("\\s+"), " ").trim() }.filter { it.isNotEmpty() }
+
+    /**
+     * Upcoming dividend table padho: "Indag Rubber Ltd | 16 Nov 2026 | 16 Nov 2026 | Dividend (0.9/- per share)".
+     * Har "Dividend (x/- per share)" se peeche jaakar do tarikh aur company ka naam dhoondho.
+     */
+    fun parseDividendPage(html: String): List<Div> {
+        val lines = pageLines(html)
+        val out = mutableListOf<Div>()
+        lines.forEachIndexed { i, line ->
+            val amount = PER_SHARE.find(line)?.groupValues?.get(1)?.toDoubleOrNull() ?: return@forEachIndexed
+            val dates = mutableListOf<String>()
+            var name = ""
+            var j = i - 1
+            while (j >= 0 && j >= i - BACK) {
+                val l = lines[j]
+                when {
+                    FULL_DATE.matches(l) -> dates.add(0, l.trim())
+                    PER_SHARE.containsMatchIn(l) -> j = -1
+                    dates.isNotEmpty() && !NOT_NAME.containsMatchIn(l) && l.any { it.isLetter() } && l.length in 3..90 -> {
+                        name = l
+                        j = -1
+                    }
+                }
+                j--
+            }
+            if (name.isEmpty() || dates.isEmpty()) return@forEachIndexed
+            // Do tarikh ho to doosri record date hai (pehli ex-date)
+            val record = dates.last()
+            if (out.none { it.company.equals(name, true) && it.record == record }) out.add(Div(name, amount, record))
+        }
+        return out
+    }
+
+    private const val BACK = 6
+
+    /** "16 Nov 2026" ko ms mein (IST din ki shuruaat). */
+    fun dateMs(text: String): Long = try {
+        SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).apply { timeZone = IST }.parse(text.trim())?.time ?: 0L
+    } catch (e: java.text.ParseException) {
+        0L
+    }
+
+    /** Trust, InvIT, REIT company ke share nahi: chhod do. */
+    fun isTrust(name: String): Boolean = Regex("(?i)\\b(trust|invit|reit|fund)\\b").containsMatchIn(name)
+
+    /** AI ka jawab: {"items":[{"company":"X","amount":1.5,"record_date":"16 Nov 2026"}]} */
+    fun parseAiDividends(text: String): List<Div> {
+        val out = mutableListOf<Div>()
+        try {
+            val items = JSONObject(MarketLogic.jsonBlock(text)).optJSONArray("items") ?: return out
+            for (i in 0 until items.length()) {
+                val o = items.optJSONObject(i) ?: continue
+                val name = if (o.isNull("company")) "" else o.optString("company").trim()
+                val date = if (o.isNull("record_date")) "" else o.optString("record_date").trim()
+                if (name.isEmpty() || dateMs(date) == 0L) continue
+                out.add(Div(name, o.optDouble("amount", 0.0).takeIf { !it.isNaN() } ?: 0.0, date))
+            }
+        } catch (e: JSONException) {
+            return out
+        }
+        return out
+    }
+
     /** Lock ke samay ka aadhaar: kaunsa poora hua din, uska band bhaav, aur kya bazaar us waqt khula tha. */
     data class Base(val date: String, val close: Double, val intraday: Boolean)
 

@@ -200,9 +200,11 @@ class PatternActivity : Activity() {
             if (!shown) return@forEach
             box.addView(text(pattern.about, 13f, false, GREY))
             if (list.isEmpty()) {
+                if (pattern.id == "dividend") dividendList()
                 box.addView(text("No share locked for this pattern yet.", 14f))
                 return@forEach
             }
+            if (pattern.id == "dividend") dividendList()
             scoreboard(list)
             val rows = if (pattern.id in full) list else list.take(ROWS)
             rows.forEach { row(it) }
@@ -213,6 +215,37 @@ class PatternActivity : Activity() {
                 })
             }
         }
+    }
+
+    /** Aane wale dividend ki list: kaun lock hua, kaun nahi aur kyun. */
+    private fun dividendList() {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0xFFFFF6E5.toInt(), 10)
+            setPadding(dp(12), dp(8), dp(12), dp(10))
+        }
+        card.addView(text("Upcoming dividends (next 14 days)", 15f, true, 0xFFB54700.toInt()))
+        val rows = Patterns.dividendList(this)
+        val note = Patterns.dividendListNote(this)
+        card.addView(text(if (note.isEmpty()) "Not fetched yet. Tap Get dividend list." else note, 12f, false, GREY))
+        val shown = if ("divlist" in full) rows else rows.take(DIV_ROWS)
+        shown.forEach { r ->
+            val amount = r.optDouble("amount", 0.0)
+            card.addView(text(
+                (if (r.optBoolean("locked")) "✓ " else "✗ ") + r.optString("company") + "  ·  " + (if (amount > 0) "₹" + String.format(Locale.ENGLISH, "%.2f", amount) + "  ·  " else "") +
+                    "record " + r.optString("record") + (if (r.optBoolean("locked")) "" else "\n    " + r.optString("why")),
+                13f, false, if (r.optBoolean("locked")) INK else GREY
+            ))
+        }
+        if (rows.size > DIV_ROWS) {
+            card.addView(button(if ("divlist" in full) "▲ Less" else "▼ All " + rows.size) {
+                if ("divlist" in full) full.remove("divlist") else full.add("divlist")
+                render()
+            })
+        }
+        val app = applicationContext
+        card.addView(button("Get dividend list now") { work("Reading the dividend list") { Patterns.syncDividends(app) } })
+        box.addView(card, wide(6))
     }
 
     /** Pattern ka nateeja: ab tak aur 1 din, 1 hafta, 1 mahina, 3 mahine baad. */
@@ -281,6 +314,7 @@ class PatternActivity : Activity() {
         })
         card.addView(text(
             when {
+                lock.optString("via").isNotEmpty() -> "From " + lock.optString("via")
                 lock.optBoolean("manual") -> "Added by you"
                 lock.optBoolean("ai") -> "AI-checked event"
                 else -> "Not AI-checked (AI was not available)"
@@ -302,6 +336,7 @@ class PatternActivity : Activity() {
 
     companion object {
         private const val ROWS = 3
+        private const val DIV_ROWS = 8
         private const val TRUST = 20
         private const val INK = 0xFF1D2433.toInt()
         private const val GREY = 0xFF667085.toInt()

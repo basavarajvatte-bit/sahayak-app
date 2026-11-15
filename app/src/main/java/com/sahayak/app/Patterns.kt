@@ -87,9 +87,11 @@ object Patterns {
         }
         if (!busy.compareAndSet(false, true)) return "Pattern study is already running"
         try {
-            val added = scan(c)
+            var added = scan(c)
             if (added < 0) return "No internet. Try again"
             val now = System.currentTimeMillis()
+            // Din mein ek baar aane wale dividend ki list
+            if (!scheduled || prefs(c).getString("div_day", "") != PatternLogic.day(now)) added += dividends(c).coerceAtLeast(0)
             if (!scheduled || now - prefs(c).getLong("track_at", 0L) > TRACK_GAP_MS) track(c)
             val note = if (added == 0) "No new event found" else "$added new shares locked"
             prefs(c).edit().putLong("last", now).putString("note", note).apply()
@@ -196,7 +198,7 @@ object Patterns {
     /** Ek company ko ek pattern mein lock karo. Company, bhaav aur aadhaar teeno pakke hon tabhi. */
     private fun lock(
         c: Context, cand: Candidate, company: String, detail: String, aiChecked: Boolean, niftyDaily: PatternLogic.Daily?, niftyNow: Double?,
-        manual: Boolean = false
+        manual: Boolean = false, via: String = ""
     ): Boolean {
         val quote = Market.findIndian(company) ?: return false
         if (!PatternLogic.sameCompany(company, quote.name, quote.symbol)) return false
@@ -243,8 +245,86 @@ object Patterns {
             if (i >= 0) item.put("nBaseClose", niftyDaily.raw[i]).put("nLock", if (base.intraday) niftyNow else niftyDaily.raw[i])
         }
         if (manual) item.put("manual", true)
+        if (via.isNotEmpty()) item.put("via", via)
         change(c) { it.add(item) }
         return true
+    }
+
+    private const val LIST_URL = "https://anandrathi.com/share-market-today/upcoming-dividend"
+    private const val AHEAD_DAYS = 14
+
+    /** Aane wale dividend ki list jo pichhli baar mili (dikhane ke liye): [{company, amount, record, locked, why}]. */
+    fun dividendList(c: Context): List<JSONObject> {
+        val a = JSONArray(prefs(c).getString("div_list", "[]"))
+        return List(a.length()) { a.getJSONObject(it) }
+    }
+
+    fun dividendListNote(c: Context) = prefs(c).getString("div_note", "").orEmpty()
+
+    /**
+     * Website se aane wale dividend ki list lao (na mile to AI se Google search),
+     * aur har company ko Dividend pattern mein aaj ke jaanche hue bhaav par lock karo.
+     */
+    private fun dividends(c: Context): Int {
+        val now = System.currentTimeMillis()
+        val today = PatternLogic.dateMs(java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH).apply {
+            timeZone = java.util.TimeZone.getTimeZone("Asia/Kolkata")
+        }.format(java.util.Date(now)))
+        val until = today + AHEAD_DAYS * 86_400_000L
+        progress = "Reading the upcoming dividend list"
+        var via = "Anand Rathi list"
+        val found = mutableListOf<PatternLogic.Div>()
+        listOf(LIST_URL, "$LIST_URL?page=2").forEach { url ->
+            Market.web(url)?.let { html -> PatternLogic.parseDividendPage(html).forEach { d -> if (found.none { it.company == d.company }) found.add(d) } }
+        }
+        if (found.isEmpty()) {
+            val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
+            if (key.isNotEmpty()) {
+                progress = "Website did not open. AI is searching for upcoming dividends"
+                val fmt = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH)
+                Planner(GeminiLive.newClient(), key, 60L).upcomingDividends(fmt.format(java.util.Date(today)), fmt.format(java.util.Date(until)))
+                    ?.let { found.addAll(PatternLogic.parseAiDividends(it)) }
+                via = "AI web search"
+            }
+        }
+        val upcoming = found.filter { PatternLogic.dateMs(it.record) in today..until }
+        val pattern = PatternLogic.byId("dividend") ?: return 0
+        val niftyDaily = daily(NIFTY, "3mo")
+        val niftyNow = Market.yahoo(NIFTY)?.price
+        val shown = JSONArray()
+        var added = 0
+        upcoming.forEachIndexed { i, d ->
+            val row = JSONObject().put("company", d.company).put("amount", d.amount).put("record", d.record)
+            if (PatternLogic.isTrust(d.company)) {
+                shown.put(row.put("locked", false).put("why", "Trust, not a company share"))
+                return@forEachIndexed
+            }
+            progress = "Locking " + d.company + " (" + (i + 1) + " of " + upcoming.size + ")"
+            val money = if (d.amount > 0) "₹" + String.format(java.util.Locale.ENGLISH, "%.2f", d.amount) + " per share · " else ""
+            val already = locks(c).any { it.optString("p") == "dividend" && PatternLogic.sameCompany(MarketLogic.companyQuery(d.company), it.optString("name"), it.optString("symbol")) }
+            val cand = Candidate(pattern, d.company + ": dividend " + money + "record date " + d.record, LIST_URL, now, via)
+            val ok = !already && lock(c, cand, MarketLogic.companyQuery(d.company), money + "record " + d.record, via == "AI web search", niftyDaily, niftyNow, true, via)
+            if (ok) added++
+            shown.put(row.put("locked", ok || already).put("why", if (already) "Already locked" else if (ok) "Locked now" else "Not found on NSE/BSE or price unclear"))
+        }
+        val note = (if (found.isEmpty()) "Could not get the dividend list" else upcoming.size.toString() + " upcoming record dates from " + via) +
+            " · " + java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.ENGLISH).format(java.util.Date(now))
+        prefs(c).edit().putString("div_list", shown.toString()).putString("div_note", note).putString("div_day", PatternLogic.day(now)).apply()
+        return if (found.isEmpty()) -1 else added
+    }
+
+    /** Sirf dividend list dobara lao (button se). */
+    fun syncDividends(c: Context): String {
+        if (!busy.compareAndSet(false, true)) return "Pattern study is already running"
+        try {
+            val n = dividends(c)
+            return if (n < 0) "Could not get the dividend list. Check internet" else "Dividend list updated. $n new shares locked"
+        } catch (e: org.json.JSONException) {
+            return "Something went wrong. Try again"
+        } finally {
+            progress = ""
+            busy.set(false)
+        }
     }
 
     /**
