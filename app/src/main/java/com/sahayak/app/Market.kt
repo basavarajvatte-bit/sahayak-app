@@ -95,6 +95,28 @@ object Market {
         null
     }
 
+    // ---------- Pattern study ke liye khule darwaze ----------
+
+    fun web(url: String): String? = get(url)
+
+    /** Naam se Indian share aur uska Yahoo bhaav. */
+    fun findIndian(name: String): MarketLogic.Quote? = find(name)
+
+    fun yahoo(symbol: String): MarketLogic.Quote? = yahooQuote(symbol)
+
+    /** Tickertape ka bhaav ek share ka (sid se). */
+    fun tapePrice(sid: String): Double? = if (sid.isEmpty()) null else tapeQuotes(listOf(sid))[sid]?.first
+
+    fun googleOnly(symbol: String): Double? = googlePrice(symbol)
+
+    fun armPattern(c: Context, at: Long) = arm(c, Patterns.ACTION, PATTERN_NOTE, "pattern_next", at)
+
+    fun cancelPattern(c: Context) = cancel(c, Patterns.ACTION, PATTERN_NOTE, "pattern_next")
+
+    fun nextPattern(c: Context) = prefs(c).getLong("pattern_next", 0L)
+
+    const val PATTERN_NOTE = 7_904
+
     private fun rss(query: String) =
         "https://news.google.com/rss/search?q=" + URLEncoder.encode("$query when:1d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
 
@@ -777,6 +799,7 @@ object Market {
     /** Share jodne ya hatane ke baad, aur phone chalu hone par. */
     fun rearm(c: Context) {
         armVerify(c)
+        Patterns.rearm(c)
         if (reportOn(c) && shares(c).isNotEmpty()) armReport(c) else cancel(c, ACTION_REPORT, REPORT_NOTE, "report_next")
         if (newsOn(c)) {
             val at = nextNews(c)

@@ -186,6 +186,11 @@ class WorkReceiver : BroadcastReceiver() {
             Thread { Watcher.run(app, true) }.start()
             return
         }
+        if (intent.action == Patterns.ACTION) {
+            val app = context.applicationContext
+            Thread { Patterns.run(app, true) }.start()
+            return
+        }
         if (intent.action == Market.ACTION_VERIFY) {
             val app = context.applicationContext
             Thread { Market.verifyAll(app, true) }.start()
