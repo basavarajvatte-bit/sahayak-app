@@ -178,7 +178,9 @@ class TodoPopup(
 
     /** Sirf list, koi hello ya extra line nahi. */
     private fun speech(items: List<org.json.JSONObject>): String =
-        items.take(MAX_SPOKEN).joinToString(". ") { it.optString("text") }
+        items.take(MAX_SPOKEN).joinToString(". ") { item ->
+            item.optString("text") + if (Todos.timed(item) && !Todos.whenText(item).startsWith("Overdue")) " at " + Todos.clock(item.optLong("at")) else ""
+        }
 
     private fun hello(prefs: android.content.SharedPreferences): String {
         val name = prefs.getString("name", "").orEmpty()
@@ -230,7 +232,8 @@ class TodoPopup(
 
     fun show() {
         hide()
-        val items = Todos.pending(service)
+        // Chhotu sirf aaj ke kaam batata hai
+        val items = Todos.today(service)
         if (items.isEmpty()) return
         val pad = (14 * density).toInt()
         val card = LinearLayout(service).apply {
@@ -255,22 +258,30 @@ class TodoPopup(
         punchable(robot)
         top.addView(robot, LinearLayout.LayoutParams((190 * density).toInt(), (190 * density).toInt()))
         top.addView(TextView(service).apply {
-            text = "To-do: tap when done"
+            text = "Today's to-do: tap when done"
             textSize = 15f
             setTextColor(Color.rgb(32, 201, 151))
                 setShadowLayer(8f, 0f, 2f, Color.BLACK)
             gravity = Gravity.CENTER
         })
         card.addView(top)
+        fun label(item: org.json.JSONObject): String {
+            val whenText = Todos.whenText(item)
+            return item.optString("text") + when {
+                whenText.startsWith("Overdue") -> "  (" + whenText.removePrefix("Overdue · ") + ")"
+                Todos.timed(item) -> "  · " + Todos.clock(item.optLong("at"))
+                else -> ""
+            }
+        }
         fun row(item: org.json.JSONObject) = TextView(service).apply {
-            text = "○  " + item.optString("text")
+            text = "○  " + label(item)
             textSize = 18f
             setTextColor(Color.WHITE)
             setShadowLayer(8f, 0f, 2f, Color.BLACK)
             setPadding(0, pad / 2, 0, pad / 2)
             setOnClickListener {
                 Todos.complete(service, item.optString("id"))
-                text = "✓  " + item.optString("text")
+                text = "✓  " + label(item)
                 alpha = 0.5f
                 isClickable = false
                 if (ttsReady) tts.stop()

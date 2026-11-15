@@ -75,10 +75,16 @@ class MainActivity : Activity() {
             isChecked = prefs.getBoolean("todo_speak", true)
             setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("todo_speak", on).apply() }
         }
+        val whenButton = findViewById<Button>(R.id.todoWhen)
+        todoWhen = TodoPicker(this) { whenButton.text = todoWhen.label() }
+        whenButton.setOnClickListener { todoWhen.open() }
+        findViewById<Button>(R.id.todoToday).setOnClickListener { todoWhen.today() }
+        findViewById<Button>(R.id.todoTomorrow).setOnClickListener { todoWhen.tomorrow() }
         findViewById<Button>(R.id.todoAdd).setOnClickListener {
             val input = findViewById<EditText>(R.id.todoInput)
-            Todos.add(this, input.text.toString())
+            Todos.add(this, input.text.toString(), todoWhen.at(), todoWhen.timed)
             input.setText("")
+            todoWhen.reset()
             renderTodos()
         }
         findViewById<Button>(R.id.youtubeButton).setOnClickListener {
@@ -322,44 +328,64 @@ class MainActivity : Activity() {
         }
     }
 
-    /** More dabaya ho to poori list, warna sirf 4 kaam. */
+    /** More dabaya ho to aage ke din bhi, warna sirf aaj ke 4 kaam. */
     private var todoOpen = false
+    private lateinit var todoWhen: TodoPicker
 
     private fun renderTodos() {
         val box = findViewById<LinearLayout>(R.id.todoBox)
         box.removeAllViews()
-        val all = Todos.all(this).sortedBy { it.optBoolean("done") }
-        val pending = all.count { !it.optBoolean("done") }
-        val shown = if (todoOpen) all else all.filter { !it.optBoolean("done") }.take(TODO_ROWS)
+        val pending = Todos.pending(this)
+        val today = Todos.today(this)
+        val shown = if (todoOpen) pending else today.take(TODO_ROWS)
+        var group = ""
         shown.forEach { item ->
-            val done = item.optBoolean("done")
-            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            row.addView(TextView(this).apply {
-                text = (if (done) "✓ " else "") + item.optString("text")
-                textSize = 16f
-                setTextColor(if (done) 0xFF667085.toInt() else 0xFF1D2433.toInt())
-            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            if (!done) {
-                row.addView(smallButton("Done") {
-                    Todos.complete(this, item.optString("id"))
-                    renderTodos()
+            val head = Todos.groupOf(item)
+            if (head != group) {
+                group = head
+                box.addView(TextView(this).apply {
+                    text = head
+                    textSize = 15f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setTextColor(if (head == "Overdue") 0xFFC62828.toInt() else 0xFF1F5C4D.toInt())
+                    setPadding(0, (10 * resources.displayMetrics.density).toInt(), 0, 0)
                 })
             }
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            words.addView(TextView(this).apply {
+                text = item.optString("text")
+                textSize = 16f
+                setTextColor(0xFF1D2433.toInt())
+            })
+            val whenText = Todos.whenText(item)
+            if (Todos.timed(item) || whenText.startsWith("Overdue")) {
+                words.addView(TextView(this).apply {
+                    text = if (Todos.timed(item)) "⏰ " + Todos.clock(item.optLong("at")) else whenText
+                    textSize = 13f
+                    setTextColor(if (whenText.startsWith("Overdue")) 0xFFC62828.toInt() else 0xFF667085.toInt())
+                })
+            }
+            row.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(smallButton("Done") {
+                Todos.complete(this, item.optString("id"))
+                renderTodos()
+            })
             row.addView(smallButton("Remove") {
                 Todos.remove(this, item.optString("id"))
                 renderTodos()
             })
             box.addView(row)
         }
-        val hidden = all.size - shown.size
+        if (today.isEmpty() && !todoOpen) {
+            box.addView(TextView(this).apply { text = "Nothing for today."; textSize = 15f })
+        }
+        val hidden = pending.size - shown.size
         if (hidden > 0 || todoOpen) {
-            box.addView(smallButton(if (todoOpen) "Less" else "More ($hidden)") {
+            box.addView(smallButton(if (todoOpen) "Less" else "More: all days ($hidden)") {
                 todoOpen = !todoOpen
                 renderTodos()
             })
-        }
-        if (pending == 0 && !todoOpen) {
-            box.addView(TextView(this).apply { text = "No tasks left."; textSize = 15f })
         }
     }
 

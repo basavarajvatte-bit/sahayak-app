@@ -21,12 +21,14 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.sahayak.app.MiniBuddy
+import com.sahayak.app.TodoPicker
 import com.sahayak.app.Todos
 
 /** To-do list aur setup ki ek hi screen. */
 class TodoActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var input: EditText
+    private lateinit var picker: TodoPicker
     private lateinit var name: EditText
     private lateinit var overlayButton: Button
     private lateinit var batteryButton: Button
@@ -68,9 +70,18 @@ class TodoActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
         page.addView(input)
+        val whenButton = button("") { picker.open() }
+        picker = TodoPicker(this) { whenButton.text = picker.label() }
+        whenButton.text = picker.label()
+        val quick = LinearLayout(this)
+        quick.addView(button("Today") { picker.today() }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        quick.addView(button("Tomorrow") { picker.tomorrow() }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        page.addView(quick)
+        page.addView(whenButton)
         page.addView(button("Add") {
-            Todos.add(this, input.text.toString())
+            Todos.add(this, input.text.toString(), picker.at(), picker.timed)
             input.setText("")
+            picker.reset()
             render()
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -112,7 +123,7 @@ class TodoActivity : Activity() {
     private fun test() {
         when {
             !Settings.canDrawOverlays(this) -> toastLine("Press Allow Chhotu on screen first")
-            Todos.pending(this).isEmpty() -> toastLine("Add a task first")
+            Todos.today(this).isEmpty() -> toastLine("Add a task for today first")
             else -> {
                 moveTaskToBack(true)
                 Handler(Looper.getMainLooper()).postDelayed({ TodoService.instance?.showNow() }, 500L)
@@ -139,10 +150,21 @@ class TodoActivity : Activity() {
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
         list.removeAllViews()
         val items = Todos.pending(this)
-        if (items.isEmpty()) list.addView(label("No tasks yet.", 15f))
-        (if (open) items else items.take(ROWS)).forEach { item ->
+        val today = Todos.today(this)
+        val shown = if (open) items else today.take(ROWS)
+        if (today.isEmpty()) list.addView(label("Nothing for today.", 15f))
+        var group = ""
+        shown.forEach { item ->
+            val head = Todos.groupOf(item)
+            if (head != group) {
+                group = head
+                list.addView(label(head, 15f, true).apply {
+                    setTextColor(if (head == "Overdue") 0xFFC62828.toInt() else 0xFF1F5C4D.toInt())
+                })
+            }
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            row.addView(label(item.optString("text"), 16f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            val time = if (Todos.timed(item)) "⏰ " + Todos.clock(item.optLong("at")) + "  " else ""
+            row.addView(label(time + item.optString("text"), 16f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(button("Done") {
                 Todos.complete(this, item.optString("id"))
                 render()
@@ -153,8 +175,8 @@ class TodoActivity : Activity() {
             })
             list.addView(row)
         }
-        if (items.size > ROWS) {
-            list.addView(button(if (open) "Less" else "More (" + (items.size - ROWS) + ")") {
+        if (items.size > shown.size || open) {
+            list.addView(button(if (open) "Less" else "More: all days (" + (items.size - shown.size) + ")") {
                 open = !open
                 render()
             })

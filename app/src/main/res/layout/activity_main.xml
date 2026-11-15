@@ -139,6 +139,36 @@
                     android:textAllCaps="false" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <Button
+                    android:id="@+id/todoToday"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="Today"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/todoTomorrow"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="Tomorrow"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/todoWhen"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:text="📅  Today  ·  Any time"
+                android:textAllCaps="false"
+                android:textSize="16sp" />
+
             <CheckBox
                 android:id="@+id/todoSpeak"
                 android:layout_width="match_parent"
