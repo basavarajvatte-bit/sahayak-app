@@ -14,7 +14,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /** Share page par "Buffett check" ka dabba: 8 jaanch, har ek ke saath ⓘ (samjhaane wala) button. */
-class BuffettCard(private val a: Activity, private val symbol: String, private val financial: Boolean) {
+class BuffettCard(
+    private val a: Activity, private val symbol: String, private val financial: Boolean, private val name: String = "", private val price: Double = 0.0
+) {
     val view = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
     private val main = Handler(Looper.getMainLooper())
 
@@ -95,7 +97,94 @@ class BuffettCard(private val a: Activity, private val symbol: String, private v
             row.addView(infoButton { explain(c.id) })
             view.addView(row)
         }
+
+        // ----- Munger ki soch: profit asli? bhaav sahi? laal jhande -----
+        section("💵 Profit asli hai?")
+        checkRow(BuffettLogic.quality(data))
+        section("🏷️ Sasta hai ya mehenga?")
+        checkRow(BuffettLogic.ownerYield(data, price))
+        section("🚩 Laal jhande")
+        BuffettLogic.dataFlags(data).forEach { checkRow(it) }
+        newsBox = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        view.addView(newsBox)
+        loadNews()
         buttons()
+    }
+
+    private var newsBox: LinearLayout? = null
+
+    private fun section(words: String) {
+        view.addView(text(words, 16f, true).apply { setPadding(0, dp(14), 0, dp(2)) })
+    }
+
+    private fun checkRow(c: BuffettLogic.Check) {
+        val row = LinearLayout(a).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, dp(2))
+        }
+        val (mark, color) = when (c.status) {
+            BuffettLogic.PASS -> "✓" to GREEN
+            BuffettLogic.FAIL -> "✗" to RED
+            else -> "?" to GREY
+        }
+        row.addView(text(mark, 20f, true, color), LinearLayout.LayoutParams(dp(28), LinearLayout.LayoutParams.WRAP_CONTENT))
+        val words = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(text(c.title, 15f, true))
+        words.addView(text(c.value, 13f, false, GREY))
+        row.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(infoButton { explainMore(c.id) })
+        view.addView(row)
+    }
+
+    /** Khabron mein laal jhande (peeche se). */
+    private fun loadNews() {
+        val box = newsBox ?: return
+        if (name.isEmpty()) return
+        val head = LinearLayout(a).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, dp(2))
+        }
+        val mark = text("…", 20f, true, GREY)
+        head.addView(mark, LinearLayout.LayoutParams(dp(28), LinearLayout.LayoutParams.WRAP_CONTENT))
+        val words = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(text("Khabron mein laal jhande", 15f, true))
+        val line = text("6 mahine ki khabrein dekh raha hu…", 13f, false, GREY)
+        words.addView(line)
+        head.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        head.addView(infoButton { explainMore("news") })
+        box.addView(head)
+        Thread {
+            val found = Market.redNews(name)
+            main.post {
+                if (a.isDestroyed) return@post
+                if (found.isEmpty()) {
+                    mark.text = "✓"
+                    mark.setTextColor(GREEN)
+                    line.text = "Pledge, auditor, SEBI, default jaisi koi khabar nahi mili"
+                    return@post
+                }
+                mark.text = "⚠"
+                mark.setTextColor(RED)
+                line.text = found.size.toString() + " khabar mili, khud padh kar dekho:"
+                found.forEach { n ->
+                    box.addView(text("📰 " + MarketLogic.cleanTitle(n.title) + "  (" + MarketLogic.publisher(n.title) + ")", 13f, false, 0xFF1565C0.toInt()).apply {
+                        setPadding(dp(28), dp(2), 0, dp(2))
+                        setOnClickListener {
+                            try {
+                                a.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(n.link)))
+                            } catch (e: android.content.ActivityNotFoundException) {
+                                // Browser nahi hai
+                            }
+                        }
+                    })
+                }
+            }
+        }.start()
+    }
+
+    private fun explainMore(id: String) {
+        val info = BuffettLogic.MORE_INFO[id] ?: return
+        show(info.title, "📌 Kya dekhte hain\n" + info.what + "\n\n✓ Kab milta hai\n" + info.pass + "\n\n💡 Kyun zaroori hai\n" + info.why)
     }
 
     private fun buttons() {

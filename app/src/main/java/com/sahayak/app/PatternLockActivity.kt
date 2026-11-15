@@ -177,7 +177,7 @@ class PatternLockActivity : Activity() {
         loadChart()
 
         // ----- Buffett check -----
-        page.addView(BuffettCard(this, lock.optString("symbol"), false).view, wide(16))
+        page.addView(BuffettCard(this, lock.optString("symbol"), false, lock.optString("name"), lock.optDouble("price", 0.0)).view, wide(16))
 
         // ----- Khabar aur buttons -----
         val news = card()

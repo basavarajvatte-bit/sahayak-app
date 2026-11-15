@@ -123,11 +123,17 @@ class FundActivity : Activity() {
             inputType = InputType.TYPE_CLASS_NUMBER
         }
         buy.addView(amount)
+        val think = BuyDialog.thinking(this, buy)
         buy.addView(button("Kharido") {
             val n = name.text.toString()
             val rs = amount.text.toString().toDoubleOrNull() ?: 0.0
+            think.problem()?.let {
+                status.text = it
+                return@button
+            }
+            val thought = think.thought()
             work("Kharid raha hu") {
-                val answer = Funds.buy(app, fundId, n, rs)
+                val answer = Funds.buy(app, fundId, n, rs, thought)
                 if (answer.startsWith("Kharida")) main.post {
                     name.setText("")
                     amount.setText("")
@@ -181,6 +187,57 @@ class FundActivity : Activity() {
         }
         summary.addView(head, wide(8))
 
+        val holds0 = fund.optJSONArray("holdings")
+        val list0 = (0 until (holds0?.length() ?: 0)).mapNotNull { holds0?.optJSONObject(it) }
+        // ----- Paisa kahan laga (risk) -----
+        val (top, sectors) = FundLogic.concentration(list0)
+        if (top != null) {
+            val risk = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = rounded(0xFFFFFFFF.toInt(), 12)
+                setPadding(dp(14), dp(8), dp(14), dp(10))
+            }
+            val head2 = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            head2.addView(text("⚖️ Paisa kahan laga", 15f, true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            head2.addView(info("Paisa kahan laga (risk)",
+                "📌 Kya dekhte hain\nFund ka kitna paisa ek hi share mein aur ek hi sector mein laga hai.\n\n✓ Theek kab\nEk share mein 40% se kam, ek sector mein 50% se kam.\n\n💡 Kyun zaroori hai\n" +
+                    "Saara paisa ek jagah ho to us ek share ya sector ki buri khabar poora fund gira deti hai. Buffett kam shares mein bharosa rakhte hain, lekin sirf tab jab dhandha poori tarah samajh mein aaye. Bina samjhe ek jagah zyada paisa daalna sattebaazi hai."))
+            risk.addView(head2)
+            val bigShare = top.second > 40
+            risk.addView(text("Sabse bada hissa: " + top.first + " " + String.format(Locale.ENGLISH, "%.0f%%", top.second) + (if (bigShare) "  ⚠ bahut zyada" else ""), 14f, true, if (bigShare) RED else INK))
+            val bigSector = sectors.firstOrNull()?.let { it.second > 50 && it.first != "Other" } == true
+            risk.addView(text("Sector: " + sectors.take(4).joinToString(",  ") { it.first + " " + String.format(Locale.ENGLISH, "%.0f%%", it.second) } +
+                (if (bigSector) "  ⚠ ek sector mein zyada" else ""), 13f, false, if (bigSector) RED else GREY))
+            summary.addView(risk, wide(8))
+        }
+        // ----- Faisla diary -----
+        val now = System.currentTimeMillis()
+        val due = list0.filter { FundLogic.reviewDue(it, now) != null }
+        val verdicts = list0.flatMap { h -> (0 until (h.optJSONArray("reviews")?.length() ?: 0)).mapNotNull { h.optJSONArray("reviews")?.optJSONObject(it)?.optString("verdict") } }
+        if (list0.isNotEmpty()) {
+            val diary = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = rounded(0xFFFFF6E5.toInt(), 12)
+                setPadding(dp(14), dp(8), dp(14), dp(10))
+            }
+            val head3 = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            head3.addView(text("📓 Faisla diary", 15f, true, 0xFFB54700.toInt()), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            head3.addView(info("Faisla diary",
+                "📌 Kya hai\nKhareedte waqt aapne likha tha ki share kyun liya aur kya galat ho sakta hai. 3, 6 aur 12 mahine baad app wahi dikhata hai aur poochta hai: aapka kaaran sahi nikla ya nahi?\n\n" +
+                    "💡 Kyun zaroori hai\nShare kabhi kismat se badhta hai, kabhi sahi soch se. Sirf munafa dekhne se ye pata nahi chalta. Buffett aur Munger apni galtiyan likh kar rakhte the, taaki dobara na hon. Kuch mahine mein aapko pata chalega ki aapki soch kitni baar sahi nikalti hai."))
+            diary.addView(head3)
+            diary.addView(text(
+                if (due.isEmpty()) "Abhi koi review baaki nahi. Pehla review kharid ke 90 din baad aayega."
+                else "🔔 " + due.size + " faisle review ke liye: " + due.joinToString(", ") { it.optString("symbol").substringBefore('.') } + ". Share ke dabbe par tap karo.",
+                14f, due.isNotEmpty()
+            ))
+            if (verdicts.isNotEmpty()) {
+                diary.addView(text("Ab tak: ✓ " + verdicts.count { it == "right" } + " sahi nikle  ·  ✗ " + verdicts.count { it == "wrong" } + " galat  ·  ? " +
+                    verdicts.count { it == "unsure" } + " pata nahi", 13f, true, GREY))
+            }
+            summary.addView(diary, wide(8))
+        }
+
         box.removeAllViews()
         val holds = fund.optJSONArray("holdings")
         val list = (0 until (holds?.length() ?: 0)).mapNotNull { holds?.optJSONObject(it) }
@@ -232,33 +289,108 @@ class FundActivity : Activity() {
         card.addView(line(PatternLogic.signed(pct), 18f, true, ink))
         card.addView(line(FundLogic.rupees(profit, true), 12f, true, soft))
         card.addView(line(h.optInt("qty").toString() + " × " + FundLogic.rupees(h.optDouble("buyPrice")), 11f, false, soft))
+        if (FundLogic.reviewDue(h, System.currentTimeMillis()) != null) card.addView(line("📓 Review karo", 11f, true, ink))
         return card
     }
 
-    /** Share ka poora hisaab aur Becho / Tickertape. */
+    /** Gol ⓘ button jo samjhaata hai. */
+    private fun info(title: String, body: String) = TextView(this).apply {
+        text = "i"
+        textSize = 16f
+        gravity = Gravity.CENTER
+        setTextColor(0xFFFFFFFF.toInt())
+        setTypeface(Typeface.SERIF, Typeface.BOLD_ITALIC)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(0xFF175CD3.toInt())
+        }
+        layoutParams = LinearLayout.LayoutParams(dp(30), dp(30))
+        setOnClickListener { AlertDialog.Builder(this@FundActivity).setTitle(title).setMessage(body).setPositiveButton("Samajh gaya", null).show() }
+    }
+
+    /** Share ka poora hisaab, aapka kaaran, review aur Becho / Tickertape. */
     private fun details(h: JSONObject) {
         val cost = FundLogic.cost(h)
         val value = FundLogic.value(h)
         val nifty = Funds.niftyNow(this)
+        val now = System.currentTimeMillis()
+        val held = FundLogic.daysHeld(h, now)
         val niftyPct = if (nifty != null && h.optDouble("niftyAtBuy", 0.0) > 0) (nifty / h.optDouble("niftyAtBuy") - 1) * 100 else Double.NaN
         val words = StringBuilder()
-            .append("Kharida: ").append(day.format(Date(h.optLong("buyAt")))).append(", ").append(h.optInt("qty")).append(" share × ").append(FundLogic.rupees(h.optDouble("buyPrice"))).append("\n")
-            .append("Laga: ").append(FundLogic.rupees(cost)).append("\n")
+            .append("Kharida: ").append(day.format(Date(h.optLong("buyAt")))).append(" (").append(held).append(" din se rakha)\n")
+            .append(h.optInt("qty")).append(" share × ").append(FundLogic.rupees(h.optDouble("buyPrice"))).append(" = ").append(FundLogic.rupees(cost)).append("\n")
             .append("Abhi: ").append(FundLogic.rupees(h.optDouble("lastPrice"))).append(" × ").append(h.optInt("qty")).append(" = ").append(FundLogic.rupees(value)).append("\n")
             .append("Munafa: ").append(FundLogic.rupees(value - cost, true)).append(" (").append(PatternLogic.signed(if (cost > 0) (value - cost) / cost * 100 else 0.0)).append(")")
         if (!niftyPct.isNaN()) words.append("\nUsi din se Nifty: ").append(PatternLogic.signed(niftyPct))
-        val app = applicationContext
-        AlertDialog.Builder(this).setTitle(h.optString("name")).setMessage(words.toString())
-            .setPositiveButton("Becho") { _, _ -> work("Bech raha hu") { Funds.sell(app, fundId, h.optString("id")) } }
-            .setNeutralButton("Tickertape") { _, _ ->
-                val slug = h.optString("slug")
-                status.text = Market.openTickertape(this, if (slug.startsWith("/stocks/")) "https://www.tickertape.in$slug" else null, h.optString("symbol"))
+        h.optString("sector").takeIf { it.isNotEmpty() }?.let { words.append("\nSector: ").append(it) }
+        if (h.optString("why").isNotEmpty()) words.append("\n\n🧠 Aapne kyun liya:\n").append(h.optString("why"))
+        if (h.optString("risks").isNotEmpty()) words.append("\n\n⚠ Aapne socha kya galat ho sakta hai:\n").append(h.optString("risks"))
+        if (h.has("understand")) words.append("\n\n" + if (h.optBoolean("understand")) "✓ Aapne kaha dhandha samajhte ho" else "✗ Aapne kaha dhandha poora nahi samajhte")
+        val reviews = h.optJSONArray("reviews")
+        if (reviews != null && reviews.length() > 0) {
+            words.append("\n\n📓 Review:")
+            for (i in 0 until reviews.length()) {
+                val r = reviews.optJSONObject(i) ?: continue
+                words.append("\n").append(r.optInt("days")).append(" din: ").append(
+                    when (r.optString("verdict")) {
+                        "right" -> "✓ kaaran sahi nikla"
+                        "wrong" -> "✗ kaaran galat nikla"
+                        else -> "? pata nahi"
+                    }
+                ).append(" (tab ").append(PatternLogic.signed(r.optDouble("pct"))).append(")")
             }
-            .setNegativeButton("Band karo", null).show()
+        }
+        val due = FundLogic.reviewDue(h, now)
+        val box = AlertDialog.Builder(this).setTitle(h.optString("name")).setMessage(words.toString())
+            .setPositiveButton("Becho") { _, _ -> confirmSell(h, held) }
+            .setNegativeButton("Band karo", null)
+        if (due != null) box.setNeutralButton("📓 Review karo ($due din)") { _, _ -> review(h, due) }
+        else box.setNeutralButton("Tickertape") { _, _ ->
+            val slug = h.optString("slug")
+            status.text = Market.openTickertape(this, if (slug.startsWith("/stocks/")) "https://www.tickertape.in$slug" else null, h.optString("symbol"))
+        }
+        box.show()
+    }
+
+    /** Faisla diary ka review: aapka kaaran sahi nikla? */
+    private fun review(h: JSONObject, days: Int) {
+        val cost = FundLogic.cost(h)
+        val pct = if (cost > 0) (FundLogic.value(h) - cost) / cost * 100 else 0.0
+        val msg = "$days din pehle aapne ye share liya tha.\n\n🧠 Aapka kaaran:\n" + h.optString("why").ifEmpty { "(nahi likha tha)" } +
+            "\n\n⚠ Aapke soche hue khatre:\n" + h.optString("risks").ifEmpty { "(nahi likhe the)" } +
+            "\n\nAb tak share " + PatternLogic.signed(pct) + ".\n\nBhaav ko chhodo, sirf dhandha dekho: jo kaaran aapne socha tha, kya wo sach hua?"
+        AlertDialog.Builder(this).setTitle("📓 Review: " + h.optString("name")).setMessage(msg)
+            .setPositiveButton("✓ Sahi nikla") { _, _ -> saveReview(h, days, "right") }
+            .setNegativeButton("✗ Galat nikla") { _, _ -> saveReview(h, days, "wrong") }
+            .setNeutralButton("? Pata nahi") { _, _ -> saveReview(h, days, "unsure") }
+            .show()
+    }
+
+    private fun saveReview(h: JSONObject, days: Int, verdict: String) {
+        Funds.review(this, fundId, h.optString("id"), days, verdict)
+        status.text = "Diary mein save ho gaya"
+        render()
+    }
+
+    /** Buffett ka sabar: 1 saal se pehle bechne par ek baar rok kar poochho. */
+    private fun confirmSell(h: JSONObject, held: Int) {
+        val app = applicationContext
+        val sell = { work("Bech raha hu") { Funds.sell(app, fundId, h.optString("id")) } }
+        if (held >= PATIENCE_DAYS) {
+            sell()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Ruko, ek baar socho")
+            .setMessage("Ye share sirf $held din pehle liya tha.\n\nBuffett: \"Jo share 10 saal nahi rakh sakte, use 10 minute bhi mat rakho.\"\n\n" +
+                "Aapka kaaran tha:\n" + h.optString("why").ifEmpty { "(nahi likha tha)" } + "\n\nKya ye kaaran badal gaya hai, ya sirf bhaav upar-neeche hua hai?")
+            .setPositiveButton("Kaaran badla, becho") { _, _ -> sell() }
+            .setNegativeButton("Nahi, rakhta hu", null)
+            .show()
     }
 
     companion object {
         private const val EXTRA_ID = "id"
+        private const val PATIENCE_DAYS = 365
         private const val INK = 0xFF1D2433.toInt()
         private const val SOFT = 0xFFB8C0CC.toInt()
         private const val GREY = 0xFF667085.toInt()

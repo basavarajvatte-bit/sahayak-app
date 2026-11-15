@@ -58,8 +58,18 @@ object BuyDialog {
             textSize = 12f
             setTextColor(0xFF667085.toInt())
         })
-        AlertDialog.Builder(a).setTitle("🛒 Buy: $name").setView(page)
-            .setPositiveButton("Kharido") { _, _ ->
+        val think = thinking(a, page)
+        val dialog = AlertDialog.Builder(a).setTitle("🛒 Buy: $name").setView(android.widget.ScrollView(a).apply { addView(page) })
+            .setPositiveButton("Kharido", null)
+            .setNegativeButton("Rehne do", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val problem = think.problem()
+                if (problem != null) {
+                    android.widget.Toast.makeText(a, problem, android.widget.Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
                 val rs = amount.text.toString().toDoubleOrNull() ?: 0.0
                 val i = pick.selectedItemPosition.coerceIn(0, names.lastIndex)
                 val app = a.applicationContext
@@ -72,14 +82,54 @@ object BuyDialog {
                         if (names[i] == NEW) {
                             val made = Funds.create(app, newName)
                             fundId = Funds.all(app).firstOrNull { it.optString("name").equals(newName.trim(), true) }?.optString("id").orEmpty()
-                            if (fundId.isEmpty()) made else Funds.buySymbol(app, fundId, symbol, name, slug, rs)
-                        } else Funds.buySymbol(app, fundId, symbol, name, slug, rs)
+                            if (fundId.isEmpty()) made else Funds.buySymbol(app, fundId, symbol, name, slug, rs, think.thought())
+                        } else Funds.buySymbol(app, fundId, symbol, name, slug, rs, think.thought())
                     } catch (e: org.json.JSONException) {
                         "Kuch gadbad hui. Dobara try karo"
                     }
                     main.post { if (!a.isDestroyed) done(answer) }
                 }.start()
             }
-            .setNegativeButton("Rehne do", null).show()
+        }
+        dialog.show()
+    }
+
+    /** Munger ki checklist ke dabbe: samajhta hu?, kyun?, kya galat ho sakta hai? */
+    class Thinking(private val understand: android.widget.CheckBox, private val why: EditText, private val risks: EditText) {
+        fun problem(): String? = when {
+            why.text.isBlank() -> "Pehle likho: ye share kyun le rahe ho?"
+            risks.text.isBlank() -> "Pehle likho: kya galat ho sakta hai? (Munger: ulta socho)"
+            else -> null
+        }
+
+        fun thought() = Funds.Thought(why.text.toString(), risks.text.toString(), understand.isChecked)
+    }
+
+    fun thinking(a: Activity, page: LinearLayout): Thinking {
+        val d = a.resources.displayMetrics.density
+        page.addView(TextView(a).apply {
+            text = "🧠 Khareedne se pehle socho"
+            textSize = 15f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, (14 * d).toInt(), 0, 0)
+        })
+        val understand = android.widget.CheckBox(a).apply { text = "Main ye dhandha samajhta hu (kaise kamati hai)" }
+        page.addView(understand)
+        val why = EditText(a).apply {
+            hint = "Ye share kyun le raha hu? (1-2 line)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        page.addView(why)
+        val risks = EditText(a).apply {
+            hint = "Kya galat ho sakta hai? (2-3 khatre)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        page.addView(risks)
+        page.addView(TextView(a).apply {
+            text = "Ye diary mein save hoga. 3, 6 aur 12 mahine baad app poochega ki aapka kaaran sahi nikla ya nahi."
+            textSize = 12f
+            setTextColor(0xFF667085.toInt())
+        })
+        return Thinking(understand, why, risks)
     }
 }

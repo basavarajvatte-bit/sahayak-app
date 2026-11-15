@@ -68,4 +68,31 @@ class BuffettLogicTest {
         assertTrue(BuffettLogic.parse("blocked").isEmpty())
         assertEquals(8, BuffettLogic.INFO.size)
     }
+
+    @Test fun checksProfitQualityPriceAndFlags() {
+        val j = json(
+            series("annualOperatingCashFlow", "2024" to 90 * cr, "2025" to 110 * cr),
+            series("annualNetIncome", "2024" to 100 * cr, "2025" to 120 * cr),
+            series("annualCapitalExpenditure", "2025" to -30 * cr),
+            series("annualOrdinarySharesNumber", "2023" to 1.0e8, "2025" to 1.2e8),
+            series("annualTotalDebt", "2023" to 100 * cr, "2025" to 400 * cr),
+            series("annualStockholdersEquity", "2025" to 1000 * cr)
+        )
+        val d = BuffettLogic.parse(j)
+        val q = BuffettLogic.quality(d)
+        assertEquals(BuffettLogic.PASS, q.status)
+        assertEquals("Cash ÷ profit = 0.91 (2 saal)", q.value)
+        // Owner earnings 80 cr; keemat 1.2 cr share × ₹100 = 1,200 cr; yield 6.7% < 7%
+        val y = BuffettLogic.ownerYield(d, 100.0)
+        assertEquals(BuffettLogic.FAIL, y.status)
+        assertTrue(y.value.startsWith("Owner earnings yield 6.7%"))
+        assertEquals(BuffettLogic.PASS, BuffettLogic.ownerYield(d, 50.0).status)
+        val flags = BuffettLogic.dataFlags(d).associateBy { it.id }
+        assertEquals(BuffettLogic.FAIL, flags["dilution"]!!.status)
+        assertEquals(BuffettLogic.FAIL, flags["debtRise"]!!.status)
+        assertTrue(BuffettLogic.redFlagNews("Promoters of XYZ pledge 20% stake"))
+        assertTrue(BuffettLogic.redFlagNews("ABC Ltd auditor resigns citing concerns"))
+        assertTrue(!BuffettLogic.redFlagNews("ABC Ltd Q2 profit rises 20%"))
+        assertEquals(5, BuffettLogic.MORE_INFO.size)
+    }
 }

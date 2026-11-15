@@ -75,6 +75,97 @@ object BuffettLogic {
         )
     )
 
+    // ---------- Munger ki soch: profit asli hai? bhaav sahi hai? laal jhande ----------
+
+    const val FD_RATE = 7.0
+
+    val MORE_INFO = mapOf(
+        "quality" to Info(
+            "Profit asli hai ya kaagzi?",
+            "Dhandhe se bank mein aaya asli cash (operating cash flow) ko kaagaz par dikhaye net profit se milaate hain. Saalon ka jod ÷ saalon ka jod.",
+            "Cash, profit ka kam se kam 80% ho (0.8 ya zyada).",
+            "Profit hisaab-kitaab se badhaya ja sakta hai, cash nahi. Agar company saalon tak profit dikhaye par cash na aaye, to ya to grahak paisa nahi de rahe, ya maal godown mein pada hai, ya hisaab mein gadbad hai. Munger ise sabse pehle dekhte the."
+        ),
+        "yield" to Info(
+            "Sasta hai ya mehenga? (owner earnings yield)",
+            "Owner earnings = dhandhe ki cash kamai − machinery ka kharcha (capex). Ise poori company ki bazaar keemat (share ka bhaav × kul share) se bhaag dete hain. Matlab: ₹100 ki company khareedo to saal mein kitna asli cash kamati hai.",
+            "Ye yield FD (lagbhag 7%) se zyada ho.",
+            "Buffett achhi company bhi mehenge bhaav par nahi lete; isse 'margin of safety' kehte hain. Agar company ki kamai FD se bhi kam hai, to aap khatra le rahe ho bina extra fayde ke, jab tak company bahut tezi se na badhe. Tezi se badhne wali company ka yield kam ho sakta hai, isliye ise growth ke saath dekho."
+        ),
+        "dilution" to Info(
+            "Naye share bechna (dilution)",
+            "Company ke kul share ki ginti saalon mein kitni badhi.",
+            "Kul share 5% se zyada na badhe hon.",
+            "Jab company baar-baar naye share bechti hai, to aapka hissa chhota hota jaata hai, bhale aapne kuch na kiya ho. Achhi company apne munafe se badhti hai, shareholders ka hissa kaat kar nahi."
+        ),
+        "debtRise" to Info(
+            "Karz tezi se badhna",
+            "Kul karz pehle saal se aakhri saal tak kitna badha.",
+            "Karz 50% se zyada na badha ho (ya karz ho hi na).",
+            "Karz ka tezi se badhna dikhata hai ki dhandha apne paise se nahi chal pa raha. Bura samay aaye to sabse pehle yahi companies phansti hain."
+        ),
+        "news" to Info(
+            "Khabron mein laal jhande",
+            "Pichhle 6 mahine ki khabron mein promoter ka share girvi (pledge), auditor ka istifa, SEBI/ED ki jaanch, default jaise shabd.",
+            "Aisi koi khabar na mile.",
+            "Munger kehte the: buri khabar ek baar aaye to aksar aur bhi chhupi hoti hai. Promoter share girvi rakhe to wo paise ki tangi mein hai; auditor chhod de to hisaab mein gadbad ka shak. Ye khabron se dhoondha jaata hai, isliye kabhi chhoot bhi sakta hai — khabar khud padh kar dekho."
+        )
+    )
+
+    /** Profit asli hai: saalon ka operating cash ÷ saalon ka net profit. */
+    fun quality(d: Map<String, List<Pair<String, Double>>>): Check {
+        val pairs = paired(d, "annualOperatingCashFlow", "annualNetIncome")
+        if (pairs.isEmpty()) return Check("quality", "Profit asli hai ya kaagzi?", UNKNOWN, "Data nahi mila")
+        val cash = pairs.sumOf { it.second }
+        val profit = pairs.sumOf { it.third }
+        if (profit <= 0) return Check("quality", "Profit asli hai ya kaagzi?", FAIL, "Saalon ka jod ghaate mein")
+        val ratio = cash / profit
+        return Check("quality", "Profit asli hai ya kaagzi?", if (ratio >= 0.8) PASS else FAIL,
+            "Cash ÷ profit = " + String.format(Locale.ENGLISH, "%.2f", ratio) + " (" + pairs.size + " saal)")
+    }
+
+    /** Sasta ya mehenga: owner earnings ÷ bazaar keemat, FD se tulna. */
+    fun ownerYield(d: Map<String, List<Pair<String, Double>>>, price: Double): Check {
+        val ocf = latest(d, "annualOperatingCashFlow")
+        val capex = latest(d, "annualCapitalExpenditure") ?: 0.0
+        val shares = latest(d, "annualOrdinarySharesNumber")
+        if (ocf == null || shares == null || shares <= 0 || price <= 0) return Check("yield", "Sasta hai ya mehenga?", UNKNOWN, "Data nahi mila")
+        val owner = ocf - Math.abs(capex)
+        val cap = price * shares
+        val y = owner / cap * 100
+        return Check("yield", "Sasta hai ya mehenga?", if (y >= FD_RATE) PASS else FAIL,
+            "Owner earnings yield " + String.format(Locale.ENGLISH, "%.1f", y) + "% · FD ~" + FD_RATE.toInt() + "% · company ki keemat " + cr(cap))
+    }
+
+    /** Data se laal jhande: naye share bechna, karz tezi se badhna. */
+    fun dataFlags(d: Map<String, List<Pair<String, Double>>>): List<Check> {
+        val out = mutableListOf<Check>()
+        val shares = d["annualOrdinarySharesNumber"].orEmpty()
+        out.add(if (shares.size < 2) Check("dilution", "Naye share bechna", UNKNOWN, "Data nahi mila")
+        else {
+            val rise = (shares.last().second / shares.first().second - 1) * 100
+            Check("dilution", "Naye share bechna", if (rise <= 5) PASS else FAIL,
+                "Kul share " + (if (rise >= 0) "+" else "") + String.format(Locale.ENGLISH, "%.1f", rise) + "% (" + shares.first().first + " se " + shares.last().first + ")")
+        })
+        val debt = d["annualTotalDebt"].orEmpty()
+        out.add(if (debt.size < 2) Check("debtRise", "Karz tezi se badhna", if (debt.isEmpty() && d.containsKey("annualStockholdersEquity")) PASS else UNKNOWN,
+            if (debt.isEmpty() && d.containsKey("annualStockholdersEquity")) "Karz nahi mila" else "Data nahi mila")
+        else {
+            val first = debt.first().second
+            val last = debt.last().second
+            val ok = last <= 0 || (first > 0 && last <= first * 1.5)
+            Check("debtRise", "Karz tezi se badhna", if (ok) PASS else FAIL, "Karz " + cr(first) + " → " + cr(last))
+        })
+        return out
+    }
+
+    private val RED_WORDS = Regex(
+        """(?i)\b(pledg\w*|auditor (resign\w*|quits?|exit\w*)|resignation of (the )?auditor|sebi (order|probe|notice|bans?|penalty)|ed (raid|probe|searches)|income tax (raid|search)|default\w*|fraud|forensic audit|insolvency|nclt|siphon\w*|whistleblower)\b"""
+    )
+
+    /** Khabar ki heading mein laal jhande wala shabd hai? */
+    fun redFlagNews(title: String): Boolean = RED_WORDS.containsMatchIn(title)
+
     /** Yahoo ka jawab: har type ke liye (saal, value), purane se naye. */
     fun parse(json: String): Map<String, List<Pair<String, Double>>> {
         val out = mutableMapOf<String, List<Pair<String, Double>>>()

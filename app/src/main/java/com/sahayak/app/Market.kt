@@ -471,6 +471,16 @@ object Market {
         return json
     }
 
+    /** Pichhle 6 mahine ki laal jhande wali khabrein (pledge, auditor, SEBI, default …) sirf isi company ki. */
+    fun redNews(name: String): List<WatchLogic.News> {
+        val q = MarketLogic.companyQuery(name)
+        if (q.isEmpty()) return emptyList()
+        val query = "\"$q\" pledge OR auditor OR SEBI OR default OR fraud OR raid when:180d"
+        val xml = get("https://news.google.com/rss/search?q=" + URLEncoder.encode(query, "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en") ?: return emptyList()
+        return WatchLogic.news(xml).filter { MarketLogic.aboutCompany(it.title, q) && BuffettLogic.redFlagNews(it.title) }
+            .sortedByDescending { MarketLogic.pubTime(it.date) }.distinctBy { MarketLogic.cleanTitle(it.title) }.take(5)
+    }
+
     /** Locked shares ka Buffett score ("5/7"), hafte mein ek baar. Kuch badla ho to true. */
     fun fillBuffett(c: Context): Boolean {
         var changed = false

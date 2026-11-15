@@ -40,4 +40,25 @@ class FundLogicTest {
         assertEquals("-₹1,200.25", FundLogic.rupees(-1200.25, true))
         assertEquals("₹999", FundLogic.rupees(999.0))
     }
+
+    @Test fun diaryReviewsAndRisk() {
+        val day = 86_400_000L
+        val now = 1_000 * day
+        val h = JSONObject().put("buyAt", now - 200 * day).put("qty", 10).put("buyPrice", 100.0).put("lastPrice", 120.0).put("symbol", "ABC.NS").put("sector", "Energy")
+        assertEquals(200, FundLogic.daysHeld(h, now))
+        assertEquals(90, FundLogic.reviewDue(h, now))
+        h.put("reviews", JSONArray().put(JSONObject().put("days", 90)))
+        assertEquals(180, FundLogic.reviewDue(h, now))
+        (h.getJSONArray("reviews")).put(JSONObject().put("days", 180))
+        assertEquals(null, FundLogic.reviewDue(h, now))
+        val young = JSONObject().put("buyAt", now - 10 * day)
+        assertEquals(null, FundLogic.reviewDue(young, now))
+
+        val other = JSONObject().put("qty", 5).put("buyPrice", 80.0).put("lastPrice", 80.0).put("symbol", "XYZ.NS").put("sector", "Health Care")
+        val (top, sectors) = FundLogic.concentration(listOf(h, other))
+        // 1200 aur 400: ABC 75%
+        assertEquals("ABC", top!!.first)
+        assertEquals(75.0, top.second, 0.001)
+        assertEquals("Energy" to 75.0, sectors[0])
+    }
 }

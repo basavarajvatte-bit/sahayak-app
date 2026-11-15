@@ -66,6 +66,30 @@ object FundLogic {
         return Summary(invested, value, realized, nifty, day, list.size).also { it.soldCost = soldCost }
     }
 
+    /** Faisla diary: kitne din baad apna kaaran dobara jaanchna hai. */
+    val REVIEW_DAYS = listOf(90, 180, 365)
+
+    fun daysHeld(h: JSONObject, now: Long): Int = ((now - h.optLong("buyAt")) / 86_400_000L).toInt().coerceAtLeast(0)
+
+    /** Kaunsa review baaki hai (90/180/365 din), sabse purana pehle. Koi nahi to null. */
+    fun reviewDue(h: JSONObject, now: Long): Int? {
+        val done = mutableSetOf<Int>()
+        val reviews = h.optJSONArray("reviews")
+        if (reviews != null) for (i in 0 until reviews.length()) reviews.optJSONObject(i)?.let { done.add(it.optInt("days")) }
+        val held = daysHeld(h, now)
+        return REVIEW_DAYS.firstOrNull { held >= it && it !in done }
+    }
+
+    /** Fund mein paisa kahan laga: (sabse bade share ka naam, uska %), aur sector ke % (bade se chhota). */
+    fun concentration(holdings: List<JSONObject>): Pair<Pair<String, Double>?, List<Pair<String, Double>>> {
+        val total = holdings.sumOf { value(it) }
+        if (total <= 0) return null to emptyList()
+        val top = holdings.maxByOrNull { value(it) }?.let { it.optString("symbol").substringBefore('.') to value(it) / total * 100 }
+        val sectors = holdings.groupBy { it.optString("sector").ifEmpty { "Other" } }
+            .map { (s, list) -> s to list.sumOf { value(it) } / total * 100 }.sortedByDescending { it.second }
+        return top to sectors
+    }
+
     /** ₹1,23,456 jaisa Indian tareeke se. */
     fun rupees(v: Double, sign: Boolean = false): String {
         val neg = v < 0

@@ -68,18 +68,21 @@ object Funds {
     }
 
     /** Fund mein share kharido: itne rupaye ka, aaj ke jaanche hue bhaav par. Jawab user ke liye. */
-    fun buy(c: Context, fundId: String, typed: String, amount: Double): String {
+    /** Khareedne se pehle ki soch: kyun le raha hu, kya galat ho sakta hai, dhandha samajhta hu ya nahi. */
+    data class Thought(val why: String = "", val risks: String = "", val understand: Boolean = false)
+
+    fun buy(c: Context, fundId: String, typed: String, amount: Double, thought: Thought = Thought()): String {
         val fund = get(c, fundId) ?: return "Fund nahi mila"
         if (typed.isBlank()) return "Share ka naam likho"
         if (amount <= 0) return "Kitne rupaye ka kharidna hai, wo likho"
         if (holdings(fund).length() >= MAX_HOLDINGS) return "Ek fund mein zyada se zyada $MAX_HOLDINGS shares"
         progress = "$typed dhoondh raha hu"
         val quote = Market.findIndian(typed.trim()) ?: return "\"$typed\" NSE/BSE par nahi mila. NSE code try karo, jaise RELIANCE"
-        return buyQuote(c, fundId, quote, amount, "")
+        return buyQuote(c, fundId, quote, amount, "", thought)
     }
 
     /** Share ka NSE code pata ho (green list, My shares, pattern): seedha wahi share, naam se dhoondhe bina. */
-    fun buySymbol(c: Context, fundId: String, symbol: String, name: String, slug: String, amount: Double): String {
+    fun buySymbol(c: Context, fundId: String, symbol: String, name: String, slug: String, amount: Double, thought: Thought = Thought()): String {
         val fund = get(c, fundId) ?: return "Fund nahi mila"
         if (amount <= 0) return "Kitne rupaye ka kharidna hai, wo likho"
         if (holdings(fund).length() >= MAX_HOLDINGS) return "Ek fund mein zyada se zyada $MAX_HOLDINGS shares"
@@ -87,10 +90,10 @@ object Funds {
         val code = symbol.substringBefore('.')
         val quote = (if (symbol.contains('.')) Market.yahoo(symbol) else null) ?: Market.yahoo("$code.NS") ?: Market.yahoo("$code.BO") ?: Market.findIndian(name)
             ?: return "$name ka bhaav nahi mila. Internet check karo"
-        return buyQuote(c, fundId, quote.copy(name = name.ifEmpty { quote.name }), amount, slug)
+        return buyQuote(c, fundId, quote.copy(name = name.ifEmpty { quote.name }), amount, slug, thought)
     }
 
-    private fun buyQuote(c: Context, fundId: String, quote: MarketLogic.Quote, amount: Double, knownSlug: String): String {
+    private fun buyQuote(c: Context, fundId: String, quote: MarketLogic.Quote, amount: Double, knownSlug: String, thought: Thought): String {
         progress = quote.name + " ka bhaav jaanch raha hu"
         val slug = knownSlug.takeIf { it.startsWith("/stocks/") }
             ?: Market.tickertapeLink(quote.name, "", quote.symbol)?.removePrefix("https://www.tickertape.in").orEmpty()
@@ -103,6 +106,11 @@ object Funds {
             .put("qty", qty).put("buyPrice", price).put("buyAt", now).put("lastPrice", price).put("lastAt", now).put("sources", sources)
         quote.prevClose?.let { h.put("prevClose", it) }
         nifty?.let { h.put("niftyAtBuy", it) }
+        h.put("why", thought.why.trim().take(300)).put("risks", thought.risks.trim().take(400)).put("understand", thought.understand)
+        // Sector, taaki fund ka risk dikh sake
+        val code = quote.symbol.substringBefore('.')
+        Market.tape("https://api.tickertape.in/search?text=" + java.net.URLEncoder.encode(code, "UTF-8") + "&types=stock&pageNumber=0")
+            ?.let { MarketLogic.findSector(it, code) }?.takeIf { it.isNotEmpty() }?.let { h.put("sector", it) }
         change(c) { list -> list.firstOrNull { it.optString("id") == fundId }?.let { holdings(it).put(h) } }
         nifty?.let { prefs(c).edit().putFloat("nifty", it.toFloat()).apply() }
         progress = ""
@@ -110,6 +118,22 @@ object Funds {
         val fundName = get(c, fundId)?.optString("name").orEmpty()
         return "Kharida ($fundName): " + quote.name + "  " + qty + " share × " + FundLogic.rupees(price) + " = " + FundLogic.rupees(spent) +
             (if (amount - spent >= 1) "  (" + FundLogic.rupees(amount - spent) + " bacha)" else "")
+    }
+
+    /** Faisla diary: apne kaaran ko 90/180/365 din baad jaancho. verdict = right / wrong / unsure. */
+    fun review(c: Context, fundId: String, holdingId: String, days: Int, verdict: String) {
+        change(c) { all ->
+            val f = all.firstOrNull { it.optString("id") == fundId } ?: return@change
+            val hs = holdings(f)
+            for (i in 0 until hs.length()) {
+                val h = hs.optJSONObject(i) ?: continue
+                if (h.optString("id") != holdingId) continue
+                val cost = FundLogic.cost(h)
+                val pct = if (cost > 0) (FundLogic.value(h) - cost) / cost * 100 else 0.0
+                val list = h.optJSONArray("reviews") ?: JSONArray().also { h.put("reviews", it) }
+                list.put(JSONObject().put("days", days).put("verdict", verdict).put("at", System.currentTimeMillis()).put("pct", pct))
+            }
+        }
     }
 
     /** Share becho: abhi ke jaanche hue bhaav par. Munafa ya nuksaan fund mein jud jaata hai. */

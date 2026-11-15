@@ -217,7 +217,7 @@ class ShareActivity : Activity() {
 
         // ----- Buffett check -----
         if (MarketLogic.indianSymbol(share.optString("symbol"))) {
-            page.addView(BuffettCard(this, share.optString("symbol"), share.optString("sector").equals("Financials", true)).view, wide().apply { topMargin = dp(16) })
+            page.addView(BuffettCard(this, share.optString("symbol"), share.optString("sector").equals("Financials", true), share.optString("name"), share.optDouble("lastPrice", 0.0)).view, wide().apply { topMargin = dp(16) })
         }
 
         // ----- Saal dar saal revenue aur profit -----
