@@ -83,18 +83,22 @@ class MarketActivity : Activity() {
         setPadding(0, dp(5), 0, dp(3))
     }
 
-    /** Chhota peela nishan: Tickertape par Low valuation. */
-    private fun valueTag() = TextView(this).apply {
-        text = "💰 Low valuation"
-        textSize = 11f
-        setTextColor(0xFF8A5A00.toInt())
-        setTypeface(typeface, android.graphics.Typeface.BOLD)
-        setPadding(dp(5), dp(1), dp(5), dp(1))
-        background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(0xFFFFE8A3.toInt())
-            cornerRadius = dp(5).toFloat()
+    /** Chhota nishan: Tickertape valuation Low (hara), Avg (peela), High (laal). */
+    private fun valueTag(tag: String): TextView? {
+        val look = MarketLogic.valuationLook(tag) ?: return null
+        return TextView(this).apply {
+            text = look.first
+            textSize = 11f
+            setTextColor(look.second)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(dp(5), dp(1), dp(5), dp(1))
+            maxLines = 1
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(look.third)
+                cornerRadius = dp(5).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) }
         }
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) }
     }
 
     /** Badha to hara dabba, gira to laal, barabar to grey. Safed akshar. */
@@ -439,7 +443,7 @@ class MarketActivity : Activity() {
                 val ticker = row.optString("ticker")
                 box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
                 box.addView(text(row.optInt("green").toString() + " of " + row.optInt("total") + " green  ·  Open in Tickertape", 13f, true, if (count == GreenList.MAX_GREEN) GREEN else TEAL))
-                if (MarketLogic.lowValuation(row.optString("valuation"))) box.addView(valueTag())
+                valueTag(row.optString("valuation"))?.let { box.addView(it) }
                 box.setOnClickListener { openGreen(row) }
                 val locked = Market.shares(this).any { it.optString("symbol").substringBefore('.') == ticker && ticker.isNotEmpty() }
                 val actions = LinearLayout(this).apply { gravity = Gravity.END }
@@ -506,19 +510,28 @@ class MarketActivity : Activity() {
             if (c > 0.004) up++ else if (c < -0.004) down++
         }
         sharesBox.addView(text(ordered.size.toString() + " locked  ·  ▲ $up up  ·  ▼ $down down since lock. Tap a box for its chart.", 13f, true, GREY))
-        // Tickertape par "Low" valuation wale (bazaar ke ausat se saste) alag se
-        val cheap = ordered.filter { MarketLogic.lowValuation(it.optString("valuation")) }
+        // Tickertape ka valuation: Low (sasta), Avg, High (mehenga) alag-alag
         val valueBox = card()
         valueBox.background = android.graphics.drawable.GradientDrawable().apply {
-            setColor(0xFFFFF4D6.toInt())
+            setColor(0xFFFFFFFF.toInt())
             cornerRadius = dp(10).toFloat()
         }
-        valueBox.addView(text("💰 Low valuation (Tickertape): " + cheap.size + " of " + ordered.size, 15f, true, 0xFF8A5A00.toInt()))
-        valueBox.addView(text(
-            if (cheap.isEmpty()) "Abhi kisi locked share ka valuation Low nahi hai (ya abhi check ho raha hai)."
-            else cheap.joinToString(",  ") { it.optString("symbol").substringBefore('.') }, 14f, true
-        ))
-        valueBox.addView(text("Low valuation = Tickertape ke hisaab se bhaav bazaar ke ausat se sasta. Din mein ek baar check hota hai.", 12f, false, GREY))
+        valueBox.addView(text("Valuation (Tickertape)", 15f, true))
+        listOf("Low", "Avg", "High").forEach { kind ->
+            val group = ordered.filter { MarketLogic.valuationKind(it.optString("valuation")) == kind }
+            val look = MarketLogic.valuationLook(kind) ?: return@forEach
+            valueBox.addView(text(look.first + ": " + group.size + "  (" + MarketLogic.valuationMeaning(kind) + ")", 14f, true, look.second).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(look.third)
+                    cornerRadius = dp(6).toFloat()
+                }
+                setPadding(dp(8), dp(3), dp(8), dp(3))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+            if (group.isNotEmpty()) valueBox.addView(text(group.joinToString(",  ") { it.optString("symbol").substringBefore('.') }, 13f))
+        }
+        val unknown = ordered.count { MarketLogic.valuationKind(it.optString("valuation")).isEmpty() }
+        if (unknown > 0) valueBox.addView(text("$unknown shares ka valuation abhi nahi mila (check ho raha hai ya Tickertape par nahi).", 12f, false, GREY))
+        valueBox.addView(text("Din mein ek baar Tickertape scorecard se check hota hai.", 12f, false, GREY))
         sharesBox.addCard(valueBox)
         val sure = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == true }
         val doubt = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == false }
@@ -616,7 +629,7 @@ class MarketActivity : Activity() {
         box.addView(line(MarketLogic.pctText(price, saved), 18f, true, ink))
         box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))
         box.addView(line(day.format(Date(s.optLong("savedAt"))) + if (MarketLogic.indianSymbol(s.optString("symbol"))) "" else "  ·  Foreign", 11f, false, soft))
-        if (MarketLogic.lowValuation(s.optString("valuation"))) box.addView(valueTag())
+        valueTag(s.optString("valuation"))?.let { box.addView(it) }
         // Chhota Buy button: dummy fund mein kharido
         box.addView(TextView(this).apply {
             text = "🛒 Buy"

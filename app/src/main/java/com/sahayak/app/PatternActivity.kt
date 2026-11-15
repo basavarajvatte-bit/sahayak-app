@@ -337,14 +337,15 @@ class PatternActivity : Activity() {
         card.addView(line(PatternLogic.signed(change), 18f, true, ink))
         card.addView(line("Lock " + MarketLogic.money(lock.optDouble("lockPrice", 0.0), "INR"), 11f, false, soft))
         card.addView(line(day.format(Date(lock.optLong("lockAt"))), 11f, false, soft))
-        if (MarketLogic.lowValuation(lock.optString("valuation"))) {
+        MarketLogic.valuationLook(lock.optString("valuation"))?.let { look ->
             card.addView(TextView(this).apply {
-                text = "💰 Low valuation"
+                text = look.first
                 textSize = 11f
-                setTextColor(0xFF8A5A00.toInt())
+                setTextColor(look.second)
                 setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(5), dp(1), dp(5), dp(1))
-                background = rounded(0xFFFFE8A3.toInt(), 5)
+                maxLines = 1
+                background = rounded(look.third, 5)
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
         }
         return card

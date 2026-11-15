@@ -829,6 +829,30 @@ object MarketLogic {
     /** Tickertape ka "Low" valuation matlab bazaar ke ausat se sasta. */
     fun lowValuation(tag: String) = tag.equals("Low", true)
 
+    /** Valuation ka seedha naam: Low, Avg, High (ya khaali). */
+    fun valuationKind(tag: String): String = when {
+        tag.equals("Low", true) -> "Low"
+        tag.equals("High", true) -> "High"
+        tag.equals("Avg", true) || tag.equals("Average", true) || tag.equals("Medium", true) -> "Avg"
+        else -> ""
+    }
+
+    /** Valuation ka nishan: (likhne ke liye, akshar ka rang, peeche ka rang). */
+    fun valuationLook(tag: String): Triple<String, Int, Int>? = when (valuationKind(tag)) {
+        "Low" -> Triple("🟢 Low valuation", 0xFF166534.toInt(), 0xFFD1FADF.toInt())
+        "Avg" -> Triple("🟡 Avg valuation", 0xFF8A5A00.toInt(), 0xFFFFE8A3.toInt())
+        "High" -> Triple("🔴 High valuation", 0xFF991B1B.toInt(), 0xFFFEE2E2.toInt())
+        else -> null
+    }
+
+    /** Matlab Hinglish mein. */
+    fun valuationMeaning(kind: String): String = when (kind) {
+        "Low" -> "bazaar ke ausat se sasta"
+        "Avg" -> "bazaar ke ausat jitna"
+        "High" -> "bazaar ke ausat se mehenga"
+        else -> ""
+    }
+
     /** Scorecard ka jawab: (kitni hari, kul kitni). Samajh na aaye to null. */
     fun parseScorecard(json: String): Pair<Int, Int>? {
         try {

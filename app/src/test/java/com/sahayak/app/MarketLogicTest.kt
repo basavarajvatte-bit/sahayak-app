@@ -318,5 +318,10 @@ class MarketLogicTest {
         assertEquals("", MarketLogic.scoreTag("blocked", "Valuation"))
         assertTrue(MarketLogic.lowValuation("Low"))
         assertFalse(MarketLogic.lowValuation("High"))
+        assertEquals("Avg", MarketLogic.valuationKind("avg"))
+        assertEquals("High", MarketLogic.valuationKind("High"))
+        assertEquals("", MarketLogic.valuationKind(""))
+        assertEquals("🔴 High valuation", MarketLogic.valuationLook("High")!!.first)
+        assertNull(MarketLogic.valuationLook("?"))
     }
 }
