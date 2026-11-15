@@ -593,34 +593,83 @@ class MarketActivity : Activity() {
         if (Market.reportOn(this) && next > 0) reportBox.addView(text("Next report: " + time.format(Date(next)), 13f, false, GREY))
         val reports = Market.reports(this)
         val shown = if (reportsOpen) reports else reports.take(1)
-        shown.forEach { r ->
-            val box = card()
-            box.addView(text("Report  ·  " + time.format(Date(r.optLong("at"))), 13f, true, TEAL))
-            val items = r.optJSONArray("items") ?: return@forEach
-            for (i in 0 until items.length()) {
-                val item = items.optJSONObject(i) ?: continue
-                val up = item.optDouble("up", 0.0)
-                box.addView(text(item.optString("name"), 15f, true))
-                box.addView(text(item.optString("text"), 14f, false, if (up > 0.004) GREEN else if (up < -0.004) RED else INK))
-                item.optString("extra").takeIf { it.isNotEmpty() }?.let { box.addView(text(it, 12f, false, GREY)) }
-                val news = item.optJSONArray("news")
-                if (news == null || news.length() == 0) {
-                    box.addView(text("No news today.", 13f, false, GREY))
-                } else {
-                    for (j in 0 until news.length()) {
-                        val n = news.optJSONObject(j) ?: continue
-                        box.addView(text("• " + n.optString("t"), 13f, false, BLUE).apply { setOnClickListener { open(n.optString("l")) } })
-                    }
-                }
-            }
-            reportBox.addCard(box)
-        }
+        shown.forEach { r -> reportView(r) }
         if (reports.size > 1) {
-            reportBox.addView(button(if (reportsOpen) "Hide old reports" else "Old reports (" + (reports.size - 1) + ")") {
+            reportBox.addView(button(if (reportsOpen) "Purani reports chhupao" else "Purani reports (" + (reports.size - 1) + ")") {
                 reportsOpen = !reportsOpen
                 render()
             })
         }
+    }
+
+    /** Ek report: upar saar, phir har share ka saaf dabba (Hinglish). */
+    private fun reportView(r: org.json.JSONObject) {
+        val items = r.optJSONArray("items") ?: return
+        val list = (0 until items.length()).mapNotNull { items.optJSONObject(it) }
+        val head = card()
+        head.addView(text("📋 Report  ·  " + time.format(Date(r.optLong("at"))), 16f, true, TEAL))
+        val up = list.count { it.optDouble("up", 0.0) > 0.004 }
+        val down = list.count { it.optDouble("up", 0.0) < -0.004 }
+        head.addView(text(list.size.toString() + " shares   ·   🟢 $up lock se upar   ·   🔴 $down lock se neeche", 14f, true))
+        if (list.any { it.optBoolean("closed") }) head.addView(text("Aaj bazaar band tha, isliye pichhle bazaar din ka bhaav dikh raha hai.", 13f, false, GREY))
+        if (list.any { it.has("fresh") && !it.optBoolean("fresh") }) head.addView(text("Kuch shares ka aaj ka bhaav nahi mila, unka purana bhaav dikh raha hai.", 13f, false, GREY))
+        reportBox.addCard(head)
+        // Sabse zyada badhe upar, sabse zyada gire neeche
+        list.sortedByDescending { it.optDouble("up", 0.0) }.forEach { item -> reportShare(item) }
+    }
+
+    private fun reportShare(item: org.json.JSONObject) {
+        val box = card()
+        val change = item.optDouble("up", 0.0)
+        // Baayi taraf patli hari/laal patti, ek nazar mein pata chale
+        box.background = android.graphics.drawable.LayerDrawable(arrayOf(
+            android.graphics.drawable.GradientDrawable().apply {
+                setColor(if (change > 0.004) CHIP_GREEN else if (change < -0.004) CHIP_RED else CHIP_GREY)
+                cornerRadius = dp(10).toFloat()
+            },
+            android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFFFFFFF.toInt())
+                cornerRadius = dp(10).toFloat()
+            }
+        )).apply { setLayerInset(1, dp(5), 0, 0, 0) }
+        box.setPadding(dp(16), dp(10), dp(12), dp(10))
+        val code = item.optString("code")
+        box.addView(text(item.optString("name") + if (code.isNotEmpty()) "  ($code)" else "", 16f, true))
+        if (!item.has("price")) {
+            // Purani report: jaisi thi waisi
+            box.addView(text(item.optString("text"), 14f, false, if (change > 0.004) GREEN else if (change < -0.004) RED else INK))
+        } else {
+            val currency = item.optString("currency")
+            val nowRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            nowRow.addView(text(MarketLogic.money(item.optDouble("price"), currency), 22f, true))
+            if (item.has("today")) {
+                val today = item.optDouble("today")
+                nowRow.addView(chip("Aaj " + MarketLogic.pctText(1.0 + today / 100.0, 1.0), today), chipSpace())
+            }
+            box.addView(nowRow)
+            val lockRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            lockRow.addView(text("🔒 " + day.format(Date(item.optLong("savedAt"))) + " ko " + MarketLogic.money(item.optDouble("saved"), currency), 14f, false, GREY))
+            lockRow.addView(chip("Lock se " + MarketLogic.pctText(1.0 + change / 100.0, 1.0), change), chipSpace())
+            box.addView(lockRow)
+        }
+        val news = item.optJSONArray("news")
+        if (news != null && news.length() > 0) {
+            box.addView(text("Khabar:", 13f, true, GREY).apply { setPadding(0, dp(8), 0, 0) })
+            for (j in 0 until minOf(news.length(), 2)) {
+                val n = news.optJSONObject(j) ?: continue
+                val source = n.optString("s")
+                box.addView(text("📰 " + n.optString("t") + if (source.isNotEmpty()) "  ($source)" else "", 13f, false, BLUE).apply {
+                    maxLines = 2
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setOnClickListener { open(n.optString("l")) }
+                })
+            }
+        }
+        box.setOnClickListener {
+            Market.shares(this).firstOrNull { it.optString("symbol").substringBefore('.') == code && code.isNotEmpty() }
+                ?.let { startActivity(ShareActivity.forShare(this, it.optString("id"))) }
+        }
+        reportBox.addCard(box)
     }
 
     private fun renderNews() {

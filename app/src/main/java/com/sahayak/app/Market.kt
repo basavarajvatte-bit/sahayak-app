@@ -535,11 +535,11 @@ object Market {
                 if (fresh && s.has("prevClose")) {
                     val t = MarketLogic.pctText(price, s.optDouble("prevClose"))
                     parts.add("Today $t")
-                    short += " $t today"
+                    short += "  aaj $t"
                 }
                 val since = MarketLogic.pctText(price, saved)
                 parts.add("Since saved (" + day.format(Date(s.optLong("savedAt"))) + ", " + MarketLogic.money(saved, currency) + ") " + since)
-                short += ", $since since saved"
+                short += ",  lock se $since"
                 val market = s.optLong("marketAt")
                 val extra = when {
                     !fresh -> "Could not get today's price. Showing the last one."
@@ -548,21 +548,25 @@ object Market {
                 }
                 val news = JSONArray()
                 val query = MarketLogic.companyQuery(name)
-                val first = BrainLogic.tokens(query).firstOrNull().orEmpty()
-                get(rss("$query share"))?.let { xml ->
-                    WatchLogic.news(xml).filter { first.isEmpty() || first in it.title.lowercase(Locale.ENGLISH) }
+                // Sirf isi company ki khabar: naam ke saare shabd heading mein hon
+                get(rss("\"$query\" share"))?.let { xml ->
+                    WatchLogic.news(xml).filter { MarketLogic.aboutCompany(it.title, query) && !MarketLogic.foreignNews(it.title) }
                         .sortedByDescending { MarketLogic.pubTime(it.date) }.take(SHARE_NEWS)
-                        .forEach { news.put(JSONObject().put("t", it.title).put("l", it.link)) }
+                        .forEach { news.put(JSONObject().put("t", MarketLogic.cleanTitle(it.title)).put("s", MarketLogic.publisher(it.title)).put("l", it.link)) }
                 }
-                items.put(JSONObject().put("name", name).put("text", parts.joinToString("  ·  ")).put("extra", extra)
-                    .put("up", MarketLogic.pct(price, saved)).put("news", news))
+                val item = JSONObject().put("name", name).put("code", s.optString("symbol").substringBefore('.')).put("text", parts.joinToString("  ·  "))
+                    .put("extra", extra).put("up", MarketLogic.pct(price, saved)).put("news", news)
+                    .put("price", price).put("currency", currency).put("saved", saved).put("savedAt", s.optLong("savedAt"))
+                    .put("fresh", fresh).put("closed", market > 0 && MarketLogic.dayKey(market, zone) != today)
+                if (fresh && s.has("prevClose")) item.put("today", MarketLogic.pct(price, s.optDouble("prevClose")))
+                items.put(item)
                 note.add("$name $short")
             }
             val list = reports(c).toMutableList()
             list.add(0, JSONObject().put("at", started).put("items", items))
             prefs(c).edit().putString("reports", JSONArray(list.take(MAX_REPORTS)).toString()).apply()
             if (scheduled || got > 0) {
-                Watcher.alertNow(c, REPORT_NOTE, "Share report", note.take(NOTE_LINES).joinToString("\n") + (if (note.size > NOTE_LINES) "\n…and " + (note.size - NOTE_LINES) + " more in Sahayak" else ""), "", MarketActivity::class.java)
+                Watcher.alertNow(c, REPORT_NOTE, "Share report: aaj ka hisaab", note.take(NOTE_LINES).joinToString("\n") + (if (note.size > NOTE_LINES) "\n…aur " + (note.size - NOTE_LINES) + " shares Sahayak mein" else ""), "", MarketActivity::class.java)
             }
             return if (got == 0) "Could not get prices. " + lastError else "Report ready"
         } finally {
