@@ -41,6 +41,17 @@ object MarketLogic {
         }
     }
 
+    // ---------- Locked shares ke group ----------
+
+    private val LOCK_FROM = Regex("(?i)^(smallcap|midcap|largecap) green scorecard: ([0-9]) of ([0-9])")
+
+    /** "Smallcap green scorecard: 5 of 6 green" se (Smallcap, 5). Green list se na aaya ho to null. */
+    fun lockGroup(fromTitle: String): Pair<String, Int>? {
+        val m = LOCK_FROM.find(fromTitle.trim()) ?: return null
+        val cap = m.groupValues[1].lowercase(Locale.ENGLISH).replaceFirstChar { it.uppercase() }
+        return cap to m.groupValues[2].toInt()
+    }
+
     // ---------- Chart ----------
 
     /** Chart ka ek button: naam, Yahoo ka range aur har bindu ka antar. */

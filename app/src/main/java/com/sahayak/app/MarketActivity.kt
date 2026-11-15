@@ -39,7 +39,7 @@ class MarketActivity : Activity() {
     private lateinit var newsBox: LinearLayout
     private var newsOpen = false
     private var reportsOpen = false
-    private var sharesOpen = false
+    private val closedCaps = mutableSetOf<String>()
     private var loading = true
     private lateinit var greenStatus: TextView
     private lateinit var greenFresh: Button
@@ -413,9 +413,8 @@ class MarketActivity : Activity() {
             sharesBox.addView(text("No share locked yet.", 14f, false, GREY))
             return
         }
-        // Naya lock kiya share sabse upar. Ek line mein 3 dabbe. Lock ka bhaav hi tulna ka point
+        // Pehle Smallcap (6, 5, 4 of 6 green), phir Midcap, phir Largecap, aakhir mein khabar ya naam se lock kiye
         val ordered = shares.sortedByDescending { it.optLong("savedAt") }
-        val shown = ordered.take(if (sharesOpen) ordered.size else TILE_ROWS * TILES)
         var up = 0
         var down = 0
         ordered.forEach {
@@ -423,18 +422,59 @@ class MarketActivity : Activity() {
             if (c > 0.004) up++ else if (c < -0.004) down++
         }
         sharesBox.addView(text(ordered.size.toString() + " locked  ·  ▲ $up up  ·  ▼ $down down since lock. Tap a box for its chart.", 13f, true, GREY))
-        shown.chunked(TILES).forEach { line ->
+        val groups = ordered.groupBy { MarketLogic.lockGroup(it.optString("fromTitle")) }
+        val sections = listOf("Smallcap", "Midcap", "Largecap").map { cap ->
+            cap to (GreenList.MAX_GREEN downTo GreenList.MIN_GREEN).map { n -> n to groups[cap to n].orEmpty() }
+        }
+        sections.forEach { (cap, parts) ->
+            val total = parts.sumOf { it.second.size }
+            if (total == 0) return@forEach
+            val open = cap !in closedCaps
+            sharesBox.addView(section((if (open) "▼ " else "▶ ") + cap + "  ($total)") {
+                if (open) closedCaps.add(cap) else closedCaps.remove(cap)
+                render()
+            })
+            if (!open) return@forEach
+            parts.forEach { (n, list) ->
+                if (list.isEmpty()) return@forEach
+                sharesBox.addView(text("$n of " + GreenList.MAX_GREEN + " green  (" + list.size + ")", 14f, true, if (n == GreenList.MAX_GREEN) GREEN else TEAL))
+                grid(list)
+            }
+        }
+        val other = groups[null].orEmpty()
+        if (other.isNotEmpty()) {
+            val open = OTHER !in closedCaps
+            sharesBox.addView(section((if (open) "▼ " else "▶ ") + "From news or typed  (" + other.size + ")") {
+                if (open) closedCaps.add(OTHER) else closedCaps.remove(OTHER)
+                render()
+            })
+            if (open) grid(other)
+        }
+    }
+
+    /** Group ka naam: bada, tap karke band ya khulta hai. */
+    private fun section(words: String, action: () -> Unit) = TextView(this).apply {
+        text = words
+        textSize = 17f
+        setTextColor(0xFFFFFFFF.toInt())
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setPadding(dp(12), dp(9), dp(12), dp(9))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(INK)
+            cornerRadius = dp(8).toFloat()
+        }
+        setOnClickListener { action() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) }
+    }
+
+    /** Ek line mein 3 dabbe. */
+    private fun grid(list: List<org.json.JSONObject>) {
+        list.chunked(TILES).forEach { line ->
             val row = LinearLayout(this)
             line.forEach { s -> row.addView(tile(s), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) }) }
             // Khaali jagah taaki aakhri line ke dabbe bhi same size ke rahein
             repeat(TILES - line.size) { row.addView(android.view.View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { setMargins(dp(3), 0, dp(3), 0) }) }
             sharesBox.addView(row)
-        }
-        if (ordered.size > TILE_ROWS * TILES) {
-            sharesBox.addView(button(if (sharesOpen) "▲ Less" else "▼ More (" + (ordered.size - TILE_ROWS * TILES) + " shares)") {
-                sharesOpen = !sharesOpen
-                render()
-            })
         }
     }
 
@@ -551,7 +591,7 @@ class MarketActivity : Activity() {
         private const val REFRESH_MS = 15_000L
         private const val NEWS_ROWS = 10
         private const val TILES = 3
-        private const val TILE_ROWS = 2
+        private const val OTHER = "other"
         private const val CHIP_GREEN = 0xFF16A34A.toInt()
         private const val CHIP_RED = 0xFFDC2626.toInt()
         private const val CHIP_GREY = 0xFF98A2B3.toInt()

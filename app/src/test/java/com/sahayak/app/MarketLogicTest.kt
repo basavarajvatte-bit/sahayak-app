@@ -212,4 +212,11 @@ class MarketLogicTest {
         assertNull(MarketLogic.parseSeries("""{"chart":{"result":[{"meta":{},"timestamp":[1],"indicators":{"quote":[{"close":[5.0]}]}}]}}"""))
         assertNull(MarketLogic.parseSeries("blocked"))
     }
+
+    @Test fun groupsLockedSharesByCapAndGreen() {
+        assertEquals("Smallcap" to 5, MarketLogic.lockGroup("Smallcap green scorecard: 5 of 6 green"))
+        assertEquals("Largecap" to 4, MarketLogic.lockGroup("Largecap green scorecard: 4 of 6 green"))
+        assertNull(MarketLogic.lockGroup("Patanjali Foods Q2 results: Net profit falls 18.8%"))
+        assertNull(MarketLogic.lockGroup(""))
+    }
 }
