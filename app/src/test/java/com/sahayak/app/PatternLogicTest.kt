@@ -6,6 +6,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
+import java.util.TimeZone
 
 class PatternLogicTest {
     private fun p(id: String) = PatternLogic.byId(id)!!
@@ -107,5 +109,51 @@ class PatternLogicTest {
         assertEquals("▲ 2.00%", PatternLogic.signed(2.0))
         assertEquals("▼ 0.50%", PatternLogic.signed(-0.5))
         assertNotNull(PatternLogic.byId("usfda"))
+    }
+
+    @Test fun readsAPastedDividendList() {
+        val pasted = """Company
+Dividend/share
+Record Date
+Ashok Leyland
+₹1.00
+20 Nov
+Oil India
+₹7.00
+20 Nov
+A.K. Capital Services
+₹18.00
+18 Nov
+Shipping Corporation of India
+₹4.00
+16 Nov"""
+        val rows = PatternLogic.parseList(pasted)
+        assertEquals(4, rows.size)
+        assertEquals(PatternLogic.Row("Ashok Leyland", "₹1.00 · record 20 Nov"), rows[0])
+        assertEquals(PatternLogic.Row("A.K. Capital Services", "₹18.00 · record 18 Nov"), rows[2])
+        assertEquals(PatternLogic.Row("Shipping Corporation of India", "₹4.00 · record 16 Nov"), rows[3])
+        val tabs = PatternLogic.parseList("Cochin Shipyard\t₹3.00\t16 Nov\nIndag Rubber | ₹0.90 | 16 Nov\nTCS")
+        assertEquals(listOf("Cochin Shipyard", "Indag Rubber", "TCS"), tabs.map { it.company })
+        assertEquals("₹0.90 · record 16 Nov", tabs[1].detail)
+        assertTrue(PatternLogic.parseList("₹1.00\n20 Nov\n").isEmpty())
+    }
+
+    @Test fun dividendRecordDateNewsCounts() {
+        assertTrue(PatternLogic.matches(p("dividend"), "Oil India fixes record date for interim dividend of Rs 7 per share"))
+        assertTrue(PatternLogic.matches(p("dividend"), "Cochin Shipyard dividend: Rs 3 per share, record date November 16"))
+        assertFalse(PatternLogic.matches(p("dividend"), "Top 10 dividend stocks to buy this week"))
+    }
+
+    @Test fun oldNewsUsesTheNewsDayClose() {
+        val d = PatternLogic.parseDaily(chart(days, "100,102,104,110,112", null))!!
+        // Khabar 12 Nov ki (raat ko), 13 aur 16 ka bhaav baad mein
+        val event = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply { set(2026, Calendar.NOVEMBER, 12, 20, 0, 0) }.timeInMillis
+        assertEquals(PatternLogic.Base("2026-11-12", 104.0, false), PatternLogic.baseOn(d, event))
+        val t = PatternLogic.track(d, PatternLogic.baseOn(d, event)!!, 104.0)!!
+        assertEquals((112.0 - 104.0) / 104.0 * 100, t.now, 0.001)
+        assertEquals((110.0 - 104.0) / 104.0 * 100, t.steps[0]!!, 0.001)
+        // Shanivar ki khabar: shukravar ka band bhaav
+        val saturday = Calendar.getInstance(TimeZone.getTimeZone("Asia/Kolkata")).apply { set(2026, Calendar.NOVEMBER, 14, 11, 0, 0) }.timeInMillis
+        assertEquals("2026-11-13", PatternLogic.baseOn(d, saturday)!!.date)
     }
 }

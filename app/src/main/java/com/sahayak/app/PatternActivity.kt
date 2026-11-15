@@ -115,7 +115,39 @@ class PatternActivity : Activity() {
                 render()
             }
         })
-        page.addView(button("Scan news now") { work("Reading news") { Patterns.run(app, false) } })
+        page.addView(button("Scan news now (last 7 days)") { work("Reading news") { Patterns.run(app, false) } })
+
+        // ----- Apni list se jodna -----
+        val paste = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(0xFFFFFFFF.toInt(), 10)
+            setPadding(dp(12), dp(8), dp(12), dp(10))
+        }
+        paste.addView(text("Add shares by hand", 15f, true))
+        paste.addView(text("Paste a list (like a dividend list) or type one company per line. They are locked at today's verified price.", 13f, false, GREY))
+        val names = PatternLogic.ALL.map { it.label }
+        val choose = android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(this@PatternActivity, android.R.layout.simple_spinner_dropdown_item, names)
+        }
+        paste.addView(choose)
+        val listBox = android.widget.EditText(this).apply {
+            hint = "Ashok Leyland\n₹1.00\n20 Nov\nOil India\n₹7.00\n20 Nov"
+            minLines = 4
+            gravity = android.view.Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        paste.addView(listBox)
+        paste.addView(button("Lock these shares") {
+            val pattern = PatternLogic.ALL[choose.selectedItemPosition.coerceIn(0, PatternLogic.ALL.lastIndex)]
+            val words = listBox.text.toString()
+            open.add(pattern.id)
+            work("Locking shares") {
+                val answer = Patterns.addList(app, pattern.id, words)
+                if (answer.startsWith("Locked") && !answer.startsWith("Locked 0")) main.post { listBox.setText("") }
+                answer
+            }
+        })
+        page.addView(paste, wide(8))
         page.addView(button("Update results now") { work("Updating") { Patterns.refresh(app) } })
         status = text("", 14f, true, TEAL)
         page.addView(status)
@@ -131,6 +163,7 @@ class PatternActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Patterns.rearm(this)
         render()
         if (Patterns.running()) main.post(tick)
     }
@@ -247,8 +280,12 @@ class PatternActivity : Activity() {
             setOnClickListener { open(lock.optString("link")) }
         })
         card.addView(text(
-            (if (lock.optBoolean("ai")) "AI-checked event" else "Not AI-checked (AI was not available)") + "  ·  Price from " + lock.optInt("sources", 1) +
-                (if (lock.optInt("sources", 1) == 1) " source" else " sources"), 12f, false, GREY
+            when {
+                lock.optBoolean("manual") -> "Added by you"
+                lock.optBoolean("ai") -> "AI-checked event"
+                else -> "Not AI-checked (AI was not available)"
+            } + "  ·  " + (if (lock.optBoolean("eventDay")) "Lock price = closing price on the news day " + lock.optString("baseDate")
+            else "Price from " + lock.optInt("sources", 1) + (if (lock.optInt("sources", 1) == 1) " source" else " sources")), 12f, false, GREY
         ))
         val actions = LinearLayout(this).apply { gravity = android.view.Gravity.END }
         actions.addView(button("Tickertape") {

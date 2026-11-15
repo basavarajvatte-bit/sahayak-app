@@ -25,9 +25,9 @@ object PatternLogic {
 
     val ALL = listOf(
         Pattern(
-            "dividend", "Dividend", "Company announces a dividend", "dividend declares OR announces OR recommends per share",
-            listOf(r("""\bdividends?\b"""), r("""\b(declares?|declared|announces?|announced|recommends?|recommended|approves?|approved|board)\b""")),
-            r("""\b(ex-?dividend|ex-?date|record date today|stocks? to watch|dividend stocks|yield stocks|should you|mutual fund|trade ex)\b""")
+            "dividend", "Dividend", "Company announces a dividend or fixes its record date", "dividend per share declares OR announces OR \"record date\"",
+            listOf(r("""\bdividends?\b"""), r("""\b(declares?|declared|announces?|announced|recommends?|recommended|approves?|approved|board|record date|fixes|sets|per share|rs|₹)\b""")),
+            r("""\b(stocks? to watch|dividend stocks|yield stocks|should you|mutual fund|these stocks|top \d+|\d+ stocks)\b""")
         ),
         Pattern(
             "split", "Stock split", "Company announces a split of its shares", "\"stock split\" OR \"share split\" OR sub-division board approves",
@@ -208,6 +208,55 @@ object PatternLogic {
             return null
         }
     }
+
+    /** Khabar purani ho to us din ka band bhaav aadhaar: us din ya usse pehle ka aakhri bazaar ka din. */
+    fun baseOn(daily: Daily, eventMs: Long): Base? {
+        val want = day(eventMs)
+        val i = daily.days.indexOfLast { it <= want }
+        if (i < 0) return null
+        return Base(daily.days[i], daily.raw[i], false)
+    }
+
+    /** Chipkayi hui list ki ek line: company, uska detail (jaise ₹7.00), aur tarikh. */
+    data class Row(val company: String, val detail: String)
+
+    private val MONEY_LINE = Regex("""^\s*(₹|rs\.?|inr)\s*[0-9]""", RegexOption.IGNORE_CASE)
+    private val DATE_LINE = Regex("""^\s*[0-9]{1,2}[\s\-/](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(\s*[0-9]{2,4})?\s*$""", RegexOption.IGNORE_CASE)
+    private val NUMBER_LINE = Regex("""^[\s0-9.,:%₹/-]*$""")
+    private val HEADER = setOf("company", "companies", "dividend/share", "dividend", "record date", "ex-date", "ex date", "amount", "date", "name", "stock", "ratio", "details")
+
+    /**
+     * Chipkayi hui list padho. Har line par ek cheez ho (jaise aapki list) ya ek hi line mein tab ya | se alag.
+     * Company wali line ke baad aane wale ₹ aur tarikh us company ka detail bante hain.
+     */
+    fun parseList(text: String): List<Row> {
+        val out = mutableListOf<Row>()
+        var name = ""
+        val detail = mutableListOf<String>()
+        fun flush() {
+            if (name.isNotEmpty() && out.none { it.company.equals(name, true) }) out.add(Row(name, detail.joinToString(" · ")))
+            name = ""
+            detail.clear()
+        }
+        text.lines().flatMap { line -> line.split('\t', '|').map { it.trim() } }.filter { it.isNotEmpty() }.forEach { part ->
+            val lower = part.lowercase(Locale.ENGLISH)
+            when {
+                lower in HEADER -> Unit
+                MONEY_LINE.containsMatchIn(part) -> if (name.isNotEmpty()) detail.add(part)
+                DATE_LINE.matches(part) -> if (name.isNotEmpty()) detail.add("record " + part)
+                NUMBER_LINE.matches(part) -> Unit
+                part.length > 60 -> Unit
+                else -> {
+                    flush()
+                    name = part.trimEnd('.', ',', ':')
+                }
+            }
+        }
+        flush()
+        return out.take(MAX_PASTE)
+    }
+
+    private const val MAX_PASTE = 60
 
     /** Lock ke samay ka aadhaar: kaunsa poora hua din, uska band bhaav, aur kya bazaar us waqt khula tha. */
     data class Base(val date: String, val close: Double, val intraday: Boolean)

@@ -12,7 +12,8 @@ object Patterns {
     const val ACTION = "com.sahayak.app.PATTERN_SCAN"
     private const val GAP_MS = 2 * 3_600_000L
     private const val TRACK_GAP_MS = 5 * 3_600_000L
-    private const val FRESH_MS = 36 * 3_600_000L
+    private const val FRESH_MS = 7 * 86_400_000L
+    private const val TODAY_MS = 20 * 3_600_000L
     private const val SAME_MS = 30 * 86_400_000L
     private const val ACTIVE_MS = 100 * 86_400_000L
     private const val MAX_LOCKS = 500
@@ -33,7 +34,7 @@ object Patterns {
 
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun on(c: Context) = prefs(c).getBoolean("on", false)
+    fun on(c: Context) = prefs(c).getBoolean("on", true)
 
     fun lastScan(c: Context) = prefs(c).getLong("last", 0L)
 
@@ -65,7 +66,7 @@ object Patterns {
     fun remove(c: Context, id: String) = change(c) { list -> list.removeAll { it.optString("id") == id } }
 
     private fun rss(query: String) =
-        "https://news.google.com/rss/search?q=" + URLEncoder.encode("$query when:1d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
+        "https://news.google.com/rss/search?q=" + URLEncoder.encode("$query when:7d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
 
     private fun daily(symbol: String, range: String): PatternLogic.Daily? {
         val enc = URLEncoder.encode(symbol, "UTF-8")
@@ -163,7 +164,7 @@ object Patterns {
             }
         }
 
-        val niftyDaily = daily(NIFTY, "1mo")
+        val niftyDaily = daily(NIFTY, "3mo")
         val niftyNow = Market.yahoo(NIFTY)?.price
         var added = 0
         val names = mutableListOf<String>()
@@ -194,12 +195,29 @@ object Patterns {
 
     /** Ek company ko ek pattern mein lock karo. Company, bhaav aur aadhaar teeno pakke hon tabhi. */
     private fun lock(
-        c: Context, cand: Candidate, company: String, detail: String, aiChecked: Boolean, niftyDaily: PatternLogic.Daily?, niftyNow: Double?
+        c: Context, cand: Candidate, company: String, detail: String, aiChecked: Boolean, niftyDaily: PatternLogic.Daily?, niftyNow: Double?,
+        manual: Boolean = false
     ): Boolean {
         val quote = Market.findIndian(company) ?: return false
         if (!PatternLogic.sameCompany(company, quote.name, quote.symbol)) return false
         val now = System.currentTimeMillis()
         if (locks(c).any { it.optString("p") == cand.pattern.id && it.optString("symbol") == quote.symbol && now - it.optLong("lockAt") < SAME_MS }) return false
+
+        // Khabar ek din se purani: us din ka band bhaav hi lock ka bhaav (taaki asar khabar ke din se gina jaaye)
+        if (!manual && now - cand.at > TODAY_MS) {
+            val history = daily(quote.symbol, "3mo") ?: return false
+            val base = PatternLogic.baseOn(history, cand.at) ?: return false
+            val item = JSONObject().put("id", now.toString() + "-" + quote.symbol).put("p", cand.pattern.id).put("symbol", quote.symbol).put("name", quote.name)
+                .put("slug", Market.tickertapeLink(quote.name, "", quote.symbol)?.removePrefix("https://www.tickertape.in").orEmpty())
+                .put("title", cand.title).put("link", cand.link).put("source", cand.source).put("detail", detail)
+                .put("eventAt", cand.at).put("lockAt", now).put("lockPrice", base.close).put("price", quote.price).put("ai", aiChecked)
+                .put("baseDate", base.date).put("baseClose", base.close).put("intraday", false).put("sources", 1).put("sure", true).put("eventDay", true)
+            niftyDaily?.let { n ->
+                PatternLogic.baseOn(n, cand.at)?.takeIf { it.date == base.date }?.let { nb -> item.put("nBaseClose", nb.close).put("nLock", nb.close) }
+            }
+            change(c) { it.add(item) }
+            return true
+        }
 
         // Bhaav kam se kam do jagah se mile tabhi lock
         val slug = Market.tickertapeLink(quote.name, "", quote.symbol)?.removePrefix("https://www.tickertape.in").orEmpty()
@@ -224,8 +242,37 @@ object Patterns {
             val i = niftyDaily.days.indexOf(base.date)
             if (i >= 0) item.put("nBaseClose", niftyDaily.raw[i]).put("nLock", if (base.intraday) niftyNow else niftyDaily.raw[i])
         }
+        if (manual) item.put("manual", true)
         change(c) { it.add(item) }
         return true
+    }
+
+    /**
+     * Aapki di hui list ke shares ek pattern mein aaj ke bhaav par lock karo.
+     * Pehle line padhne ke niyam; kuch na mile aur AI ho to AI se company nikalwao.
+     */
+    fun addList(c: Context, patternId: String, text: String): String {
+        val pattern = PatternLogic.byId(patternId) ?: return "Choose a pattern"
+        val rows = PatternLogic.parseList(text)
+        if (rows.isEmpty()) return "No company name found. Put one company per line"
+        if (!busy.compareAndSet(false, true)) return "Pattern study is already running"
+        try {
+            val niftyDaily = daily(NIFTY, "3mo")
+            val niftyNow = Market.yahoo(NIFTY)?.price
+            val now = System.currentTimeMillis()
+            var added = 0
+            val missed = mutableListOf<String>()
+            rows.forEachIndexed { i, row ->
+                progress = "Locking " + row.company + " (" + (i + 1) + " of " + rows.size + ")"
+                val cand = Candidate(pattern, "Added by you: " + row.company + (if (row.detail.isNotEmpty()) " · " + row.detail else ""), "", now, "")
+                if (lock(c, cand, row.company, row.detail, false, niftyDaily, niftyNow, true)) added++ else missed.add(row.company)
+            }
+            return "Locked $added of " + rows.size + " in " + pattern.label +
+                (if (missed.isNotEmpty()) ". Not locked (not found, price unclear or already there): " + missed.take(8).joinToString(", ") else "")
+        } finally {
+            progress = ""
+            busy.set(false)
+        }
     }
 
     /** Har chalte lock ka hisaab: ab tak aur 1 din, 1 hafta, 1 mahina, 3 mahine baad, Nifty ke saath. */

@@ -302,6 +302,7 @@ class MarketActivity : Activity() {
         main.post(refresh)
         if (GreenList.running()) main.post(greenTick)
         if (Market.verifying()) main.post(verifyTick)
+        Patterns.rearm(this)
         // Jin locked shares ka sector nahi pata, peeche se dhoondh lo
         val app = applicationContext
         Thread {
