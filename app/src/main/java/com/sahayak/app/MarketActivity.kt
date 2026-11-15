@@ -428,6 +428,9 @@ class MarketActivity : Activity() {
                 box.setOnClickListener { openGreen(row) }
                 val locked = Market.shares(this).any { it.optString("symbol").substringBefore('.') == ticker && ticker.isNotEmpty() }
                 val actions = LinearLayout(this).apply { gravity = Gravity.END }
+                actions.addView(button("🛒 Buy") {
+                    BuyDialog.show(this, row.optString("ticker"), row.optString("name"), row.optString("slug")) { greenStatus.text = it }
+                })
                 actions.addView(button(if (locked) "✓ Locked" else "🔒 Lock at today's price") {
                     if (!locked) lockGreen(row, count)
                 }.apply { isEnabled = !locked })
@@ -584,6 +587,20 @@ class MarketActivity : Activity() {
         box.addView(line(MarketLogic.pctText(price, saved), 18f, true, ink))
         box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))
         box.addView(line(day.format(Date(s.optLong("savedAt"))) + if (MarketLogic.indianSymbol(s.optString("symbol"))) "" else "  ·  Foreign", 11f, false, soft))
+        // Chhota Buy button: dummy fund mein kharido
+        box.addView(TextView(this).apply {
+            text = "🛒 Buy"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(INK)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, dp(3), 0, dp(3))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xF2FFFFFF.toInt())
+                cornerRadius = dp(6).toFloat()
+            }
+            setOnClickListener { BuyDialog.show(this@MarketActivity, s.optString("symbol"), s.optString("name"), s.optString("slug")) { shareStatus.text = it } }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
         return box
     }
 

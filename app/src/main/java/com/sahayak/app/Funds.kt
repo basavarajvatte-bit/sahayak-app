@@ -75,8 +75,25 @@ object Funds {
         if (holdings(fund).length() >= MAX_HOLDINGS) return "Ek fund mein zyada se zyada $MAX_HOLDINGS shares"
         progress = "$typed dhoondh raha hu"
         val quote = Market.findIndian(typed.trim()) ?: return "\"$typed\" NSE/BSE par nahi mila. NSE code try karo, jaise RELIANCE"
+        return buyQuote(c, fundId, quote, amount, "")
+    }
+
+    /** Share ka NSE code pata ho (green list, My shares, pattern): seedha wahi share, naam se dhoondhe bina. */
+    fun buySymbol(c: Context, fundId: String, symbol: String, name: String, slug: String, amount: Double): String {
+        val fund = get(c, fundId) ?: return "Fund nahi mila"
+        if (amount <= 0) return "Kitne rupaye ka kharidna hai, wo likho"
+        if (holdings(fund).length() >= MAX_HOLDINGS) return "Ek fund mein zyada se zyada $MAX_HOLDINGS shares"
+        progress = "$name ka bhaav jaanch raha hu"
+        val code = symbol.substringBefore('.')
+        val quote = (if (symbol.contains('.')) Market.yahoo(symbol) else null) ?: Market.yahoo("$code.NS") ?: Market.yahoo("$code.BO") ?: Market.findIndian(name)
+            ?: return "$name ka bhaav nahi mila. Internet check karo"
+        return buyQuote(c, fundId, quote.copy(name = name.ifEmpty { quote.name }), amount, slug)
+    }
+
+    private fun buyQuote(c: Context, fundId: String, quote: MarketLogic.Quote, amount: Double, knownSlug: String): String {
         progress = quote.name + " ka bhaav jaanch raha hu"
-        val slug = Market.tickertapeLink(quote.name, "", quote.symbol)?.removePrefix("https://www.tickertape.in").orEmpty()
+        val slug = knownSlug.takeIf { it.startsWith("/stocks/") }
+            ?: Market.tickertapeLink(quote.name, "", quote.symbol)?.removePrefix("https://www.tickertape.in").orEmpty()
         val (price, sources) = checked(quote.symbol, slug, quote.price) ?: return quote.name + " ka bhaav alag jagah alag aa raha hai. Thodi der baad try karo"
         val qty = FundLogic.shares(amount, price)
         if (qty == 0) return FundLogic.rupees(amount) + " mein " + quote.name + " ka ek bhi share nahi aata (1 share = " + FundLogic.rupees(price) + ")"
@@ -90,7 +107,8 @@ object Funds {
         nifty?.let { prefs(c).edit().putFloat("nifty", it.toFloat()).apply() }
         progress = ""
         val spent = qty * price
-        return "Kharida: " + quote.name + "  " + qty + " share × " + FundLogic.rupees(price) + " = " + FundLogic.rupees(spent) +
+        val fundName = get(c, fundId)?.optString("name").orEmpty()
+        return "Kharida ($fundName): " + quote.name + "  " + qty + " share × " + FundLogic.rupees(price) + " = " + FundLogic.rupees(spent) +
             (if (amount - spent >= 1) "  (" + FundLogic.rupees(amount - spent) + " bacha)" else "")
     }
 

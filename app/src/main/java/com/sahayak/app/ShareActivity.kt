@@ -230,6 +230,9 @@ class ShareActivity : Activity() {
         loadFinance()
 
         val row = LinearLayout(this)
+        row.addView(button("🛒 Buy") {
+            BuyDialog.show(this, share.optString("symbol"), share.optString("name"), share.optString("slug")) { status.text = it }
+        }, part())
         row.addView(button("Tickertape") { tickertape() }, part())
         row.addView(button("News") {
             open("https://news.google.com/search?q=" + URLEncoder.encode(MarketLogic.companyQuery(share.optString("name")) + " share", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en")

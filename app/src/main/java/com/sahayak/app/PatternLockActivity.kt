@@ -196,6 +196,9 @@ class PatternLockActivity : Activity() {
             val slug = lock.optString("slug")
             status.text = Market.openTickertape(this, if (slug.startsWith("/stocks/")) "https://www.tickertape.in$slug" else null, lock.optString("symbol"))
         }, part(1f))
+        row.addView(button("🛒 Buy") {
+            BuyDialog.show(this, lock.optString("symbol"), lock.optString("name"), lock.optString("slug")) { status.text = it }
+        }, part(1f))
         row.addView(button("Remove") {
             Patterns.remove(this, lock.optString("id"))
             finish()
