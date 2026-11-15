@@ -96,11 +96,8 @@ object BuyDialog {
 
     /** Munger ki checklist ke dabbe: samajhta hu?, kyun?, kya galat ho sakta hai? */
     class Thinking(private val understand: android.widget.CheckBox, private val why: EditText, private val risks: EditText) {
-        fun problem(): String? = when {
-            why.text.isBlank() -> "Pehle likho: ye share kyun le rahe ho?"
-            risks.text.isBlank() -> "Pehle likho: kya galat ho sakta hai? (Munger: ulta socho)"
-            else -> null
-        }
+        /** Sab optional hai: kuch bhi na likho to bhi kharid hoga. */
+        fun problem(): String? = null
 
         fun thought() = Funds.Thought(why.text.toString(), risks.text.toString(), understand.isChecked)
     }
@@ -108,7 +105,7 @@ object BuyDialog {
     fun thinking(a: Activity, page: LinearLayout): Thinking {
         val d = a.resources.displayMetrics.density
         page.addView(TextView(a).apply {
-            text = "🧠 Khareedne se pehle socho"
+            text = "🧠 Khareedne se pehle socho (optional)"
             textSize = 15f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setPadding(0, (14 * d).toInt(), 0, 0)
@@ -116,17 +113,17 @@ object BuyDialog {
         val understand = android.widget.CheckBox(a).apply { text = "Main ye dhandha samajhta hu (kaise kamati hai)" }
         page.addView(understand)
         val why = EditText(a).apply {
-            hint = "Ye share kyun le raha hu? (1-2 line)"
+            hint = "Kyun le raha hu? (optional)"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
         page.addView(why)
         val risks = EditText(a).apply {
-            hint = "Kya galat ho sakta hai? (2-3 khatre)"
+            hint = "Kya galat ho sakta hai? (optional)"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
         page.addView(risks)
         page.addView(TextView(a).apply {
-            text = "Ye diary mein save hoga. 3, 6 aur 12 mahine baad app poochega ki aapka kaaran sahi nikla ya nahi."
+            text = "Khaali chhod sakte ho. Likhoge to diary mein save hoga, aur 3, 6, 12 mahine baad app poochega ki kaaran sahi nikla ya nahi."
             textSize = 12f
             setTextColor(0xFF667085.toInt())
         })
