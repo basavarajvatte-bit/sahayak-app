@@ -28,5 +28,6 @@ jobs:
         run: |
           cp app/build/outputs/apk/release/app-release.apk sahayak.apk
           cp todo/build/outputs/apk/release/todo-release.apk chhotu-todo.apk
+          cp market/build/outputs/apk/release/market-release.apk market-watch.apk
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest sahayak.apk chhotu-todo.apk --title "Sahayak test app" --notes "Sirf test ke liye." --latest
+          gh release create latest sahayak.apk chhotu-todo.apk market-watch.apk --title "Sahayak test app" --notes "Sirf test ke liye." --latest

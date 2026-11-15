@@ -6,3 +6,4 @@ dependencyResolutionManagement {
 rootProject.name = "sahayak-app"
 include(":app")
 include(":todo")
+include(":market")
