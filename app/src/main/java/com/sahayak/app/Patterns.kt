@@ -69,6 +69,29 @@ object Patterns {
     private fun rss(query: String) =
         "https://news.google.com/rss/search?q=" + URLEncoder.encode("$query when:7d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
 
+    /** Pattern locks ka valuation (Tickertape), din mein ek baar. Kuch badla ho to true. */
+    fun fillValuations(c: Context): Boolean {
+        var changed = false
+        val now = System.currentTimeMillis()
+        locks(c).forEach { l ->
+            if (now - l.optLong("valAt") < 20 * 3_600_000L) return@forEach
+            val slug = l.optString("slug").takeIf { it.startsWith("/stocks/") }
+                ?: Market.tickertapeLink(l.optString("name"), "", l.optString("symbol"))?.removePrefix("https://www.tickertape.in").orEmpty()
+            val tag = Market.valuationOf(slug)
+            change(c) { list ->
+                list.firstOrNull { it.optString("id") == l.optString("id") }?.let {
+                    it.put("valAt", now)
+                    if (slug.startsWith("/stocks/")) it.put("slug", slug)
+                    if (tag != it.optString("valuation")) {
+                        it.put("valuation", tag)
+                        changed = true
+                    }
+                }
+            }
+        }
+        return changed
+    }
+
     /** Detail page ke graph ke liye roz ke band bhaav. */
     fun history(symbol: String, range: String): PatternLogic.Daily? = daily(symbol, range)
 

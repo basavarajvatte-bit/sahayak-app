@@ -116,6 +116,18 @@ class ShareActivity : Activity() {
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) })
         }
         page.addView(code)
+        share.optString("valuation").takeIf { it.isNotEmpty() }?.let { tag ->
+            val low = MarketLogic.lowValuation(tag)
+            page.addView(text(
+                (if (low) "💰 Valuation: Low (Tickertape) — bazaar ke ausat se sasta" else "Valuation (Tickertape): $tag"),
+                14f, true, if (low) 0xFF8A5A00.toInt() else GREY
+            ).apply {
+                if (low) {
+                    background = rounded(0xFFFFE8A3.toInt(), 6)
+                    setPadding(dp(8), dp(4), dp(8), dp(4))
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
+        }
 
         val top = LinearLayout(this).apply {
             gravity = Gravity.BOTTOM

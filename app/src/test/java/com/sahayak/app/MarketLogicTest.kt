@@ -309,4 +309,14 @@ class MarketLogicTest {
         assertTrue(MarketLogic.sessionSince(at("2026-11-13 17:00"), at("2026-11-16 09:30")))
         assertTrue(MarketLogic.sessionSince(at("2026-11-13 11:00"), at("2026-11-13 11:01")))
     }
+
+    @Test fun readsValuationTag() {
+        val json = """{"success":true,"data":[{"name":"Performance","tag":"Avg"},{"name":"Valuation","tag":"Low","colour":"green"},{"name":"Growth","tag":"High"}]}"""
+        assertEquals("Low", MarketLogic.scoreTag(json, "Valuation"))
+        assertEquals("Avg", MarketLogic.scoreTag(json, "performance"))
+        assertEquals("", MarketLogic.scoreTag(json, "Red flags"))
+        assertEquals("", MarketLogic.scoreTag("blocked", "Valuation"))
+        assertTrue(MarketLogic.lowValuation("Low"))
+        assertFalse(MarketLogic.lowValuation("High"))
+    }
 }

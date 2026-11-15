@@ -812,6 +812,23 @@ object MarketLogic {
         }
     }
 
+    /** Scorecard ki ek line ka tag (jaise Valuation -> "Low"). Na mile to khaali. */
+    fun scoreTag(json: String, name: String): String {
+        try {
+            val items = JSONObject(json).optJSONArray("data") ?: return ""
+            for (i in 0 until items.length()) {
+                val item = items.optJSONObject(i) ?: continue
+                if (str(item, "name").equals(name, true)) return str(item, "tag")
+            }
+        } catch (e: JSONException) {
+            return ""
+        }
+        return ""
+    }
+
+    /** Tickertape ka "Low" valuation matlab bazaar ke ausat se sasta. */
+    fun lowValuation(tag: String) = tag.equals("Low", true)
+
     /** Scorecard ka jawab: (kitni hari, kul kitni). Samajh na aaye to null. */
     fun parseScorecard(json: String): Pair<Int, Int>? {
         try {

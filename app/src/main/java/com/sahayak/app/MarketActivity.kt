@@ -83,6 +83,20 @@ class MarketActivity : Activity() {
         setPadding(0, dp(5), 0, dp(3))
     }
 
+    /** Chhota peela nishan: Tickertape par Low valuation. */
+    private fun valueTag() = TextView(this).apply {
+        text = "💰 Low valuation"
+        textSize = 11f
+        setTextColor(0xFF8A5A00.toInt())
+        setTypeface(typeface, android.graphics.Typeface.BOLD)
+        setPadding(dp(5), dp(1), dp(5), dp(1))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFFFFE8A3.toInt())
+            cornerRadius = dp(5).toFloat()
+        }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) }
+    }
+
     /** Badha to hara dabba, gira to laal, barabar to grey. Safed akshar. */
     private fun chip(words: String, change: Double) = TextView(this).apply {
         text = words
@@ -310,7 +324,7 @@ class MarketActivity : Activity() {
         val app = applicationContext
         Thread {
             val changed = try {
-                Market.fillSectors(app)
+                Market.fillSectors(app) or Market.fillValuations(app)
             } catch (e: org.json.JSONException) {
                 false
             }
@@ -425,6 +439,7 @@ class MarketActivity : Activity() {
                 val ticker = row.optString("ticker")
                 box.addView(text(row.optString("name") + (if (ticker.isNotEmpty()) "  ($ticker)" else ""), 16f, true))
                 box.addView(text(row.optInt("green").toString() + " of " + row.optInt("total") + " green  ·  Open in Tickertape", 13f, true, if (count == GreenList.MAX_GREEN) GREEN else TEAL))
+                if (MarketLogic.lowValuation(row.optString("valuation"))) box.addView(valueTag())
                 box.setOnClickListener { openGreen(row) }
                 val locked = Market.shares(this).any { it.optString("symbol").substringBefore('.') == ticker && ticker.isNotEmpty() }
                 val actions = LinearLayout(this).apply { gravity = Gravity.END }
@@ -491,6 +506,20 @@ class MarketActivity : Activity() {
             if (c > 0.004) up++ else if (c < -0.004) down++
         }
         sharesBox.addView(text(ordered.size.toString() + " locked  ·  ▲ $up up  ·  ▼ $down down since lock. Tap a box for its chart.", 13f, true, GREY))
+        // Tickertape par "Low" valuation wale (bazaar ke ausat se saste) alag se
+        val cheap = ordered.filter { MarketLogic.lowValuation(it.optString("valuation")) }
+        val valueBox = card()
+        valueBox.background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(0xFFFFF4D6.toInt())
+            cornerRadius = dp(10).toFloat()
+        }
+        valueBox.addView(text("💰 Low valuation (Tickertape): " + cheap.size + " of " + ordered.size, 15f, true, 0xFF8A5A00.toInt()))
+        valueBox.addView(text(
+            if (cheap.isEmpty()) "Abhi kisi locked share ka valuation Low nahi hai (ya abhi check ho raha hai)."
+            else cheap.joinToString(",  ") { it.optString("symbol").substringBefore('.') }, 14f, true
+        ))
+        valueBox.addView(text("Low valuation = Tickertape ke hisaab se bhaav bazaar ke ausat se sasta. Din mein ek baar check hota hai.", 12f, false, GREY))
+        sharesBox.addCard(valueBox)
         val sure = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == true }
         val doubt = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == false }
         val last = Market.lastVerify(this)
@@ -587,6 +616,7 @@ class MarketActivity : Activity() {
         box.addView(line(MarketLogic.pctText(price, saved), 18f, true, ink))
         box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))
         box.addView(line(day.format(Date(s.optLong("savedAt"))) + if (MarketLogic.indianSymbol(s.optString("symbol"))) "" else "  ·  Foreign", 11f, false, soft))
+        if (MarketLogic.lowValuation(s.optString("valuation"))) box.addView(valueTag())
         // Chhota Buy button: dummy fund mein kharido
         box.addView(TextView(this).apply {
             text = "🛒 Buy"

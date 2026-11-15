@@ -419,6 +419,32 @@ object Market {
         return changed
     }
 
+    private const val VALUE_KEEP_MS = 20 * 3_600_000L
+
+    /** Tickertape scorecard se Valuation ka tag (Low, Avg, High). Na mile to khaali. */
+    fun valuationOf(slug: String): String {
+        val sid = slug.substringAfterLast('-', "")
+        if (sid.isEmpty()) return ""
+        return tape("https://analyze.api.tickertape.in/stocks/scorecard/$sid")?.let { MarketLogic.scoreTag(it, "Valuation") }.orEmpty()
+    }
+
+    /** Locked shares ka valuation, din mein ek baar. Kuch badla ho to true. */
+    fun fillValuations(c: Context): Boolean {
+        var changed = false
+        val now = System.currentTimeMillis()
+        shares(c).forEach { s ->
+            if (!MarketLogic.indianSymbol(s.optString("symbol")) || now - s.optLong("valAt") < VALUE_KEEP_MS) return@forEach
+            val tag = valuationOf(slugOf(c, s))
+            if (tag.isEmpty() && lastError == "No internet") return changed
+            setField(c, s.optString("id"), "valAt", now)
+            if (tag != s.optString("valuation")) {
+                setField(c, s.optString("id"), "valuation", tag)
+                changed = true
+            }
+        }
+        return changed
+    }
+
     /**
      * Saal dar saal revenue aur profit (₹ crore). Pehle Tickertape, na mile to Yahoo.
      * Jawab: (saal, kahan se aaya). Hafte bhar yaad rakha jaata hai.

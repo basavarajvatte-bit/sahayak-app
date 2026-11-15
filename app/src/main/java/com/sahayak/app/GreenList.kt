@@ -81,7 +81,8 @@ object GreenList {
             for (s in list) {
                 if (stop) break
                 progress = cap.label + ": checked $checked of " + list.size + ". All green so far: $full"
-                val card = Market.tape("https://analyze.api.tickertape.in/stocks/scorecard/" + s.sid)?.let { MarketLogic.parseScorecard(it) }
+                val json = Market.tape("https://analyze.api.tickertape.in/stocks/scorecard/" + s.sid)
+                val card = json?.let { MarketLogic.parseScorecard(it) }
                 if (card == null) {
                     failed++
                     if (checked == 0 && failed >= GIVE_UP) return "Tickertape did not give the scorecard. " + Market.lastError
@@ -92,7 +93,7 @@ object GreenList {
                     if (total >= MIN_ITEMS && green >= MIN_GREEN) {
                         if (green == total) full++
                         rows.put(JSONObject().put("sid", s.sid).put("name", s.name).put("ticker", s.ticker).put("slug", s.slug).put("sector", s.sector)
-                            .put("green", green).put("total", total))
+                            .put("green", green).put("total", total).put("valuation", json?.let { MarketLogic.scoreTag(it, "Valuation") }.orEmpty()))
                     }
                 }
                 try {
