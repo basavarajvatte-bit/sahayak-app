@@ -53,6 +53,10 @@
         </activity>
 
         <activity
+            android:name=".PatternLockActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".PatternActivity"
             android:exported="false" />
 

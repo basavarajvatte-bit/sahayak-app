@@ -225,10 +225,18 @@ class PatternActivity : Activity() {
             }
             if (pattern.id == "dividend") dividendList()
             scoreboard(list)
-            val rows = if (pattern.id in full) list else list.take(ROWS)
-            rows.forEach { row(it) }
-            if (list.size > ROWS) {
-                box.addView(button(if (pattern.id in full) "▲ Less" else "▼ More (" + (list.size - ROWS) + " shares)") {
+            // Ek line mein 3 dabbe: lock ke baad badha to hara, gira to laal
+            val rows = if (pattern.id in full) list else list.take(TILE_ROWS * TILES)
+            rows.chunked(TILES).forEach { line ->
+                val strip = LinearLayout(this)
+                line.forEach { lock ->
+                    strip.addView(tile(lock), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) })
+                }
+                repeat(TILES - line.size) { strip.addView(android.view.View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { setMargins(dp(3), 0, dp(3), 0) }) }
+                box.addView(strip)
+            }
+            if (list.size > TILE_ROWS * TILES) {
+                box.addView(button(if (pattern.id in full) "▲ Less" else "▼ More (" + (list.size - TILE_ROWS * TILES) + " shares)") {
                     if (pattern.id in full) full.remove(pattern.id) else full.add(pattern.id)
                     render()
                 })
@@ -295,66 +303,37 @@ class PatternActivity : Activity() {
     }
 
     /** Ek lock hua share. */
-    private fun row(lock: JSONObject) {
+    /** Ek lock hua share chhote dabbe mein. Tap karo to poora hisaab. */
+    private fun tile(lock: JSONObject): LinearLayout {
+        val change = if (lock.has("now")) lock.optDouble("now") else MarketLogic.pct(lock.optDouble("price", 0.0), lock.optDouble("lockPrice", 0.0))
+        val plain = change in -0.004..0.004
+        val ink = if (plain) INK else 0xFFFFFFFF.toInt()
+        val soft = if (plain) GREY else 0xE6FFFFFF.toInt()
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(0xFFFFFFFF.toInt(), 10)
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = rounded(if (change > 0.004) GREEN else if (change < -0.004) RED else 0xFFE4E7EC.toInt(), 10)
+            setOnClickListener { startActivity(PatternLockActivity.forLock(this@PatternActivity, lock.optString("id"))) }
         }
-        val code = lock.optString("symbol").substringBefore('.')
-        val sure = lock.optBoolean("sure", true)
-        card.addView(text(lock.optString("name") + "  ($code)" + (if (sure) "  ✓" else "  ⚠"), 15f, true))
-        val detail = lock.optString("detail")
-        card.addView(text(
-            "Locked " + day.format(Date(lock.optLong("lockAt"))) + " at " + MarketLogic.money(lock.optDouble("lockPrice", 0.0), "INR") +
-                "  ·  Now " + MarketLogic.money(lock.optDouble("price", 0.0), "INR") + (if (detail.isNotEmpty()) "\n" + detail else ""), 14f
-        ))
-        if (lock.has("now")) {
-            val now = lock.optDouble("now")
-            val line = LinearLayout(this).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
-            line.addView(chip("Since lock " + PatternLogic.signed(now), now))
-            if (lock.has("nNow")) {
-                val extra = now - lock.optDouble("nNow")
-                line.addView(text("Nifty " + PatternLogic.signed(lock.optDouble("nNow")) + "  ·  vs Nifty " + PatternLogic.signed(extra), 13f, true,
-                    if (extra > 0.004) GREEN else if (extra < -0.004) RED else GREY), wrap(8))
-            }
-            card.addView(line)
-            val steps = lock.optJSONArray("steps")
-            if (steps != null) {
-                val parts = PatternLogic.STEP_NAMES.indices.filter { !steps.isNull(it) }.map { PatternLogic.STEP_NAMES[it] + " " + PatternLogic.signed(steps.optDouble(it)) }
-                if (parts.isNotEmpty()) card.addView(text(parts.joinToString("  ·  "), 13f, false, GREY))
-            }
-            if (lock.optBoolean("adjusted")) card.addView(text("Adjusted for split, bonus or dividend", 12f, false, 0xFFB54700.toInt()))
-        } else {
-            card.addView(text("Result comes after the next update.", 13f, false, GREY))
+        fun line(words: String, size: Float, bold: Boolean, color: Int) = TextView(this).apply {
+            text = words
+            textSize = size
+            setTextColor(color)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            if (bold) setTypeface(typeface, Typeface.BOLD)
         }
-        card.addView(text(lock.optString("title") + (lock.optString("source").takeIf { it.isNotEmpty() }?.let { " - $it" } ?: ""), 13f, false, BLUE).apply {
-            setOnClickListener { open(lock.optString("link")) }
-        })
-        card.addView(text(
-            when {
-                lock.optString("via").isNotEmpty() -> "From " + lock.optString("via")
-                lock.optBoolean("manual") -> "Added by you"
-                lock.optBoolean("ai") -> "AI-checked event"
-                else -> "Not AI-checked (AI was not available)"
-            } + "  ·  " + (if (lock.optBoolean("eventDay")) "Lock price = closing price on the news day " + lock.optString("baseDate")
-            else "Price from " + lock.optInt("sources", 1) + (if (lock.optInt("sources", 1) == 1) " source" else " sources")), 12f, false, GREY
-        ))
-        val actions = LinearLayout(this).apply { gravity = android.view.Gravity.END }
-        actions.addView(button("Tickertape") {
-            val slug = lock.optString("slug")
-            status.text = Market.openTickertape(this, if (slug.startsWith("/stocks/")) "https://www.tickertape.in$slug" else null, lock.optString("symbol"))
-        })
-        actions.addView(button("Remove") {
-            Patterns.remove(this, lock.optString("id"))
-            render()
-        })
-        card.addView(actions)
-        box.addView(card, wide(6))
+        card.addView(line(lock.optString("symbol").substringBefore('.'), 13f, true, ink))
+        card.addView(line(MarketLogic.money(lock.optDouble("price", 0.0), "INR"), 14f, true, ink))
+        card.addView(line(PatternLogic.signed(change), 18f, true, ink))
+        card.addView(line("Lock " + MarketLogic.money(lock.optDouble("lockPrice", 0.0), "INR"), 11f, false, soft))
+        card.addView(line(day.format(Date(lock.optLong("lockAt"))), 11f, false, soft))
+        return card
     }
 
     companion object {
-        private const val ROWS = 3
+        private const val TILES = 3
+        private const val TILE_ROWS = 3
         private const val DIV_ROWS = 8
         private const val TRUST = 20
         private const val INK = 0xFF1D2433.toInt()

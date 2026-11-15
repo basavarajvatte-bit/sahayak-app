@@ -69,6 +69,9 @@ object Patterns {
     private fun rss(query: String) =
         "https://news.google.com/rss/search?q=" + URLEncoder.encode("$query when:7d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
 
+    /** Detail page ke graph ke liye roz ke band bhaav. */
+    fun history(symbol: String, range: String): PatternLogic.Daily? = daily(symbol, range)
+
     private fun daily(symbol: String, range: String): PatternLogic.Daily? {
         val enc = URLEncoder.encode(symbol, "UTF-8")
         for (host in listOf("query1", "query2")) {
