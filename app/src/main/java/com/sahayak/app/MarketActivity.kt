@@ -39,6 +39,7 @@ class MarketActivity : Activity() {
     private lateinit var newsBox: LinearLayout
     private var newsOpen = false
     private var reportsOpen = false
+    private var sharesOpen = false
     private var loading = true
     private lateinit var greenStatus: TextView
     private lateinit var greenFresh: Button
@@ -392,7 +393,9 @@ class MarketActivity : Activity() {
         sharesBox.removeAllViews()
         val shares = Market.shares(this)
         if (shares.isEmpty()) sharesBox.addView(text("No share saved yet.", 14f, false, GREY))
-        shares.forEach { s ->
+        // Naya lock kiya share sabse upar. Pehla share dikhao, baaki More ke andar
+        val ordered = shares.sortedByDescending { it.optLong("savedAt") }
+        ordered.take(if (sharesOpen) ordered.size else SHARE_ROWS).forEach { s ->
             val currency = s.optString("currency")
             val price = s.optDouble("lastPrice", 0.0)
             val saved = s.optDouble("savedPrice", 0.0)
@@ -445,6 +448,12 @@ class MarketActivity : Activity() {
             })
             box.addView(row)
             sharesBox.addCard(box)
+        }
+        if (ordered.size > SHARE_ROWS) {
+            sharesBox.addView(button(if (sharesOpen) "▲ Less" else "▼ More (" + (ordered.size - SHARE_ROWS) + " shares)") {
+                sharesOpen = !sharesOpen
+                render()
+            })
         }
     }
 
@@ -526,6 +535,7 @@ class MarketActivity : Activity() {
         private const val IDS = 6_000
         private const val REFRESH_MS = 15_000L
         private const val NEWS_ROWS = 10
+        private const val SHARE_ROWS = 1
         private const val INK = 0xFF1D2433.toInt()
         private const val GREY = 0xFF667085.toInt()
         private const val GREEN = 0xFF1B7F3B.toInt()
