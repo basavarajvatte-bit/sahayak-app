@@ -5,7 +5,7 @@ plugins {
 
 // Chhotu aur to-do ka code Sahayak se hi aata hai, do copy nahi rakhni
 val sharedCode = tasks.register<Copy>("sharedCode") {
-    from("../app/src/main/java/com/sahayak/app") { include("MiniBuddy.kt", "Todos.kt", "TodoPopup.kt", "TodoPicker.kt", "ShareLogic.kt", "TodoSync.kt", "SharedTodoActivity.kt") }
+    from("../app/src/main/java/com/sahayak/app") { include("MiniBuddy.kt", "Todos.kt", "TodoPopup.kt", "TodoPicker.kt", "ShareLogic.kt", "TodoSync.kt", "SharedTodoActivity.kt", "CallLogic.kt", "Calls.kt", "CallActivity.kt") }
     into(layout.buildDirectory.dir("shared/com/sahayak/app"))
 }
 
@@ -17,8 +17,10 @@ android {
         applicationId = "com.chhotu.todo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "2.2"
+        versionCode = 14
+        versionName = "2.3"
+        // Call wali library ke sirf phone wale hisse, taaki app chhota rahe
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -50,3 +52,8 @@ android {
 }
 
 tasks.named("preBuild") { dependsOn(sharedCode) }
+
+dependencies {
+    // Awaaz aur video call (WebRTC)
+    implementation("io.getstream:stream-webrtc-android:1.3.9")
+}

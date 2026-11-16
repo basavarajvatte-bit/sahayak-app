@@ -11,8 +11,10 @@ android {
         applicationId = "com.sahayak.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 139
-        versionName = "15.1"
+        versionCode = 140
+        versionName = "15.2"
+        // Call wali library ke sirf phone wale hisse, taaki app chhota rahe
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // Test key: har build par same rehti hai, taaki app update ho sake.
@@ -43,6 +45,8 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Awaaz aur video call (WebRTC)
+    implementation("io.getstream:stream-webrtc-android:1.3.9")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

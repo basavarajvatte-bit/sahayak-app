@@ -230,6 +230,11 @@ class SharedTodoActivity : Activity() {
     /** Chat ka dabba: sandesh (apne hare, doosre ke safed) aur likhne ki jagah. */
     private fun chatCard(title: String): LinearLayout {
         val box = card()
+        val calls = LinearLayout(this)
+        calls.addView(button("📞 Voice call") { startActivity(CallActivity.dial(this, false)) }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        calls.addView(button("🎥 Video call") { startActivity(CallActivity.dial(this, true)) }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        box.addView(calls)
+        box.addView(text("Calls are free over the internet. Both phones need this app and internet.", 12f, color = 0xFF667085.toInt()))
         box.addView(text("💬 $title", 18f, true))
         val scroll = ScrollView(this)
         val msgs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

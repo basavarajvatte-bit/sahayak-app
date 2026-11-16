@@ -196,6 +196,8 @@ object TodoSync {
         if (packet.type == "hello") {
             // Doosra phone poori list maang raha hai
             if (System.currentTimeMillis() - lastFull > HELLO_GAP_MS) sendAll(c)
+        } else if (packet.type == "call") {
+            Calls.onSignal(c, packet.items)
         } else if (packet.type == "chat") {
             val fresh = mergeChat(c, packet.items)
             fresh.forEach { tell(c, "💬 " + who(c), it.optString("text"), chat = true) }
@@ -278,6 +280,19 @@ object TodoSync {
             ping()
         }
     }
+
+    // ---------- Call ----------
+
+    /** Call ka signal (ghanti, haan, kaato) doosre phone ko. */
+    fun sendCall(context: Context, items: List<JSONObject>) {
+        val c = context.applicationContext
+        if (!linked(c)) return
+        start(c)
+        items.forEach { send(c, "call", listOf(it)) {} }
+    }
+
+    /** Doosre phone wale ko kya kahein: guest ke phone par diya hua naam, owner ke phone par "Other phone". */
+    fun peer(c: Context): String = if (role(c) == GUEST) name(c) else "Other phone"
 
     // ---------- Chat ----------
 
