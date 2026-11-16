@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Sahayak</string>
     <string name="control_description">When you ask, Sahayak can open apps, tap and type. It stops at password, OTP, PIN and payment screens.</string>
+    <string name="todo_widget_desc">Sahayak ki to-do list, home screen par</string>
 </resources>

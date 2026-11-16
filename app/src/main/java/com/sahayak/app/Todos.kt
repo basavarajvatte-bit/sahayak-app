@@ -74,7 +74,23 @@ object Todos {
     @Synchronized
     private fun save(context: Context, items: List<JSONObject>) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY, JSONArray(items).toString()).apply()
+            .putString(KEY, JSONArray(items).toString()).commit()
+        refreshWidgets(context)
+    }
+
+    /** Home screen ka to-do widget taaza karo (Sahayak mein ho to; Chhotu To-Do app mein ye kuch nahi karta). */
+    fun refreshWidgets(context: Context) {
+        try {
+            val manager = android.appwidget.AppWidgetManager.getInstance(context) ?: return
+            val ids = manager.getAppWidgetIds(android.content.ComponentName(context.packageName, "com.sahayak.app.TodoWidget"))
+            if (ids.isEmpty()) return
+            // Widget khud apni list taaza karta hai (onUpdate mein)
+            context.sendBroadcast(android.content.Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                .setClassName(context.packageName, "com.sahayak.app.TodoWidget")
+                .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
+        } catch (e: RuntimeException) {
+            // Widget na ho to kuch nahi
+        }
     }
 
     @Synchronized
