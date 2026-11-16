@@ -1,0 +1,1697 @@
+# Market Watch Marathi: pehli line English (code mein jaisi hai), doosri line Marathi. Beech mein khaali line.
+
+Server answered 
+Server चे उत्तर: 
+
+No internet
+Internet नाही
+
+Tickertape answered 
+Tickertape चे उत्तर: 
+
+Lock a share first
+आधी एक share lock करा
+
+Prices are already being checked
+Prices आधीच तपासले जात आहेत
+
+Finding the shares on Tickertape
+Tickertape वर shares शोधत आहे
+
+Checked $i of 
+तपासले $i / 
+
+Sources differ for 
+या share चे sources वेगळे आहेत: 
+
+. Asking AI to check
+. AI कडून तपासत आहे
+
+Sources differed. AI checked with Google search and it matched 
+Sources वेगळे होते. AI ने Google search ने तपासले आणि जुळले: 
+
+Updating fund prices
+Fund च्या prices update करत आहे
+
+ shares: $good verified
+ shares: $good खात्रीशीर
+
+, $bad need a look
+, $bad पुन्हा बघायला हवेत
+
+. Corrected $fixed lock prices
+. $fixed lock prices दुरुस्त केल्या
+
+Type a share name first
+आधी share चे नाव लिहा
+
+List is full. Remove one share first
+List भरली आहे. आधी एक share काढा
+
+No internet. Try again
+Internet नाही. पुन्हा try करा
+
+\"$name\" is not on NSE or BSE. It may be a foreign company. Try the exact NSE code, e.g. RELIANCE
+\"$name\" NSE किंवा BSE वर नाही. ही foreign company असू शकते. NSE चा अचूक code लिहा, उदा. RELIANCE
+
+Could not get the price of $name. Try again
+$name ची price मिळाली नाही. पुन्हा try करा
+
+ is already in your list
+ आधीच तुमच्या list मध्ये आहे
+
+ at 
+ @ 
+
+ (price verified)
+ (price खात्रीशीर)
+
+. See it in My shares
+. My shares मध्ये बघा
+
+Save a share first
+आधी एक share save करा
+
+Report is already being made
+Report आधीच बनत आहे
+
+Prices are already
+Prices आधीच
+
+Since saved (
+Save केल्यापासून (
+
+,  lock se $since
+,  lock पासून $since
+
+Could not get today's price. Showing the last one.
+आजची price मिळाली नाही. शेवटची price दाखवत आहे.
+
+Market was closed today. Last trading day shown.
+आज market बंद होते. शेवटच्या trading दिवसाची price दाखवली आहे.
+
+Share report: aaj ka hisaab
+Share report: आजचा हिशोब
+
+ shares Sahayak mein
+ shares Market Watch मध्ये
+
+Could not get prices. 
+Prices मिळाल्या नाहीत. 
+
+Report ready
+Report तयार आहे
+
+ new market news
+ नवीन market news
+
+Add your Gemini key to get the Hinglish meaning
+मराठी अर्थ मिळवण्यासाठी Gemini key टाका
+
+Add your Gemini key in Sahayak to get the full research
+पूर्ण research साठी Gemini key टाका
+
+AI did not give a clear answer. Tap Depth again
+AI ने स्पष्ट उत्तर दिले नाही. पुन्हा Depth दाबा
+
+Tickertape opened. Search the share there
+Tickertape उघडले. तिथे share शोधा
+
+Tickertape opened. Tap its search, long-press and Paste: $name
+Tickertape उघडले. Search वर tap करा, long-press करून Paste करा: $name
+
+Tickertape app is not installed on this phone. Install it from Play Store
+या phone मध्ये Tickertape app नाही. Play Store मधून install करा
+
+ gave a price, so it could not be cross-checked
+ ने price दिली, म्हणून पडताळणी झाली नाही
+
+Sources do not agree: 
+Sources जुळत नाहीत: 
+
+Verified by 
+खात्री केली: 
+
+ of 
+ / 
+
+ sources agree. 
+ sources जुळतात. 
+
+ shows 
+ दाखवते 
+
+📈 Share upar ja sakta hai
+📈 Share वर जाऊ शकतो
+
+📉 Share neeche aa sakta hai
+📉 Share खाली येऊ शकतो
+
+↕️ Dono taraf ja sakta hai
+↕️ दोन्ही बाजूला जाऊ शकतो
+
+➖ Share par seedha asar saaf nahi
+➖ Share वर थेट परिणाम स्पष्ट नाही
+
+Achhi khabar
+चांगली news
+
+Buri khabar
+वाईट news
+
+Roz ki baat
+रोजची गोष्ट
+
+Chhoti
+छोटी
+
+Dhyan dene layak
+लक्ष देण्यासारखी
+
+Badi
+मोठी
+
+Bahut badi
+खूप मोठी
+
+ times bigger  (▲ 
+ पट मोठे  (▲ 
+
+% more
+% जास्त
+
+% less
+% कमी
+
+No change
+बदल नाही
+
+Loss turned into profit
+Loss चा profit झाला
+
+Profit turned into loss
+Profit चा loss झाला
+
+Loss became smaller
+Loss कमी झाला
+
+Loss became bigger
+Loss वाढला
+
+New, was zero before
+नवीन, आधी शून्य होते
+
+bazaar ke ausat se sasta
+market च्या सरासरीपेक्षा स्वस्त
+
+bazaar ke ausat jitna
+market च्या सरासरीएवढे
+
+bazaar ke ausat se mehenga
+market च्या सरासरीपेक्षा महाग
+
+No browser found
+Browser सापडला नाही
+
+Something went wrong. Try again
+काहीतरी चुकले. पुन्हा try करा
+
+🔄 Update prices
+🔄 Prices update करा
+
+Updating all prices
+सर्व prices update करत आहे
+
+See news that can move the market. Save a share to follow its price every day.
+Market हलवू शकणारी news बघा. Share save करा आणि रोज त्याची price बघा.
+
+💼 My portfolio: dummy funds
+💼 My portfolio: सरावाचे funds
+
+📊 Pattern study: dividend, split, buyback and more
+📊 Pattern study: dividend, split, buyback आणि बरेच काही
+
+Share name, e.g. Tata Motors
+Share चे नाव, उदा. Tata Motors
+
+Lock at today's price
+आजच्या price वर lock करा
+
+Finding the share and its price
+Share आणि त्याची price शोधत आहे
+
+Verify all prices now
+सर्व prices आत्ता verify करा
+
+Checking every price from 3 sources
+प्रत्येक price 3 sources वरून तपासत आहे
+
+Update prices every 15 minutes while the market is open
+Market उघडे असताना दर 15 मिनिटांनी prices update करा
+
+Shares by how much of their Tickertape scorecard is green: 6 of 6, 5 of 6, 4 of 6. Tap a share to open it in Tickertape.
+Tickertape scorecard किती green आहे त्यानुसार shares: 6 पैकी 6, 6 पैकी 5, 6 पैकी 4. Share वर tap करा, Tickertape मध्ये उघडेल.
+
+Daily report
+रोजचा report
+
+Every day: how much each saved share moved, and its news.
+रोज: प्रत्येक saved share किती हलला, आणि त्याची news.
+
+Send me the report every day
+मला रोज report पाठवा
+
+Make report now
+आत्ता report बनवा
+
+Making the report
+Report बनवत आहे
+
+Results, CEO changes, big orders and deals, tariffs and trade war, RBI and government decisions.
+Results, CEO बदल, मोठ्या orders आणि deals, tariff आणि trade war, RBI आणि सरकारचे निर्णय.
+
+Keep watching market news
+Market news वर लक्ष ठेवा
+
+Pop-up alert when new news comes
+नवीन news आली की pop-up alert द्या
+
+Check every
+किती वेळाने तपासायचे
+
+$m min
+$m मिनिटे
+
+1 hour
+1 तास
+
+Check news now
+आत्ता news तपासा
+
+Checking news
+News तपासत आहे
+
+No new news. Hinglish matlab added for $told news
+नवीन news नाही. $told news चा मराठी अर्थ जोडला
+
+No new news. Hinglish matlab nahi bana: 
+नवीन news नाही. मराठी अर्थ बनला नाही: 
+
+No new news right now
+सध्या नवीन news नाही
+
+$n new news
+$n नवीन news
+
+Good and Bad tags are a guess from the words in the headline. They are not advice.
+Good/Bad tags हा headline मधल्या शब्दांवरून केलेला अंदाज आहे. हा सल्ला नाही.
+
+Har khabar ke neeche AI ka andaza hai ki share par kya asar ho sakta hai. Ye andaza hai, guarantee nahi. Khabar dabao to pichli baar ke example aur figures milenge.
+प्रत्येक news खाली AI चा अंदाज आहे की share वर काय परिणाम होऊ शकतो. हा अंदाज आहे, guarantee नाही. News वर tap करा, मागच्या वेळची उदाहरणे आणि आकडे मिळतील.
+
+Clear news list
+News list साफ करा
+
+Starting
+सुरू होत आहे
+
+Locking $name at today's price
+$name आजच्या price वर lock करत आहे
+
+ in Tickertape
+ Tickertape मध्ये
+
+Stop
+थांबवा
+
+Make fresh 
+नवीन बनवा: 
+
+ list (takes a few minutes)
+ list (काही मिनिटे लागतील)
+
+Making the 
+बनवत आहे: 
+
+Another list is being made. Wait or tap Stop
+दुसरी list बनत आहे. थांबा किंवा थांबवा दाबा
+
+ list yet.
+ list अजून नाही.
+
+List made 
+List बनली: 
+
+ companies. All green: 
+ companies. सर्व green: 
+
+No share here right now.
+सध्या इथे share नाही.
+
+To see sectors, tap Make fresh 
+Sectors बघण्यासाठी हे दाबा, नवीन बनवा: 
+
+ green  ·  Open in Tickertape
+ green  ·  Tickertape मध्ये उघडा
+
+🔒 Lock at today's price
+🔒 आजच्या price वर lock करा
+
+No share locked yet.
+अजून एकही share lock नाही.
+
+ locked  ·  ▲ $up up  ·  ▼ $down down since lock. Tap a box for its chart.
+ locked  ·  ▲ $up वर  ·  ▼ $down खाली (lock पासून). Chart साठी box वर tap करा.
+
+$unknown shares ka valuation abhi nahi mila (check ho raha hai ya Tickertape par nahi).
+$unknown shares चे valuation अजून मिळाले नाही (check होत आहे किंवा Tickertape वर नाही).
+
+Din mein ek baar Tickertape scorecard se check hota hai.
+दिवसातून एकदा Tickertape scorecard वरून check होते.
+
+Not updated yet
+अजून update नाही
+
+✓ $sure verified by 2 or more sources
+✓ $sure ची 2 किंवा जास्त sources ने खात्री
+
+  ·  ⚠ $doubt need a look
+  ·  ⚠ $doubt पुन्हा बघायला हवेत
+
+\nLast check 
+\nशेवटचा check 
+
+$n of 
+$n / 
+
+From news or typed  (
+News मधून किंवा लिहिलेले  (
+
+Report time: 
+Report ची वेळ: 
+
+  (tap to change)
+  (बदलण्यासाठी tap करा)
+
+Next report: 
+पुढचा report: 
+
+Purani reports chhupao
+जुने reports लपवा
+
+Purani reports (
+जुने reports (
+
+ shares   ·   🟢 $up lock se upar   ·   🔴 $down lock se neeche
+ shares   ·   🟢 $up lock पेक्षा वर   ·   🔴 $down lock पेक्षा खाली
+
+Aaj bazaar band tha, isliye pichhle bazaar din ka bhaav dikh raha hai.
+आज market बंद होते, म्हणून मागच्या market दिवसाची price दिसत आहे.
+
+Kuch shares ka aaj ka bhaav nahi mila, unka purana bhaav dikh raha hai.
+काही shares ची आजची price मिळाली नाही, त्यांची जुनी price दिसत आहे.
+
+ ko 
+ ला 
+
+Lock se 
+Lock पासून 
+
+Khabar:
+News:
+
+Not watching. 
+लक्ष ठेवत नाही. 
+
+Last check: 
+शेवटचा check: 
+
+Next: 
+पुढचा: 
+
+No news yet. Tap Check news now.
+अजून news नाही. आत्ता news तपासा दाबा.
+
+Pichli baar kya hua tha, example ke saath: yahan dabao
+मागच्या वेळी काय झाले होते, उदाहरणासह: इथे tap करा
+
+Less
+कमी दाखवा
+
+More (
+आणखी (
+
+Open full news
+पूर्ण news उघडा
+
+AI reads the news and can make mistakes. Open the full news and check before you decide anything.
+AI news वाचतो आणि चुकू शकतो. कोणताही निर्णय घेण्याआधी पूर्ण news उघडून तपासा.
+
+Doing depth research. It can take up to a minute
+Depth research चालू आहे. एक मिनिट लागू शकतो
+
+Something went wrong. Tap Depth again
+काहीतरी चुकले. पुन्हा Depth दाबा
+
+Could not research this news
+या news चा research झाला नाही
+
+Researched with Google search
+Google search ने research केला
+
+Researched from news headlines only (search limit reached), so some figures may be missing
+फक्त news headlines वरून research केला (search limit संपली), म्हणून काही आकडे नसतील
+
+Ye khabar kitni badi hai
+ही news किती मोठी आहे
+
+ of 5)
+ / 5)
+
+AI ka andaza: share par kya asar ho sakta hai
+AI चा अंदाज: share वर काय परिणाम होऊ शकतो
+
+Ye sirf andaza hai, guarantee nahi. Share ulta bhi ja sakta hai.
+हा फक्त अंदाज आहे, guarantee नाही. Share उलट दिशेलाही जाऊ शकतो.
+
+Pichli baar isi company ke saath aisa hua tha
+मागच्या वेळी याच company सोबत असे झाले होते
+
+Search mein is company ka aisa purana example nahi mila.
+Search मध्ये या company चे असे जुने उदाहरण मिळाले नाही.
+
+Doosri company ke saath aisa hua tha
+दुसऱ्या company सोबत असे झाले होते
+
+Search mein doosri company ka pakka example nahi mila.
+Search मध्ये दुसऱ्या company चे खात्रीशीर उदाहरण मिळाले नाही.
+
+Ye example AI ne search se nikale hain. Tarikh aur percent kabhi galat ho sakte hain, bada faisla lene se pehle khud dekh lo.
+ही उदाहरणे AI ने search मधून काढली आहेत. तारीख आणि percent कधी चुकू शकतात, मोठा निर्णय घेण्याआधी स्वतः तपासा.
+
+Kyun badla
+का बदलले
+
+Is company mein pehle kya hua
+या company मध्ये आधी काय झाले
+
+Business par asar
+Business वर परिणाम
+
+Jo pakka nahi hai
+जे खात्रीशीर नाही
+
+Earlier news on this
+यावर आधीची news
+
+Before and now
+आधी आणि आता
+
+Earlier years and quarters
+मागची वर्षे आणि quarters
+
+Opening $name in Tickertape
+$name Tickertape मध्ये उघडत आहे
+
+Save a share from this news at today's price. Then watch in My shares how it moves.
+या news मधला share आजच्या price वर save करा. मग My shares मध्ये तो कसा हलतो ते बघा.
+
+Share name, e.g. Larsen & Toubro
+Share चे नाव, उदा. Larsen & Toubro
+
+Shares in this news:
+या news मधले shares:
+
+Finding $name and today's price
+$name आणि आजची price शोधत आहे
+
+🔒 Your lock
+🔒 तुमचा lock
+
+From news: 
+News मधून: 
+
+Revenue and profit
+Revenue आणि profit
+
+Getting revenue and profit
+Revenue आणि profit आणत आहे
+
+Remove from My shares
+My shares मधून काढा
+
+Prices come from a free source and can be 10 to 15 minutes late while the market is open.
+Prices free source वरून येतात आणि market उघडे असताना 10 ते 15 मिनिटे उशिरा असू शकतात.
+
+Not checked yet.
+अजून check केले नाही.
+
+   ← used
+   ← हे वापरले
+
+Price corrected from 
+Price दुरुस्त केली, आधी: 
+
+Lock price corrected from 
+Lock price दुरुस्त केली, आधी: 
+
+Check this price now
+ही price आत्ता check करा
+
+Checking the price from 3 sources
+Price 3 sources वरून check करत आहे
+
+Could not get revenue and profit for this share
+या share चे revenue आणि profit मिळाले नाही
+
+Check internet and open this page again.
+Internet तपासा आणि हे page पुन्हा उघडा.
+
+Figures in ₹ crore, year ending March. Tap a year. Source: 
+आकडे ₹ crore मध्ये, March ला संपणारे वर्ष. वर्षावर tap करा. Source: 
+
+Opening in Tickertape
+Tickertape मध्ये उघडत आहे
+
+\nSince then 
+\nतेव्हापासून 
+
+Since lock 
+Lock पासून 
+
+Getting the 
+आणत आहे: 
+
+Could not get the chart. Check internet and tap 
+Chart मिळाला नाही. Internet तपासा आणि पुन्हा tap करा: 
+
+ again
+ 
+
+Chart from 
+Chart source: 
+
+  ·  Badge shows today's change
+  ·  Badge आजचा बदल दाखवतो
+
+ starts 
+ सुरुवात 
+
+A list is already being made. Wait for it or tap Stop
+List आधीच बनत आहे. थांबा किंवा थांबवा दाबा
+
+Getting the list of 
+List आणत आहे: 
+
+Could not get the company list from Tickertape. 
+Tickertape वरून company list मिळाली नाही. 
+
+: checked $checked of 
+: तपासले $checked / 
+
+. All green so far: $full
+. आतापर्यंत सर्व green: $full
+
+Tickertape did not give the scorecard. 
+Tickertape ने scorecard दिला नाही. 
+
+Tickertape gave only a part of the scorecard, so the list cannot be made. Send a screenshot of this
+Tickertape ने scorecard चा फक्त भाग दिला, म्हणून list बनू शकत नाही. याचा screenshot पाठवा
+
+: checked $checked companies. All green: $full
+: $checked companies तपासल्या. सर्व green: $full
+
+Pattern study is already running
+Pattern study आधीच चालू आहे
+
+No new event found
+नवीन event सापडला नाही
+
+$added new shares locked
+$added नवीन shares lock झाले
+
+Updated $n shares
+$n shares update झाले
+
+Reading news: 
+News वाचत आहे: 
+
+AI is checking 
+AI तपासत आहे: 
+
+Pattern study: $added new 
+Pattern study: $added नवीन 
+
+ and more
+ आणि आणखी
+
+Reading the upcoming dividend list
+येणाऱ्या dividends ची list वाचत आहे
+
+Website did not open. AI is searching for upcoming dividends
+Website उघडली नाही. AI येणारे dividends शोधत आहे
+
+Trust, not a company share
+Trust आहे, company share नाही
+
+Not found on NSE/BSE or price unclear
+NSE/BSE वर सापडला नाही किंवा price स्पष्ट नाही
+
+Could not get the dividend list
+Dividend list मिळाली नाही
+
+ upcoming record dates from 
+ येणाऱ्या record dates, source: 
+
+Choose a pattern
+Pattern निवडा
+
+Another scan is still running. Try again in a minute
+दुसरा scan अजून चालू आहे. एका मिनिटाने पुन्हा try करा
+
+Stopped
+थांबवले
+
+Dividend list did not open. 
+Dividend list उघडली नाही. 
+
+ scan done: 
+ scan झाला: 
+
+no new share
+नवीन share नाही
+
+$added new 
+$added नवीन 
+
+No company name found. Put one company per line
+Company चे नाव सापडले नाही. एका ओळीत एक company लिहा
+
+. Not locked (not found, price unclear or already there): 
+. Lock झाले नाहीत (सापडले नाही, price स्पष्ट नाही किंवा आधीच आहे): 
+
+Getting Nifty
+Nifty आणत आहे
+
+Company announces a dividend or fixes its record date
+Company dividend जाहीर करते किंवा record date ठरवते
+
+Company announces a split of its shares
+Company आपल्या shares चा split जाहीर करते
+
+Company announces free bonus shares
+Company मोफत bonus shares जाहीर करते
+
+Company will buy back its own shares
+Company स्वतःचेच shares परत विकत घेणार
+
+Company sells new shares to raise money
+Company पैसे उभे करण्यासाठी नवीन shares विकते
+
+Company buys, joins or splits a business
+Company एखादा business विकत घेते, जोडते किंवा वेगळा करते
+
+The owner buys more shares
+मालक (promoter) आणखी shares विकत घेतो
+
+The owner sells or pledges shares
+मालक (promoter) shares विकतो किंवा गहाण ठेवतो
+
+A big fund buys or sells a large lot
+मोठा fund एकदम मोठ्या संख्येने shares घेतो किंवा विकतो
+
+Net profit up 25% or more
+Net profit 25% किंवा जास्त वाढला
+
+Net profit down 25% or more, or a loss
+Net profit 25% किंवा जास्त घटला, किंवा loss झाला
+
+Company wins a large order
+Company ला मोठी order मिळाली
+
+A rating agency upgrades or downgrades the company
+Rating agency ने company चे rating वाढवले किंवा कमी केले
+
+Share is added to or dropped from Nifty, Sensex or MSCI
+Share Nifty, Sensex किंवा MSCI मध्ये आला किंवा बाहेर गेला
+
+The top boss resigns or a new one is named
+सर्वात मोठा अधिकारी राजीनामा देतो किंवा नवीन नेमला जातो
+
+US drug regulator approval, warning or inspection result
+US औषध नियामकाची मंजुरी, warning किंवा inspection चा निकाल
+
+When a company announces an event (dividend, split, buyback ...), Sahayak locks that share on that day and keeps watching how it moves, next to Nifty.
+Company एखादा event जाहीर करते (dividend, split, buyback ...) तेव्हा Market Watch त्या दिवशी तो share lock करते आणि Nifty च्या तुलनेत तो कसा हलतो ते बघत राहते.
+
+Auto-lock shares when these events are announced
+हे events जाहीर झाले की shares आपोआप lock करा
+
+Scan news now (last 7 days)
+आत्ता news scan करा (मागचे 7 दिवस)
+
+Reading news
+News वाचत आहे
+
+Add shares by hand
+Shares हाताने जोडा
+
+Paste a list (like a dividend list) or type one company per line. They are locked at today's verified price.
+List paste करा (उदा. dividend list) किंवा एका ओळीत एक company लिहा. ते आजच्या verified price वर lock होतील.
+
+Lock these shares
+हे shares lock करा
+
+Locking shares
+Shares lock करत आहे
+
+Update results now
+Results आत्ता update करा
+
+Updating
+Update करत आहे
+
+How to read it: a share is counted from its lock price. Splits, bonus and dividends are adjusted, so a split does not look like a fall. 
+कसे वाचायचे: share ची मोजणी त्याच्या lock price पासून होते. Split, bonus आणि dividend adjust केले जातात, म्हणून split घसरणीसारखा दिसत नाही. 
+
+A pattern means something only after about 20 shares. This is for learning, not advice.
+साधारण 20 shares नंतरच pattern ला अर्थ येतो. हे शिकण्यासाठी आहे, सल्ला नाही.
+
+ shares locked in all
+ shares एकूण lock
+
+  ·  Last scan 
+  ·  शेवटचा scan 
+
+No share locked for this pattern yet.
+या pattern साठी अजून share lock नाही.
+
+▼ More (
+▼ आणखी (
+
+Upcoming dividends (next 14 days)
+येणारे dividends (पुढचे 14 दिवस)
+
+Not fetched yet. Tap 🔍 Scan.
+अजून आणले नाही. 🔍 Scan दाबा.
+
+🔍 Scan dividends now (list + news)
+🔍 Dividends आत्ता scan करा (list + news)
+
+Scanning dividends
+Dividends scan करत आहे
+
+So far
+आतापर्यंत
+
+% went up  ·  
+% वर गेले  ·  
+
+% beat Nifty
+% Nifty पेक्षा पुढे
+
+  ·  too few to trust yet
+  ·  विश्वास ठेवायला अजून कमी
+
+Results come after the first update. Tap Update results now.
+पहिल्या update नंतर results येतील. Results आत्ता update करा दाबा.
+
+Nifty in the same time 
+त्याच काळात Nifty 
+
+Beat Nifty by 
+Nifty पेक्षा पुढे: 
+
+Behind Nifty by 
+Nifty पेक्षा मागे: 
+
+Dates
+तारखा
+
+News came:  
+News आली:  
+
+Lock price is the closing price on the news day (
+Lock price ही news च्या दिवशीची closing price आहे (
+
+), so the change counts from the news.
+), म्हणून बदल news पासून मोजला जातो.
+
+Lock price is the verified price when Sahayak locked it.
+Lock price ही Market Watch ने lock करतानाची verified price आहे.
+
+Adjusted for split, bonus or dividend since the lock.
+Lock नंतरच्या split, bonus किंवा dividend साठी adjust केले.
+
+How it moved after the lock
+Lock नंतर कसा हलला
+
+comes later
+नंतर येईल
+
+Not updated yet. Tap Update results now on the list.
+अजून update नाही. List वर Results आत्ता update करा दाबा.
+
+Price since a little before the lock
+Lock च्या थोडे आधीपासूनची price
+
+Getting the chart
+Chart आणत आहे
+
+The news
+ही news
+
+Added by you
+तुम्ही जोडले
+
+AI-checked event
+AI ने तपासलेला event
+
+Not AI-checked
+AI ने तपासले नाही
+
+Remove
+काढा
+
+For learning, not advice.
+शिकण्यासाठी, सल्ला नाही.
+
+Could not get the chart. Check internet and open again
+Chart मिळाला नाही. Internet तपासा आणि पुन्हा उघडा
+
+  ·  adjusted for split or bonus
+  ·  split किंवा bonus साठी adjust केले
+
+Fund ka naam likho
+Fund चे नाव लिहा
+
+Zyada se zyada $MAX_FUNDS funds ban sakte hain
+जास्तीत जास्त $MAX_FUNDS funds बनवता येतात
+
+Is naam ka fund pehle se hai
+या नावाचा fund आधीच आहे
+
+Fund ban gaya: $clean
+Fund बनला: $clean
+
+Fund nahi mila
+Fund सापडला नाही
+
+Share ka naam likho
+Share चे नाव लिहा
+
+Kitne rupaye ka kharidna hai, wo likho
+किती रुपयांचे घ्यायचे ते लिहा
+
+Ek fund mein zyada se zyada $MAX_HOLDINGS shares
+एका fund मध्ये जास्तीत जास्त $MAX_HOLDINGS shares
+
+$typed dhoondh raha hu
+$typed शोधत आहे
+
+\"$typed\" NSE/BSE par nahi mila. NSE code try karo, jaise RELIANCE
+\"$typed\" NSE/BSE वर सापडला नाही. NSE code try करा, उदा. RELIANCE
+
+$name ka bhaav jaanch raha hu
+$name ची price तपासत आहे
+
+$name ka bhaav nahi mila. Internet check karo
+$name ची price मिळाली नाही. Internet तपासा
+
+ ka bhaav jaanch raha hu
+ ची price तपासत आहे
+
+ ka bhaav alag jagah alag aa raha hai. Thodi der baad try karo
+ ची price वेगवेगळ्या ठिकाणी वेगळी येत आहे. थोड्या वेळाने try करा
+
+ mein 
+ मध्ये 
+
+ ka ek bhi share nahi aata (1 share = 
+ चा एकही share येत नाही (1 share = 
+
+Kharida ($fundName): 
+घेतले ($fundName): 
+
+ bacha)
+ उरले)
+
+Share nahi mila
+Share सापडला नाही
+
+Bhaav pakka nahi hua. Thodi der baad becho
+Price खात्रीशीर नाही. थोड्या वेळाने विका
+
+Becha: 
+विकले: 
+
+ par. 
+ ला. 
+
+Bhaav pehle se update ho rahe hain
+Prices आधीच update होत आहेत
+
+Abhi kisi fund mein share nahi hai
+सध्या कोणत्याही fund मध्ये share नाही
+
+Bhaav: 
+Price: 
+
+Saare bhaav update ho gaye
+सर्व prices update झाल्या
+
+ bhaav update hue
+ prices update झाल्या
+
+Kuch gadbad hui. Dobara try karo
+काहीतरी चुकले. पुन्हा try करा
+
+Nakli paise, asli bhaav. Apne funds banao, shares chuno, aur dekho aapka andaaza kitna sahi nikla.
+खोटे पैसे, खऱ्या prices. आपले funds बनवा, shares निवडा आणि तुमचा अंदाज किती बरोबर ठरला ते बघा.
+
+Naya fund banao
+नवीन fund बनवा
+
+Fund ka naam, jaise Dividend Fund
+Fund चे नाव, उदा. Dividend Fund
+
++ Fund banao
++ Fund बनवा
+
+Fund ban gaya
+Fund बनला
+
+Saare bhaav update karo
+सर्व prices update करा
+
+Ye seekhne ke liye nakli paisa hai, asli nivesh nahi. Faisla aapka.
+हे शिकण्यासाठी खोटे पैसे आहेत, खरी investment नाही. निर्णय तुमचा.
+
+Bhaav update ho rahe hain
+Prices update होत आहेत
+
+Abhi koi fund nahi. Upar naam likho aur + Fund banao dabao.
+अजून fund नाही. वर नाव लिहा आणि + Fund बनवा दाबा.
+
+Kul portfolio
+एकूण portfolio
+
+   Laga: 
+   गुंतवले: 
+
+Khaali fund. Tap karke shares kharido.
+रिकामा fund. Tap करून shares घ्या.
+
+Nifty mein lagate to 
+Nifty मध्ये गुंतवले असते तर 
+
+Nifty se aage 
+Nifty पेक्षा पुढे 
+
+Nifty se peeche 
+Nifty पेक्षा मागे 
+
+🛒 Share kharido
+🛒 Share घ्या
+
+Aaj ke jaanche hue bhaav par kharida jayega. Sirf poore share aate hain.
+आजच्या तपासलेल्या price वर घेतले जाईल. फक्त पूर्ण shares येतात.
+
+Share ka naam, jaise Ashok Leyland
+Share चे नाव, उदा. Ashok Leyland
+
+Kitne rupaye ka, jaise 10000
+किती रुपयांचे, उदा. 10000
+
+Kharido
+घ्या
+
+Kharid raha hu
+घेत आहे
+
+Bhaav update karo
+Price update करा
+
+Ye fund delete karo
+हा fund delete करा
+
+Ye fund aur iske saare shares hata du?
+हा fund आणि त्याचे सर्व shares काढू?
+
+Haan, hatao
+हो, काढा
+
+Nahi
+नाही
+
+Abhi ki keemat
+आत्ताची किंमत
+
+Laga: 
+गुंतवले: 
+
+  ·  Beche hue ka munafa: 
+  ·  विकलेल्यांचा profit: 
+
+Wahi paisa Nifty mein: 
+तेच पैसे Nifty मध्ये: 
+
+Aap Nifty se aage 
+तुम्ही Nifty पेक्षा पुढे 
+
+Aap Nifty se peeche 
+तुम्ही Nifty पेक्षा मागे 
+
+⚖️ Paisa kahan laga
+⚖️ पैसे कुठे गुंतले
+
+Paisa kahan laga (risk)
+पैसे कुठे गुंतले (risk)
+
+📌 Kya dekhte hain\nFund ka kitna paisa ek hi share mein aur ek hi sector mein laga hai.\n\n✓ Theek kab\nEk share mein 40% se kam, ek sector mein 50% se kam.\n\n💡 Kyun zaroori hai\n
+📌 काय बघतो\nFund चे किती पैसे एकाच share मध्ये आणि एकाच sector मध्ये गुंतले आहेत.\n\n✓ ठीक कधी\nएका share मध्ये 40% पेक्षा कमी, एका sector मध्ये 50% पेक्षा कमी.\n\n💡 का महत्त्वाचे\n
+
+Saara paisa ek jagah ho to us ek share ya sector ki buri khabar poora fund gira deti hai. Buffett kam shares mein bharosa rakhte hain, lekin sirf tab jab dhandha poori tarah samajh mein aaye. Bina samjhe ek jagah zyada paisa daalna sattebaazi hai.
+सर्व पैसे एकाच ठिकाणी असतील तर त्या एका share किंवा sector ची वाईट news पूर्ण fund खाली आणते. Buffett कमी shares वर विश्वास ठेवतात, पण फक्त तेव्हाच जेव्हा business पूर्ण समजलेला असतो. न समजता एकाच ठिकाणी जास्त पैसे टाकणे म्हणजे जुगार.
+
+Sabse bada hissa: 
+सर्वात मोठा हिस्सा: 
+
+  ⚠ bahut zyada
+  ⚠ खूप जास्त
+
+  ⚠ ek sector mein zyada
+  ⚠ एका sector मध्ये जास्त
+
+📓 Faisla diary
+📓 निर्णय diary
+
+Faisla diary
+निर्णय diary
+
+📌 Kya hai\nKhareedte waqt aapne likha tha ki share kyun liya aur kya galat ho sakta hai. 3, 6 aur 12 mahine baad app wahi dikhata hai aur poochta hai: aapka kaaran sahi nikla ya nahi?\n\n
+📌 काय आहे\nShare घेताना तुम्ही लिहिले होते की share का घेतला आणि काय चुकू शकते. 3, 6 आणि 12 महिन्यांनी app तेच दाखवते आणि विचारते: तुमचे कारण बरोबर ठरले का?\n\n
+
+💡 Kyun zaroori hai\nShare kabhi kismat se badhta hai, kabhi sahi soch se. Sirf munafa dekhne se ye pata nahi chalta. Buffett aur Munger apni galtiyan likh kar rakhte the, taaki dobara na hon. Kuch mahine mein aapko pata chalega ki aapki soch kitni baar sahi nikalti hai.
+💡 का महत्त्वाचे\nShare कधी नशिबाने वाढतो, कधी योग्य विचाराने. फक्त profit बघून हे कळत नाही. Buffett आणि Munger आपल्या चुका लिहून ठेवायचे, म्हणजे त्या पुन्हा होऊ नयेत. काही महिन्यांत तुम्हाला कळेल की तुमचा विचार किती वेळा बरोबर ठरतो.
+
+Abhi koi review baaki nahi. Pehla review kharid ke 90 din baad aayega.
+सध्या review बाकी नाही. पहिला review खरेदीनंतर 90 दिवसांनी येईल.
+
+ faisle review ke liye: 
+ निर्णय review साठी: 
+
+. Share ke dabbe par tap karo.
+. Share च्या box वर tap करा.
+
+Ab tak: ✓ 
+आतापर्यंत: ✓ 
+
+ sahi nikle  ·  ✗ 
+ बरोबर ठरले  ·  ✗ 
+
+ galat  ·  ? 
+ चुकले  ·  ? 
+
+ pata nahi
+ माहीत नाही
+
+Abhi koi share nahi. Upar se kharido.
+अजून share नाही. वरून घ्या.
+
+Beche hue (
+विकलेले (
+
+📓 Review karo
+📓 Review करा
+
+Samajh gaya
+समजले
+
+Kharida: 
+घेतले: 
+
+ din se rakha)\n
+ दिवसांपासून ठेवले)\n
+
+Abhi: 
+आत्ता: 
+
+Munafa: 
+Profit: 
+
+\nUsi din se Nifty: 
+\nत्याच दिवसापासून Nifty: 
+
+\n\n🧠 Aapne kyun liya:\n
+\n\n🧠 तुम्ही का घेतला:\n
+
+\n\n⚠ Aapne socha kya galat ho sakta hai:\n
+\n\n⚠ तुम्हाला काय चुकू शकते असे वाटले:\n
+
+✓ Aapne kaha dhandha samajhte ho
+✓ तुम्ही म्हणालात business समजतो
+
+✗ Aapne kaha dhandha poora nahi samajhte
+✗ तुम्ही म्हणालात business पूर्ण समजत नाही
+
+ din: 
+ दिवस: 
+
+✓ kaaran sahi nikla
+✓ कारण बरोबर ठरले
+
+✗ kaaran galat nikla
+✗ कारण चुकले
+
+? pata nahi
+? माहीत नाही
+
+Becho
+विका
+
+Band karo
+बंद करा
+
+📓 Review karo ($due din)
+📓 Review करा ($due दिवस)
+
+$days din pehle aapne ye share liya tha.\n\n🧠 Aapka kaaran:\n
+$days दिवसांपूर्वी तुम्ही हा share घेतला होता.\n\n🧠 तुमचे कारण:\n
+
+(nahi likha tha)
+(लिहिले नव्हते)
+
+\n\n⚠ Aapke soche hue khatre:\n
+\n\n⚠ तुम्ही विचार केलेले धोके:\n
+
+(nahi likhe the)
+(लिहिले नव्हते)
+
+\n\nAb tak share 
+\n\nआतापर्यंत share 
+
+.\n\nBhaav ko chhodo, sirf dhandha dekho: jo kaaran aapne socha tha, kya wo sach hua?
+.\n\nPrice सोडा, फक्त business बघा: तुम्ही विचार केलेले कारण खरे ठरले का?
+
+✓ Sahi nikla
+✓ बरोबर ठरले
+
+✗ Galat nikla
+✗ चुकले
+
+? Pata nahi
+? माहीत नाही
+
+Diary mein save ho gaya
+Diary मध्ये save झाले
+
+Bech raha hu
+विकत आहे
+
+Ruko, ek baar socho
+थांबा, एकदा विचार करा
+
+Ye share sirf $held din pehle liya tha.\n\nBuffett: \"Jo share 10 saal nahi rakh sakte, use 10 minute bhi mat rakho.\"\n\n
+हा share फक्त $held दिवसांपूर्वी घेतला होता.\n\nBuffett: \"जो share 10 वर्षे ठेवू शकत नाही, तो 10 मिनिटेही ठेवू नका.\"\n\n
+
+Aapka kaaran tha:\n
+तुमचे कारण होते:\n
+
+\n\nKya ye kaaran badal gaya hai, ya sirf bhaav upar-neeche hua hai?
+\n\nहे कारण बदलले आहे का, की फक्त price वर-खाली झाली आहे?
+
+Kaaran badla, becho
+कारण बदलले, विका
+
+Nahi, rakhta hu
+नाही, ठेवतो
+
++ Naya fund banao
++ नवीन fund बनवा
+
+Kis fund mein?
+कोणत्या fund मध्ये?
+
+Naye fund ka naam
+नवीन fund चे नाव
+
+Kitne rupaye ka?
+किती रुपयांचे?
+
+Aaj ke jaanche hue bhaav par, sirf poore share. Nakli paisa.
+आजच्या तपासलेल्या price वर, फक्त पूर्ण shares. खोटे पैसे.
+
+Rehne do
+राहू द्या
+
+$name kharid raha hu
+$name घेत आहे
+
+🧠 Khareedne se pehle socho (optional)
+🧠 घेण्याआधी विचार करा (optional)
+
+Main ye dhandha samajhta hu (kaise kamati hai)
+मला हा business समजतो (company कशी कमावते)
+
+Kyun le raha hu? (optional)
+का घेत आहे? (optional)
+
+Kya galat ho sakta hai? (optional)
+काय चुकू शकते? (optional)
+
+Khaali chhod sakte ho. Likhoge to diary mein save hoga, aur 3, 6, 12 mahine baad app poochega ki kaaran sahi nikla ya nahi.
+रिकामे सोडू शकता. लिहिले तर diary मध्ये save होईल, आणि 3, 6, 12 महिन्यांनी app विचारेल की कारण बरोबर ठरले का.
+
+Cash zyada, karz kam
+Cash जास्त, कर्ज कमी
+
+Company par kitna lamba karz (long-term debt) hai, uske paas kitna cash hai, aur saal mein kitna munafa kamati hai.
+Company वर किती long-term कर्ज (debt) आहे, तिच्याकडे किती cash आहे, आणि वर्षाला किती profit कमावते.
+
+Long-term karz itna kam ho ki 4 saal ke net profit se poora chuk jaye, ya company ke paas karz se zyada cash ho.
+Long-term कर्ज इतके कमी असावे की 4 वर्षांच्या net profit मधून पूर्ण फिटेल, किंवा company कडे कर्जापेक्षा जास्त cash असावी.
+
+Bura samay (mandi, corona jaisa) aaye to karz wali company ko byaaj bharna padta hai, warna doob sakti hai. Kam karz wali company tufaan jhel leti hai aur mauka milne par sasti cheezein khareed sakti hai. Buffett kehte hain: karz se hi achhe-achhe log doobte hain.
+वाईट काळ (मंदी, corona सारखा) आला तर कर्ज असलेल्या company ला व्याज भरावे लागते, नाहीतर ती बुडू शकते. कमी कर्ज असलेली company वादळ सहन करते आणि संधी मिळाल्यावर स्वस्त गोष्टी विकत घेऊ शकते. Buffett म्हणतात: कर्जामुळेच चांगले-चांगले लोक बुडतात.
+
+Debt-to-Equity kam
+Debt-to-Equity कमी
+
+Karz ÷ shareholders ka paisa (equity). Jaise D/E 0.3 matlab har ₹100 apne paise par sirf ₹30 karz.
+कर्ज ÷ shareholders चे पैसे (equity). उदा. D/E 0.3 म्हणजे स्वतःच्या प्रत्येक ₹100 वर फक्त ₹30 कर्ज.
+
+D/E 0.5 se kam. Bank aur NBFC ke liye ye jaanch nahi hoti, kyunki logon ka paisa (deposit) lena hi unka dhandha hai.
+D/E 0.5 पेक्षा कमी. Bank आणि NBFC साठी ही तपासणी होत नाही, कारण लोकांचे पैसे (deposit) घेणे हाच त्यांचा business आहे.
+
+D/E kam ho to company apne paise se chal rahi hai, udhaar se nahi. Zyada D/E wali company ka munafa byaaj mein chala jaata hai, aur byaaj dar badhne par sabse pehle wahi girti hai.
+D/E कमी असेल तर company स्वतःच्या पैशावर चालते, उधारीवर नाही. जास्त D/E असलेल्या company चा profit व्याजात जातो, आणि व्याजदर वाढला की सर्वात आधी तीच पडते.
+
+Retained earnings lagaataar badhe
+Retained earnings सतत वाढणे
+
+Retained earnings = company ne aaj tak jo munafa kamaya aur baanta nahi, wo company mein jama hai.
+Retained earnings = company ने आजपर्यंत कमावलेला आणि न वाटलेला profit, जो company मध्ये जमा आहे.
+
+Har saal pichhle saal se zyada ho (jitne saal ka data mila, sab mein).
+दरवर्षी मागच्या वर्षापेक्षा जास्त असावे (जितक्या वर्षांचा data मिळाला, सर्वांमध्ये).
+
+Iska badhna dikhata hai ki company har saal sach mein paisa jod rahi hai aur apne hi munafe se badh rahi hai, baar-baar naye share bechkar ya karz lekar nahi. Buffett ise company ki 'bachat' maante hain.
+हे वाढणे दाखवते की company दरवर्षी खरोखर पैसे जमा करत आहे आणि स्वतःच्या profit मधून वाढत आहे, वारंवार नवीन shares विकून किंवा कर्ज घेऊन नाही. Buffett याला company ची 'बचत' मानतात.
+
+ROE 15% se zyada, karz se nahi
+ROE 15% पेक्षा जास्त, कर्जामुळे नाही
+
+ROE (Return on Equity) = net profit ÷ shareholders ka paisa. Matlab company aapke har ₹100 par saal mein kitna kamati hai.
+ROE (Return on Equity) = net profit ÷ shareholders चे पैसे. म्हणजे company तुमच्या प्रत्येक ₹100 वर वर्षाला किती कमावते.
+
+Har saal ROE 15% ya zyada ho, aur saath mein D/E 1 se kam ho (taaki ROE karz ke dum par na ho).
+दरवर्षी ROE 15% किंवा जास्त असावा, आणि सोबत D/E 1 पेक्षा कमी असावा (म्हणजे ROE कर्जाच्या जोरावर नसावा).
+
+Oonchi aur lagaataar ROE matlab dhandha andar se taakatwar hai. Lekin karz lekar bhi ROE badhaya ja sakta hai, jo khatarnaak hai. Isliye Buffett ROE ke saath karz bhi dekhte hain.
+जास्त आणि सतत ROE म्हणजे business आतून मजबूत आहे. पण कर्ज घेऊनही ROE वाढवता येतो, जे धोकादायक आहे. म्हणून Buffett ROE सोबत कर्जही बघतात.
+
+Kam capex
+कमी capex
+
+Capex = machinery, factory, plant par kharcha. Ise dhandhe ki kamai (operating cash flow) se milaate hain.
+Capex = machinery, factory, plant वरचा खर्च. याची तुलना business च्या कमाईशी (operating cash flow) करतात.
+
+Saalon ka capex, kamai ke aadhe (50%) se kam ho.
+सर्व वर्षांचा capex, कमाईच्या अर्ध्यापेक्षा (50%) कमी असावा.
+
+Jis company ko chalte rehne ke liye baar-baar bhaari machine aur plant lagane padte hain, uska bahut sa munafa wahi kha jaata hai. Achhi company kam kharche mein zyada kamati hai, aur bacha paisa shareholders ke kaam aata hai.
+ज्या company ला चालू राहण्यासाठी वारंवार मोठ्या machines आणि plant लावावे लागतात, तिचा बराच profit तिथेच जातो. चांगली company कमी खर्चात जास्त कमावते, आणि उरलेले पैसे shareholders च्या कामी येतात.
+
+Preferred stock na ho
+Preferred stock नसावा
+
+Preferred stock ek mehngi funding hai: unhe pakka dividend pehle dena padta hai.
+Preferred stock ही महाग funding आहे: त्यांना ठरलेला dividend आधी द्यावा लागतो.
+
+Preferred stock na ho, ya equity ke 1% se bhi kam ho.
+Preferred stock नसावा, किंवा equity च्या 1% पेक्षाही कमी असावा.
+
+Strong company ko aisi mehngi funding ki zaroorat nahi padti. Iska hona dikhata hai ki company ko kabhi paise ki tangi thi. India mein ye bahut kam companies mein hota hai.
+Strong company ला अशा महाग funding ची गरज पडत नाही. तो असणे दाखवते की company ला कधीतरी पैशांची अडचण होती. India मध्ये हे फार कमी companies मध्ये असते.
+
+Company apne hi share bazaar se wapas khareedti hai, ya uske kul share ghat jaate hain.
+Company स्वतःचेच shares market मधून परत विकत घेते, किंवा तिचे एकूण shares कमी होतात.
+
+Pichhle saalon mein buyback hua ho, ya kul share ki ginti ghati ho.
+मागच्या वर्षांत buyback झाला असावा, किंवा एकूण shares ची संख्या कमी झाली असावी.
+
+Buyback tab hota hai jab company ke paas faltu paisa ho aur management maanta ho ki share sasta hai. Isse bache shareholders ka hissa badhta hai. India mein buyback kam hota hai, isliye ✗ aana bura sign nahi, bas ✓ ek achha sign hai.
+Company कडे जास्तीचे पैसे असतात आणि management ला share स्वस्त वाटतो तेव्हा buyback होतो. त्यामुळे उरलेल्या shareholders चा हिस्सा वाढतो. India मध्ये buyback कमी होतो, म्हणून ✗ येणे वाईट sign नाही, फक्त ✓ हा चांगला sign आहे.
+
+Moat (andaaza)
+Moat (अंदाज)
+
+Moat = aisi taakat jo doosron ko is dhandhe mein aane se roke: brand (Coca-Cola), network, sasta banana, patent. Ise seedha naapa nahi ja sakta, isliye numbers se andaaza lagaya hai.
+Moat = अशी ताकद जी इतरांना या business मध्ये येण्यापासून रोखते: brand (Coca-Cola), network, स्वस्तात बनवणे, patent. हे थेट मोजता येत नाही, म्हणून numbers वरून अंदाज लावला आहे.
+
+Har saal net profit margin 10% ya zyada, ROE 15% ya zyada, aur margin har saal lagbhag same (8% se zyada upar-neeche nahi).
+दरवर्षी net profit margin 10% किंवा जास्त, ROE 15% किंवा जास्त, आणि margin दरवर्षी जवळपास सारखे (8% पेक्षा जास्त वर-खाली नाही).
+
+Jis company ka munafa saal dar saal oonchi aur sthir rehta hai, uske paas aksar koi moat hota hai, warna competition use kam kar deta. Ye sirf andaaza hai: company ka brand aur dhandha khud bhi samjhna zaroori hai.
+ज्या company चा profit वर्षानुवर्षे जास्त आणि स्थिर राहतो, तिच्याकडे बहुधा moat असतो, नाहीतर competition ने तो कमी केला असता. हा फक्त अंदाज आहे: company चा brand आणि business स्वतः समजून घेणेही गरजेचे आहे.
+
+Profit asli hai ya kaagzi?
+Profit खरा आहे की कागदावरचा?
+
+Dhandhe se bank mein aaya asli cash (operating cash flow) ko kaagaz par dikhaye net profit se milaate hain. Saalon ka jod ÷ saalon ka jod.
+Business मधून bank मध्ये आलेली खरी cash (operating cash flow) आणि कागदावर दाखवलेला net profit यांची तुलना. सर्व वर्षांची बेरीज ÷ सर्व वर्षांची बेरीज.
+
+Cash, profit ka kam se kam 80% ho (0.8 ya zyada).
+Cash, profit च्या किमान 80% असावी (0.8 किंवा जास्त).
+
+Profit hisaab-kitaab se badhaya ja sakta hai, cash nahi. Agar company saalon tak profit dikhaye par cash na aaye, to ya to grahak paisa nahi de rahe, ya maal godown mein pada hai, ya hisaab mein gadbad hai. Munger ise sabse pehle dekhte the.
+Profit हिशोबाने वाढवता येतो, cash नाही. Company वर्षानुवर्षे profit दाखवत असेल पण cash येत नसेल, तर एकतर ग्राहक पैसे देत नाहीत, किंवा माल godown मध्ये पडून आहे, किंवा हिशोबात गडबड आहे. Munger हे सर्वात आधी बघायचे.
+
+Sasta hai ya mehenga? (owner earnings yield)
+स्वस्त आहे की महाग? (owner earnings yield)
+
+Owner earnings = dhandhe ki cash kamai − machinery ka kharcha (capex). Ise poori company ki bazaar keemat (share ka bhaav × kul share) se bhaag dete hain. Matlab: ₹100 ki company khareedo to saal mein kitna asli cash kamati hai.
+Owner earnings = business ची cash कमाई − machinery चा खर्च (capex). याला पूर्ण company च्या market किमतीने (share ची price × एकूण shares) भागतात. म्हणजे: ₹100 ची company घेतली तर ती वर्षाला किती खरी cash कमावते.
+
+Ye yield FD (lagbhag 7%) se zyada ho.
+हे yield FD (साधारण 7%) पेक्षा जास्त असावे.
+
+Buffett achhi company bhi mehenge bhaav par nahi lete; isse 'margin of safety' kehte hain. Agar company ki kamai FD se bhi kam hai, to aap khatra le rahe ho bina extra fayde ke, jab tak company bahut tezi se na badhe. Tezi se badhne wali company ka yield kam ho sakta hai, isliye ise growth ke saath dekho.
+Buffett चांगली company सुद्धा महाग price ला घेत नाहीत; याला 'margin of safety' म्हणतात. Company ची कमाई FD पेक्षाही कमी असेल, तर तुम्ही जास्त फायद्याशिवाय धोका घेत आहात, जोपर्यंत company खूप वेगाने वाढत नाही. वेगाने वाढणाऱ्या company चे yield कमी असू शकते, म्हणून हे growth सोबत बघा.
+
+Naye share bechna (dilution)
+नवीन shares विकणे (dilution)
+
+Company ke kul share ki ginti saalon mein kitni badhi.
+Company च्या एकूण shares ची संख्या काही वर्षांत किती वाढली.
+
+Kul share 5% se zyada na badhe hon.
+एकूण shares 5% पेक्षा जास्त वाढलेले नसावेत.
+
+Jab company baar-baar naye share bechti hai, to aapka hissa chhota hota jaata hai, bhale aapne kuch na kiya ho. Achhi company apne munafe se badhti hai, shareholders ka hissa kaat kar nahi.
+Company वारंवार नवीन shares विकते तेव्हा तुमचा हिस्सा लहान होत जातो, तुम्ही काही केले नसले तरी. चांगली company स्वतःच्या profit मधून वाढते, shareholders चा हिस्सा कापून नाही.
+
+Karz tezi se badhna
+कर्ज वेगाने वाढणे
+
+Kul karz pehle saal se aakhri saal tak kitna badha.
+एकूण कर्ज पहिल्या वर्षापासून शेवटच्या वर्षापर्यंत किती वाढले.
+
+Karz 50% se zyada na badha ho (ya karz ho hi na).
+कर्ज 50% पेक्षा जास्त वाढलेले नसावे (किंवा कर्जच नसावे).
+
+Karz ka tezi se badhna dikhata hai ki dhandha apne paise se nahi chal pa raha. Bura samay aaye to sabse pehle yahi companies phansti hain.
+कर्ज वेगाने वाढणे दाखवते की business स्वतःच्या पैशावर चालू शकत नाही. वाईट काळ आला की सर्वात आधी याच companies अडकतात.
+
+Khabron mein laal jhande
+News मधले red flags
+
+Pichhle 6 mahine ki khabron mein promoter ka share girvi (pledge), auditor ka istifa, SEBI/ED ki jaanch, default jaise shabd.
+मागच्या 6 महिन्यांच्या news मध्ये promoter चे shares गहाण (pledge), auditor चा राजीनामा, SEBI/ED ची चौकशी, default असे शब्द.
+
+Aisi koi khabar na mile.
+अशी कोणतीही news नसावी.
+
+Munger kehte the: buri khabar ek baar aaye to aksar aur bhi chhupi hoti hai. Promoter share girvi rakhe to wo paise ki tangi mein hai; auditor chhod de to hisaab mein gadbad ka shak. Ye khabron se dhoondha jaata hai, isliye kabhi chhoot bhi sakta hai — khabar khud padh kar dekho.
+Munger म्हणायचे: वाईट news एकदा आली तर बहुधा आणखीही लपलेली असते. Promoter shares गहाण ठेवतो म्हणजे त्याला पैशांची अडचण आहे; auditor सोडून गेला तर हिशोबात गडबडीची शंका. हे news मधून शोधले जाते, म्हणून कधी चुकूही शकते — news स्वतः वाचून बघा.
+
+Data nahi mila
+Data मिळाला नाही
+
+Saalon ka jod ghaate mein
+सर्व वर्षांची बेरीज loss मध्ये
+
+ saal)
+ वर्षे)
+
+Sasta hai ya mehenga?
+स्वस्त आहे की महाग?
+
+% · company ki keemat 
+% · company ची किंमत 
+
+Naye share bechna
+नवीन shares विकणे
+
+Kul share 
+एकूण shares 
+
+ se 
+ ते 
+
+Karz nahi mila
+कर्ज मिळाले नाही
+
+Bank/NBFC: ye jaanch nahi hoti
+Bank/NBFC: ही तपासणी होत नाही
+
+Koi lamba karz nahi
+Long-term कर्ज नाही
+
+ · munafa nahi
+ · profit नाही
+
+ saal ke munafe mein chuke
+ वर्षांच्या profit मध्ये फिटेल
+
+ saal: 
+ वर्षे: 
+
+ · par karz zyada (D/E 
+ · पण कर्ज जास्त (D/E 
+
+Dhandhe se cash nahi aaya
+Business मधून cash आली नाही
+
+Capex kamai ka 
+Capex कमाईच्या 
+
+Preferred stock nahi mila
+Preferred stock नाही
+
+Na ke barabar
+नगण्य
+
+Kul share ghate
+एकूण shares कमी झाले
+
+Buyback nahi mila
+Buyback सापडला नाही
+
+Data kam hai
+Data कमी आहे
+
+ · upar-neeche zyada
+ · वर-खाली जास्त
+
+Buffett check kya hai
+Buffett check म्हणजे काय
+
+Warren Buffett duniya ke sabse safal investors mein se hain. Wo share khareedne se pehle company ki balance sheet mein ye dekhte hain ki company 
+Warren Buffett जगातील सर्वात यशस्वी investors पैकी एक आहेत. Share घेण्याआधी ते company च्या balance sheet मध्ये बघतात की company 
+
+strong hai, karz kam hai, aur lagaataar paisa jod rahi hai.\n\nYahan 8 jaanch hain. Har jaanch ke aage ⓘ dabao, uska matlab, kab ✓ milta hai aur 
+strong आहे, कर्ज कमी आहे, आणि सतत पैसे जमा करत आहे.\n\nइथे 8 तपासण्या आहेत. प्रत्येक तपासणीपुढे ⓘ दाबा, तिचा अर्थ, ✓ कधी मिळतो आणि 
+
+kyun zaroori hai, sab likha hai.\n\n✓ = pass   ✗ = fail   ? = data nahi mila   — = is company par laagu nahi\n\n
+का महत्त्वाचे आहे, सर्व लिहिले आहे.\n\n✓ = pass   ✗ = fail   ? = data मिळाला नाही   — = या company ला लागू नाही\n\n
+
+Data Yahoo Finance se aata hai, aksar 4 saal ka. 10 saal ka poora hisaab Screener.in button se dekho.\n\nYe seekhne ke liye hai. Pass hone ka matlab ye nahi ki share zaroor badhega.
+Data Yahoo Finance वरून येतो, बहुधा 4 वर्षांचा. 10 वर्षांचा पूर्ण हिशोब Screener.in button ने बघा.\n\nहे शिकण्यासाठी आहे. Pass होणे म्हणजे share नक्की वाढेल असे नाही.
+
+Balance sheet laa raha hu…
+Balance sheet आणत आहे…
+
+Balance sheet ka data nahi mila. Internet check karo, ya Screener.in par dekho.
+Balance sheet चा data मिळाला नाही. Internet तपासा, किंवा Screener.in वर बघा.
+
+ saal ke data se (Yahoo Finance)
+ वर्षांच्या data वरून (Yahoo Finance)
+
+ · Bank/NBFC: karz wali jaanch nahi
+ · Bank/NBFC: कर्जाची तपासणी नाही
+
+💵 Profit asli hai?
+💵 Profit खरा आहे?
+
+🏷️ Sasta hai ya mehenga?
+🏷️ स्वस्त आहे की महाग?
+
+🚩 Laal jhande
+🚩 Red flags
+
+6 mahine ki khabrein dekh raha hu…
+6 महिन्यांची news बघत आहे…
+
+Pledge, auditor, SEBI, default jaisi koi khabar nahi mili
+Pledge, auditor, SEBI, default अशी कोणतीही news मिळाली नाही
+
+ khabar mili, khud padh kar dekho:
+ news मिळाली, स्वतः वाचून बघा:
+
+📌 Kya dekhte hain\n
+📌 काय बघतो\n
+
+\n\n✓ Kab milta hai\n
+\n\n✓ कधी मिळतो\n
+
+\n\n💡 Kyun zaroori hai\n
+\n\n💡 का महत्त्वाचे\n
+
+Screener.in (10 saal)
+Screener.in (10 वर्षे)
+
+Dobara jaancho
+पुन्हा तपासा
+
+Gemini free search limit reached. Will try later
+Gemini ची free search limit संपली. नंतर try करेल
+
+Search took too long
+Search ला खूप वेळ लागला
+
+Gemini free limit reached. Try after some time
+Gemini ची free limit संपली. थोड्या वेळाने try करा
+
+Gemini is busy right now. Try again after a minute
+Gemini सध्या busy आहे. एका मिनिटाने पुन्हा try करा
+
+Gemini key problem (
+Gemini key ची अडचण (
+
+Gemini took too long
+Gemini ला खूप वेळ लागला
+
+Website address is not correct
+Website चा address बरोबर नाही
+
+Could not open the website. Check internet.
+Website उघडली नाही. Internet तपासा.
+
+Website answered 
+Website चे उत्तर: 
+
+ lines on the page.
+ ओळी page वर.
+
+New notice
+नवीन notice
+
+Page changed
+Page बदलले
+
+New notice on website$about
+Website वर नवीन notice$about
+
+Google News answered 
+Google News चे उत्तर: 
+
+No internet or Google News did not open
+Internet नाही किंवा Google News उघडले नाही
+
+No news in the last 7 days yet.
+मागच्या 7 दिवसांत अजून news नाही.
+
+Latest news:\n• 
+ताजी news:\n• 
+
+News found
+News सापडली
+
+Pops down from the top when your news is found
+तुमची news सापडली की वरून खाली येते
+
+Open news
+News उघडा
+
+This is how your news alert will look.
+तुमचा news alert असा दिसेल.
+
+Sahayak keeps checking for your news and shows every result below.
+Market Watch तुमच्या news साठी तपासत राहते आणि प्रत्येक result खाली दाखवते.
+
+What to look for
+काय शोधायचे
+
+Each topic is watched on its own, with its own results and alert. Up to 
+प्रत्येक topic वर वेगळे लक्ष, स्वतःचे results आणि alert. जास्तीत जास्त 
+
++ Add another topic
++ आणखी topic जोडा
+
+Website to watch (optional)
+लक्ष ठेवायची website (optional)
+
+Also search Google News (free, no key needed)
+Google News मध्येही शोधा (free, key लागत नाही)
+
+Check now
+आत्ता तपासा
+
+Checking now
+तपासत आहे
+
+Clear results
+Results साफ करा
+
+, e.g. Maharashtra NEET PG round 2
+, उदा. Maharashtra NEET PG round 2
+
+Stop watching
+लक्ष ठेवणे थांबवा
+
+Start watching
+लक्ष ठेवणे सुरू करा
+
+No results yet.
+अजून results नाहीत.
+
+ ($count checks)
+ ($count वेळा तपासले)
+
+Open link
+Link उघडा
+
+Bazaar ki khabar, apne shares, pattern study aur nakli portfolio. Seekhne ke liye, salah nahi.
+Market ची news, आपले shares, pattern study आणि सरावाचा portfolio. शिकण्यासाठी, सल्ला नाही.
+
+🔔 News Watch: kisi bhi khabar par nazar
+🔔 News Watch: कोणत्याही news वर लक्ष
+
+Setup (ek baar)
+Setup (एकदाच)
+
+Gemini key daaloge to khabar ki Depth research aur AI jaanch chalegi. Bina key ke baaki sab chalega. 
+Gemini key टाकली तर news चा Depth research आणि AI तपासणी चालेल. Key शिवाय बाकी सर्व चालेल. 
+
+Key free milti hai aistudio.google.com par. Ye key sirf aapke phone mein rehti hai, kisi ko mat bhejna.
+Key free मिळते aistudio.google.com वर. ही key फक्त तुमच्या phone मध्ये राहते, कोणालाही पाठवू नका.
+
+Key save karo
+Key save करा
+
+Background chalu rakhoge to roz ki report, har ghante ki bhaav jaanch aur khabar ke alert time par aayenge.
+Background चालू ठेवले तर रोजचा report, price तपासणी आणि news चे alerts वेळेवर येतील.
+
+✓ Gemini key saved
+✓ Gemini key save आहे
+
+Gemini key abhi nahi hai (zaroori nahi)
+Gemini key अजून नाही (गरजेची नाही)
+
+✓ Background chalu hai
+✓ Background चालू आहे
+
+Background mein chalne do
+Background मध्ये चालू द्या
+
+Watching. 
+लक्ष ठेवत आहे. 
+
+Munafa 
+Profit 
+
+Nuksaan 
+Loss 
+

@@ -152,7 +152,7 @@ class FundActivity : Activity() {
                 .setPositiveButton("Haan, hatao") { _, _ ->
                     Funds.delete(this, fundId)
                     finish()
-                }.setNegativeButton("Nahi", null).show()
+                }.setNegativeButton("Nahi", null).show().also { Lang.watch(it) }
         }, wide(20))
     }
 
@@ -305,7 +305,7 @@ class FundActivity : Activity() {
             setColor(0xFF175CD3.toInt())
         }
         layoutParams = LinearLayout.LayoutParams(dp(30), dp(30))
-        setOnClickListener { AlertDialog.Builder(this@FundActivity).setTitle(title).setMessage(body).setPositiveButton("Samajh gaya", null).show() }
+        setOnClickListener { AlertDialog.Builder(this@FundActivity).setTitle(title).setMessage(body).setPositiveButton("Samajh gaya", null).show().also { Lang.watch(it) } }
     }
 
     /** Share ka poora hisaab, aapka kaaran, review aur Becho / Tickertape. */
@@ -349,7 +349,7 @@ class FundActivity : Activity() {
             val slug = h.optString("slug")
             status.text = Market.openTickertape(this, if (slug.startsWith("/stocks/")) "https://www.tickertape.in$slug" else null, h.optString("symbol"))
         }
-        box.show()
+        Lang.watch(box.show())
     }
 
     /** Faisla diary ka review: aapka kaaran sahi nikla? */
@@ -363,7 +363,7 @@ class FundActivity : Activity() {
             .setPositiveButton("✓ Sahi nikla") { _, _ -> saveReview(h, days, "right") }
             .setNegativeButton("✗ Galat nikla") { _, _ -> saveReview(h, days, "wrong") }
             .setNeutralButton("? Pata nahi") { _, _ -> saveReview(h, days, "unsure") }
-            .show()
+            .show().also { Lang.watch(it) }
     }
 
     private fun saveReview(h: JSONObject, days: Int, verdict: String) {
@@ -385,7 +385,7 @@ class FundActivity : Activity() {
                 "Aapka kaaran tha:\n" + h.optString("why").ifEmpty { "(nahi likha tha)" } + "\n\nKya ye kaaran badal gaya hai, ya sirf bhaav upar-neeche hua hai?")
             .setPositiveButton("Kaaran badla, becho") { _, _ -> sell() }
             .setNegativeButton("Nahi, rakhta hu", null)
-            .show()
+            .show().also { Lang.watch(it) }
     }
 
     companion object {

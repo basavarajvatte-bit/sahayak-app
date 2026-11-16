@@ -98,10 +98,10 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
      * Jawab: (JSON text, search hua ya nahi).
      */
     fun depth(text: String): Pair<String, Boolean>? {
-        grounded(DEPTH_RULES + "\n\n" + text)?.let { return it to true }
+        grounded(Lang.ai(DEPTH_RULES) + "\n\n" + text)?.let { return it to true }
         val parts = JSONArray().put(JSONObject().put("text", text))
         for (round in 0 until 2) {
-            ask(DEPTH_RULES, parts, 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)?.let { return it to false }
+            ask(Lang.ai(DEPTH_RULES), parts, 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)?.let { return it to false }
             // Gemini vyast ho to thoda ruk kar ek baar aur
             if (!lastError.contains("busy")) break
             try {
@@ -115,7 +115,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
 
     /** Bazaar ki khabron ka Hinglish matlab aur share par ho sakne wala asar, ek hi baar mein kai khabrein. */
     fun explainNews(text: String): String? =
-        ask(NEWS_RULES, JSONArray().put(JSONObject().put("text", text)), 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)
+        ask(Lang.ai(NEWS_RULES), JSONArray().put(JSONObject().put("text", text)), 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)
 
     /** Pattern study: kya ye headings sach mein us ghatna ki khabar hain, aur kis company ki. */
     fun patternCheck(text: String): String? =

@@ -238,7 +238,9 @@ object Watcher {
     }
 
     /** Upar se girne wali (heads-up) notification, awaaz aur vibration ke saath. Dabao to khabar khule. */
-    fun alertNow(c: Context, id: Int, title: String, text: String, link: String, screen: Class<*> = WatchActivity::class.java) {
+    fun alertNow(c: Context, id: Int, rawTitle: String, rawText: String, link: String, screen: Class<*> = WatchActivity::class.java) {
+        val title = Lang.t(rawTitle)
+        val text = Lang.t(rawText)
         val manager = c.getSystemService(android.app.NotificationManager::class.java)
         val channel = android.app.NotificationChannel(NEWS_CHANNEL, "News Watch alerts", android.app.NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Pops down from the top when your news is found"

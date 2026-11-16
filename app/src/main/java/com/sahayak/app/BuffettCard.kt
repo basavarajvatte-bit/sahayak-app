@@ -230,7 +230,7 @@ class BuffettCard(
     }
 
     private fun show(title: String, body: String) {
-        AlertDialog.Builder(a).setTitle(title).setMessage(body).setPositiveButton("Samajh gaya", null).show()
+        AlertDialog.Builder(a).setTitle(title).setMessage(body).setPositiveButton("Samajh gaya", null).show().also { Lang.watch(it) }
     }
 
     companion object {

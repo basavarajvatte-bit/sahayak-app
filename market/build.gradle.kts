@@ -11,7 +11,7 @@ val sharedCode = tasks.register<Copy>("sharedCode") {
             "GreenList.kt", "Patterns.kt", "PatternLogic.kt", "PatternActivity.kt", "PatternLockActivity.kt",
             "Funds.kt", "FundLogic.kt", "FundsActivity.kt", "FundActivity.kt", "BuyDialog.kt", "BuffettLogic.kt", "BuffettCard.kt",
             "Planner.kt", "StoryLogic.kt", "ShortsLogic.kt", "BrainLogic.kt", "WatchLogic.kt", "Watcher.kt", "WatchActivity.kt",
-            "SecureStore.kt", "GeminiLive.kt"
+            "SecureStore.kt", "GeminiLive.kt", "Lang.kt", "LangMr.kt"
         )
     }
     into(layout.buildDirectory.dir("shared/com/sahayak/app"))
@@ -25,8 +25,18 @@ android {
         applicationId = "com.sahayak.market"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
+    }
+
+    // Do app: hi = Hinglish (pehle wala), mr = Marathi (alag app, dono saath install ho sakte hain)
+    flavorDimensions += "lang"
+    productFlavors {
+        create("hi") { dimension = "lang" }
+        create("mr") {
+            dimension = "lang"
+            applicationIdSuffix = ".mr"
+        }
     }
 
     signingConfigs {

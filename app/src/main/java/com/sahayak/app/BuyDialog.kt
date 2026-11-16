@@ -66,7 +66,7 @@ object BuyDialog {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val problem = think.problem()
                 if (problem != null) {
-                    android.widget.Toast.makeText(a, problem, android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(a, Lang.t(problem), android.widget.Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
                 dialog.dismiss()
@@ -92,6 +92,7 @@ object BuyDialog {
             }
         }
         dialog.show()
+        Lang.watch(dialog)
     }
 
     /** Munger ki checklist ke dabbe: samajhta hu?, kyun?, kya galat ho sakta hai? */
