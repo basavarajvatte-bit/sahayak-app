@@ -17,8 +17,8 @@ android {
         applicationId = "com.chhotu.todo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.1"
+        versionCode = 13
+        versionName = "2.2"
     }
 
     signingConfigs {

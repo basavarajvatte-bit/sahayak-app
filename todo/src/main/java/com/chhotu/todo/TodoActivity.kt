@@ -157,8 +157,8 @@ class TodoActivity : Activity() {
         overlayButton.text = if (Settings.canDrawOverlays(this)) "✓ Chhotu can show on screen" else "Allow Chhotu on screen"
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
         shareButton.text = when (TodoSync.role(this)) {
-            TodoSync.OWNER -> "👥 My list is shared"
-            TodoSync.GUEST -> "👥 " + TodoSync.name(this) + "'s list"
+            TodoSync.OWNER -> "👥 My list is shared  ·  💬 Chat" + TodoSync.unread(this).let { if (it > 0) " ($it new)" else "" }
+            TodoSync.GUEST -> "👥 " + TodoSync.name(this) + "'s list  ·  💬 Chat" + TodoSync.unread(this).let { if (it > 0) " ($it new)" else "" }
             else -> "👥 Share this list with another phone"
         }
         list.removeAllViews()

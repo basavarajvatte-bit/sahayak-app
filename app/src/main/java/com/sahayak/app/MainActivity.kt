@@ -338,8 +338,9 @@ class MainActivity : Activity() {
 
     private fun renderTodos() {
         findViewById<Button>(R.id.todoShared).text = when (TodoSync.role(this)) {
-            TodoSync.OWNER -> "👥 My list is shared"
-            TodoSync.GUEST -> "👥 " + TodoSync.name(this) + "'s list (" + Todos.pending(this, Todos.PEER).size + ")"
+            TodoSync.OWNER -> "👥 My list is shared" + TodoSync.unread(this).let { if (it > 0) "  ·  💬 $it new" else "" }
+            TodoSync.GUEST -> "👥 " + TodoSync.name(this) + "'s list (" + Todos.pending(this, Todos.PEER).size + ")" +
+                TodoSync.unread(this).let { if (it > 0) "  ·  💬 $it new" else "" }
             else -> "👥 Shared list (brother's phone)"
         }
         val box = findViewById<LinearLayout>(R.id.todoBox)

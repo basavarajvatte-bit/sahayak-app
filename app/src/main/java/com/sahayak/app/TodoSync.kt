@@ -84,6 +84,7 @@ object TodoSync {
     /** Apni list share karo. Naya code banta hai; wahi doosre phone mein daalna hai. */
     fun share(c: Context): String {
         val code = ShareLogic.newCode()
+        chatPrefs(c).edit().clear().apply()
         prefs(c).edit().clear().putString("device", device(c)).putString("role", OWNER).putString("code", code).putBoolean("dirty", true).apply()
         restart(c)
         return code
@@ -93,6 +94,7 @@ object TodoSync {
     fun join(c: Context, name: String, typed: String): Boolean {
         val code = ShareLogic.cleanCode(typed)
         if (code.isEmpty()) return false
+        chatPrefs(c).edit().clear().apply()
         prefs(c).edit().clear().putString("device", device(c)).putString("role", GUEST).putString("code", code)
             .putString("name", name.trim().take(30).ifEmpty { "Shared" }).putBoolean("hello", true).apply()
         c.getSharedPreferences("sahayak_todos_" + Todos.PEER, Context.MODE_PRIVATE).edit().clear().apply()
@@ -104,6 +106,7 @@ object TodoSync {
     fun unlink(c: Context) {
         val guest = role(c) == GUEST
         prefs(c).edit().clear().apply()
+        chatPrefs(c).edit().clear().apply()
         if (guest) c.getSharedPreferences("sahayak_todos_" + Todos.PEER, Context.MODE_PRIVATE).edit().clear().apply()
         generation++
         stream?.disconnect()
@@ -193,6 +196,9 @@ object TodoSync {
         if (packet.type == "hello") {
             // Doosra phone poori list maang raha hai
             if (System.currentTimeMillis() - lastFull > HELLO_GAP_MS) sendAll(c)
+        } else if (packet.type == "chat") {
+            val fresh = mergeChat(c, packet.items)
+            fresh.forEach { tell(c, "💬 " + who(c), it.optString("text"), chat = true) }
         } else if (packet.items.isNotEmpty()) {
             val merged = Todos.merge(c, box(c), packet.items)
             if (role(c) == OWNER) merged.added.forEach { tell(c, "New task", it.optString("text")) }
@@ -225,6 +231,8 @@ object TodoSync {
 
     private fun sendAll(c: Context) {
         lastFull = System.currentTimeMillis()
+        // Chat ke pichhle sandesh bhi, taaki band raha phone peeche na rahe (doosra phone id se dohraav hata deta hai)
+        ShareLogic.chunks(chat(c).takeLast(CHAT_RESEND)).forEach { part -> send(c, "chat", part) {} }
         val parts = ShareLogic.chunks(Todos.raw(c, box(c)))
         if (parts.isEmpty()) {
             prefs(c).edit().putBoolean("dirty", false).apply()
@@ -271,13 +279,79 @@ object TodoSync {
         }
     }
 
+    // ---------- Chat ----------
+
+    private const val CHAT_KEEP = 300
+    private const val CHAT_RESEND = 40
+    const val CHAT_MAX = 500
+
+    private fun chatPrefs(c: Context) = c.getSharedPreferences(PREFS + "_chat", Context.MODE_PRIVATE)
+
+    /** Doosre phone wale ka naam: guest ke phone par jo naam diya, owner ke phone par "Message". */
+    fun who(c: Context): String = if (role(c) == GUEST) name(c) else "Message"
+
+    /** Sab sandesh, purane se naye: {id, text, at, from}. */
+    @Synchronized
+    fun chat(c: Context): List<JSONObject> = try {
+        val a = org.json.JSONArray(chatPrefs(c).getString("msgs", "[]"))
+        List(a.length()) { a.getJSONObject(it) }
+    } catch (e: org.json.JSONException) {
+        emptyList()
+    }
+
+    fun mine(c: Context, msg: JSONObject) = msg.optString("from") == device(c)
+
+    /** Kitne naye sandesh abhi padhe nahi. */
+    fun unread(c: Context): Int {
+        val seen = chatPrefs(c).getLong("read", 0L)
+        return chat(c).count { !mine(c, it) && it.optLong("got", it.optLong("at")) > seen }
+    }
+
+    fun markRead(c: Context) = chatPrefs(c).edit().putLong("read", System.currentTimeMillis()).apply()
+
+    @Synchronized
+    private fun saveChat(c: Context, list: List<JSONObject>) {
+        chatPrefs(c).edit().putString("msgs", org.json.JSONArray(list.sortedBy { it.optLong("at") }.takeLast(CHAT_KEEP)).toString()).commit()
+    }
+
+    /** Aaye sandesh jodo; sirf naye lautao. */
+    @Synchronized
+    private fun mergeChat(c: Context, incoming: List<JSONObject>): List<JSONObject> {
+        val have = chat(c)
+        val ids = have.map { it.optString("id") }.toHashSet()
+        val now = System.currentTimeMillis()
+        val fresh = incoming.filter { it.optString("text").isNotBlank() && ids.add(it.optString("id")) }
+            .map { JSONObject(it.toString()).put("got", now) }
+        if (fresh.isNotEmpty()) saveChat(c, have + fresh)
+        return fresh
+    }
+
+    /** Sandesh bhejo. Pahuncha ya nahi, "sent" se pata chalta hai. */
+    fun sendChat(context: Context, text: String) {
+        val c = context.applicationContext
+        val clean = text.trim().take(CHAT_MAX)
+        if (clean.isEmpty() || !linked(c)) return
+        start(c)
+        val msg = JSONObject().put("id", UUID.randomUUID().toString().take(10)).put("text", clean)
+            .put("at", System.currentTimeMillis()).put("from", device(c))
+        saveChat(c, chat(c) + msg)
+        val out = JSONObject(msg.toString())
+        send(c, "chat", listOf(out)) { ok ->
+            synchronized(this) {
+                saveChat(c, chat(c).map { if (it.optString("id") == msg.optString("id")) it.put("sent", ok) else it })
+            }
+        }
+        ping()
+    }
+
     /** Upar notification: naya kaam aaya, ya doosre ne kaam kar diya. */
-    private fun tell(c: Context, title: String, text: String) {
+    private fun tell(c: Context, title: String, text: String, chat: Boolean = false) {
         try {
             val manager = c.getSystemService(NotificationManager::class.java) ?: return
             manager.createNotificationChannel(NotificationChannel(CHANNEL, "Shared to-do list", NotificationManager.IMPORTANCE_HIGH))
-            val open = c.packageManager.getLaunchIntentForPackage(c.packageName) ?: Intent()
-            val tap = PendingIntent.getActivity(c, 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val open = if (chat) Intent(c, SharedTodoActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            else c.packageManager.getLaunchIntentForPackage(c.packageName) ?: Intent()
+            val tap = PendingIntent.getActivity(c, if (chat) 1 else 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val note = Notification.Builder(c, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_menu_agenda)
                 .setContentTitle(title)

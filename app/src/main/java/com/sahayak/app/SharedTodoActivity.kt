@@ -29,6 +29,10 @@ class SharedTodoActivity : Activity() {
     private var input: EditText? = null
     private var status: TextView? = null
     private var list: LinearLayout? = null
+    private var chatBox: LinearLayout? = null
+    private var chatInput: EditText? = null
+    private var chatScroll: ScrollView? = null
+    private var chatCount = -1
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -96,6 +100,9 @@ class SharedTodoActivity : Activity() {
         input = null
         status = null
         list = null
+        chatBox = null
+        chatInput = null
+        chatCount = -1
         when (TodoSync.role(this)) {
             TodoSync.OWNER -> buildOwner()
             TodoSync.GUEST -> buildGuest()
@@ -161,6 +168,7 @@ class SharedTodoActivity : Activity() {
         })
         page.addView(box)
         page.addView(text("New tasks they add come into your normal to-do list, with a notification on top.", 14f, color = 0xFF475467.toInt()))
+        page.addView(chatCard("Chat"))
         page.addView(button("🔄 Sync now") {
             TodoSync.syncNow(this)
             toast("Syncing")
@@ -210,12 +218,102 @@ class SharedTodoActivity : Activity() {
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         tasks.addView(list)
         page.addView(tasks)
+        page.addView(chatCard("Chat with $who"))
 
         page.addView(button("🔄 Sync now") {
             TodoSync.syncNow(this)
             toast("Syncing")
         })
         page.addView(button("Disconnect") { confirmStop("Disconnect from $who's list?", "$who's list goes away from this phone. Their own phone keeps it.") })
+    }
+
+    /** Chat ka dabba: sandesh (apne hare, doosre ke safed) aur likhne ki jagah. */
+    private fun chatCard(title: String): LinearLayout {
+        val box = card()
+        box.addView(text("💬 $title", 18f, true))
+        val scroll = ScrollView(this)
+        val msgs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(msgs)
+        box.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(320)))
+        chatScroll = scroll
+        chatBox = msgs
+        val field = EditText(this).apply {
+            hint = "Write a message"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            maxLines = 4
+            filters = arrayOf(android.text.InputFilter.LengthFilter(TodoSync.CHAT_MAX))
+        }
+        chatInput = field
+        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        row.addView(field, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(button("Send") {
+            val words = field.text.toString().trim()
+            if (words.isNotEmpty()) {
+                TodoSync.sendChat(this, words)
+                field.setText("")
+                renderChat()
+            }
+        })
+        box.addView(row)
+        return box
+    }
+
+    private fun bubble(msg: org.json.JSONObject): LinearLayout {
+        val mine = TodoSync.mine(this, msg)
+        val wrap = LinearLayout(this).apply {
+            gravity = if (mine) Gravity.END else Gravity.START
+            setPadding(0, dp(3), 0, dp(3))
+        }
+        val inner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            background = GradientDrawable().apply {
+                setColor(if (mine) 0xFFD9FDD3.toInt() else 0xFFF2F4F7.toInt())
+                cornerRadius = dp(10).toFloat()
+            }
+        }
+        inner.addView(TextView(this).apply {
+            text = msg.optString("text")
+            textSize = 16f
+            setTextColor(0xFF1D2433.toInt())
+            setTextIsSelectable(true)
+        })
+        val tick = if (!mine) "" else when {
+            !msg.has("sent") -> "  🕓"
+            msg.optBoolean("sent") -> "  ✓"
+            else -> "  ⚠ not sent"
+        }
+        inner.addView(TextView(this).apply {
+            text = SimpleDateFormat("d MMM, h:mm a", Locale.ENGLISH).format(Date(msg.optLong("at"))) + tick
+            textSize = 11f
+            setTextColor(0xFF667085.toInt())
+        })
+        wrap.addView(inner, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            if (mine) leftMargin = dp(40) else rightMargin = dp(40)
+        })
+        return wrap
+    }
+
+    private fun renderChat() {
+        val box = chatBox ?: return
+        val all = TodoSync.chat(this)
+        val stamp = all.size * 31 + all.count { it.has("sent") }
+        if (stamp == chatCount) return
+        chatCount = stamp
+        box.removeAllViews()
+        if (all.isEmpty()) box.addView(text("No messages yet. Write below and tap Send.", 14f, color = 0xFF667085.toInt()))
+        all.takeLast(CHAT_SHOWN).forEach { box.addView(bubble(it)) }
+        TodoSync.markRead(this)
+        chatScroll?.post { chatScroll?.fullScroll(android.view.View.FOCUS_DOWN) }
+    }
+
+    /** Kisi kaam ke baare mein baat: chat mein us kaam ka naam pehle se likh do. */
+    private fun askAbout(task: String) {
+        val field = chatInput ?: return
+        field.setText("About \"" + task + "\": ")
+        field.setSelection(field.text.length)
+        field.requestFocus()
+        chatScroll?.let { page.requestChildFocus(field, field) }
     }
 
     private fun confirmStop(title: String, message: String) {
@@ -245,6 +343,7 @@ class SharedTodoActivity : Activity() {
                 setTextColor(0xFFC62828.toInt())
             }
         }
+        renderChat()
         val box = list ?: return
         box.removeAllViews()
         val items = Todos.pending(this, Todos.PEER)
@@ -259,6 +358,11 @@ class SharedTodoActivity : Activity() {
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
             val time = if (Todos.timed(item)) "⏰ " + Todos.clock(item.optLong("at")) + "  " else ""
             row.addView(text(time + item.optString("text"), 16f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(Button(this).apply {
+                text = "💬"
+                textSize = 14f
+                setOnClickListener { askAbout(item.optString("text")) }
+            })
             row.addView(Button(this).apply {
                 text = "Done"
                 isAllCaps = false
@@ -279,5 +383,9 @@ class SharedTodoActivity : Activity() {
             })
             box.addView(row)
         }
+    }
+
+    companion object {
+        private const val CHAT_SHOWN = 100
     }
 }
