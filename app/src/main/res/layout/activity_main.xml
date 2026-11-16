@@ -190,6 +190,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/todoShared"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="6dp"
+                android:text="👥 Shared list"
+                android:textAllCaps="false"
+                android:textSize="16sp" />
         </LinearLayout>
 
         <LinearLayout

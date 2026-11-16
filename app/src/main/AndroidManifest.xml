@@ -53,6 +53,12 @@
         </activity>
 
         <activity
+            android:name=".SharedTodoActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".FundsActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

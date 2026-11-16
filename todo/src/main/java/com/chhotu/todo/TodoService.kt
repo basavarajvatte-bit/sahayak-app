@@ -18,8 +18,9 @@ import android.provider.Settings
 import android.view.WindowManager
 import com.sahayak.app.Frames
 import com.sahayak.app.TodoPopup
+import com.sahayak.app.TodoSync
 
-/** Phone unlock hote hi Chhotu to-do dikhata hai. Internet ka use nahi. */
+/** Phone unlock hote hi Chhotu to-do dikhata hai. List share ki ho to doosre phone se aaye kaam bhi yahi sunta hai. */
 class TodoService : Service() {
     private var popup: TodoPopup? = null
     private val main = Handler(Looper.getMainLooper())
@@ -41,6 +42,7 @@ class TodoService : Service() {
         Frames.load(this)
         popup = TodoPopup(this, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         registerReceiver(unlocked, IntentFilter(Intent.ACTION_USER_PRESENT))
+        TodoSync.start(this)
     }
 
     private fun startInForeground() {
@@ -60,7 +62,10 @@ class TodoService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        TodoSync.start(this)
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 

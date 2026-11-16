@@ -14,19 +14,28 @@ object Todos {
     private const val PREFS = "sahayak_todos"
     private const val KEY = "items"
 
+    /** Doosre ki list ki copy is dibbe mein rehti hai (bhai ki list). Apni list ka dibba khaali naam "". */
+    const val PEER = "peer"
+
+    private fun prefs(context: Context, box: String) =
+        context.getSharedPreferences(if (box.isEmpty()) PREFS else PREFS + "_" + box, Context.MODE_PRIVATE)
+
+    /** Sab kuch, hataye hue kaam ke nishaan samet. Sirf do phone milane ke liye. */
     @Synchronized
-    fun all(context: Context): List<JSONObject> {
-        val array = JSONArray(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "[]"))
+    fun raw(context: Context, box: String = ""): List<JSONObject> {
+        val array = JSONArray(prefs(context, box).getString(KEY, "[]"))
         return List(array.length()) { array.getJSONObject(it) }
     }
 
-    /** Baaki kaam, samay ke kram mein (bina tarikh wale aaj ke maane jaate hain). */
-    fun pending(context: Context) = all(context).filter { !it.optBoolean("done") }.sortedWith(compareBy({ dayStart(dueOf(it)) }, { timed(it).not() }, { dueOf(it) }))
+    fun all(context: Context, box: String = ""): List<JSONObject> = raw(context, box).filter { !it.optBoolean("del") }
+
+    /** Baaki kaam, samay ke kram mein (bina tarikh wale aaj ke maane jaate hain). Koi ginti ki seema nahi. */
+    fun pending(context: Context, box: String = "") = all(context, box).filter { !it.optBoolean("done") }.sortedWith(compareBy({ dayStart(dueOf(it)) }, { timed(it).not() }, { dueOf(it) }))
 
     /** Sirf aaj ke (aur pichhle chhoote hue) kaam. Chhotu sirf yahi batata hai. */
-    fun today(context: Context, now: Long = System.currentTimeMillis()): List<JSONObject> {
+    fun today(context: Context, now: Long = System.currentTimeMillis(), box: String = ""): List<JSONObject> {
         val end = dayStart(now) + DAY_MS
-        return pending(context).filter { dueOf(it, now) < end }
+        return pending(context, box).filter { dueOf(it, now) < end }
     }
 
     /** Kaam ki tarikh. Purane kaam (bina tarikh) aaj ke maane jaate hain. */
@@ -72,10 +81,10 @@ object Todos {
     private const val DAY_MS = 86_400_000L
 
     @Synchronized
-    private fun save(context: Context, items: List<JSONObject>) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY, JSONArray(items).toString()).commit()
-        refreshWidgets(context)
+    private fun save(context: Context, items: List<JSONObject>, box: String) {
+        prefs(context, box).edit()
+            .putString(KEY, JSONArray(ShareLogic.prune(items, System.currentTimeMillis())).toString()).commit()
+        if (box.isEmpty()) refreshWidgets(context)
     }
 
     /** Home screen ka to-do widget taaza karo (Sahayak mein ho to; Chhotu To-Do app mein ye kuch nahi karta). */
@@ -94,21 +103,40 @@ object Todos {
     }
 
     @Synchronized
-    fun add(context: Context, text: String, at: Long = 0L, timed: Boolean = false) {
-        val clean = text.trim().take(120)
+    fun add(context: Context, text: String, at: Long = 0L, timed: Boolean = false, box: String = "") {
+        val clean = text.trim().take(TEXT_MAX)
         if (clean.isEmpty()) return
         val item = JSONObject().put("id", UUID.randomUUID().toString().take(8)).put("text", clean).put("done", false)
+            .put("mod", System.currentTimeMillis())
         if (at > 0L) item.put("at", at).put("timed", timed)
-        save(context, all(context) + item)
+        save(context, raw(context, box) + item, box)
+        TodoSync.localChange(context, box, listOf(item))
     }
 
     @Synchronized
-    fun complete(context: Context, id: String) {
-        save(context, all(context).map { if (it.optString("id") == id) it.put("done", true) else it })
+    fun complete(context: Context, id: String, box: String = "") = mark(context, id, box, "done")
+
+    /** Hataya hua kaam nishaan ke saath rehta hai, taaki doosre phone se wapas na aa jaye. 30 din baad saaf. */
+    @Synchronized
+    fun remove(context: Context, id: String, box: String = "") = mark(context, id, box, "del")
+
+    private fun mark(context: Context, id: String, box: String, flag: String) {
+        val changed = mutableListOf<JSONObject>()
+        val items = raw(context, box).map {
+            if (it.optString("id") == id) it.put(flag, true).put("mod", System.currentTimeMillis()).also { item -> changed.add(item) } else it
+        }
+        save(context, items, box)
+        TodoSync.localChange(context, box, changed)
     }
 
+    /** Doosre phone se aaye kaam milao. Jo naya aaya ya abhi "ho gaya" hua wo lautao. */
     @Synchronized
-    fun remove(context: Context, id: String) {
-        save(context, all(context).filter { it.optString("id") != id })
+    fun merge(context: Context, box: String, incoming: List<JSONObject>): ShareLogic.Merged {
+        val merged = ShareLogic.merge(raw(context, box), incoming, System.currentTimeMillis())
+        if (merged.changed) save(context, merged.items, box)
+        return merged
     }
+
+    /** Ek kaam mein itne akshar tak. */
+    private const val TEXT_MAX = 300
 }

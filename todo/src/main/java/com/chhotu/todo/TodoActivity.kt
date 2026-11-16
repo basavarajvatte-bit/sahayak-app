@@ -21,6 +21,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.sahayak.app.MiniBuddy
+import com.sahayak.app.SharedTodoActivity
+import com.sahayak.app.TodoSync
 import com.sahayak.app.TodoPicker
 import com.sahayak.app.Todos
 
@@ -32,6 +34,7 @@ class TodoActivity : Activity() {
     private lateinit var name: EditText
     private lateinit var overlayButton: Button
     private lateinit var batteryButton: Button
+    private lateinit var shareButton: Button
     private val prefs by lazy { getSharedPreferences("sahayak", Context.MODE_PRIVATE) }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -86,6 +89,8 @@ class TodoActivity : Activity() {
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(list)
+        shareButton = button("") { startActivity(Intent(this, SharedTodoActivity::class.java)) }
+        page.addView(shareButton)
 
         page.addView(label("Setup", 16f, true))
         name = EditText(this).apply {
@@ -136,11 +141,14 @@ class TodoActivity : Activity() {
     override fun onResume() {
         super.onResume()
         TodoService.start(this)
+        TodoSync.start(this)
+        TodoSync.listener = { render() }
         render()
     }
 
     override fun onPause() {
         super.onPause()
+        TodoSync.listener = null
         prefs.edit().putString("name", name.text.toString().trim()).apply()
     }
 
@@ -148,10 +156,15 @@ class TodoActivity : Activity() {
     private fun render() {
         overlayButton.text = if (Settings.canDrawOverlays(this)) "✓ Chhotu can show on screen" else "Allow Chhotu on screen"
         batteryButton.text = if (batteryFree()) "✓ Background use allowed" else "Allow background use"
+        shareButton.text = when (TodoSync.role(this)) {
+            TodoSync.OWNER -> "👥 My list is shared"
+            TodoSync.GUEST -> "👥 " + TodoSync.name(this) + "'s list"
+            else -> "👥 Share this list with another phone"
+        }
         list.removeAllViews()
         val items = Todos.pending(this)
         val today = Todos.today(this)
-        val shown = if (open) items else today.take(ROWS)
+        val shown = if (open) items else today
         if (today.isEmpty()) list.addView(label("Nothing for today.", 15f))
         var group = ""
         shown.forEach { item ->
@@ -184,8 +197,4 @@ class TodoActivity : Activity() {
     }
 
     private var open = false
-
-    companion object {
-        private const val ROWS = 4
-    }
 }

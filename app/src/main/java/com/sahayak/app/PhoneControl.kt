@@ -70,6 +70,7 @@ class PhoneControl : AccessibilityService() {
         instance = this
         ShortsQueue.rearm(this)
         Watcher.rearm(this)
+        TodoSync.start(this)
         Frames.load(this)
         todoPopup = TodoPopup(this)
         val filter = IntentFilter(Intent.ACTION_USER_PRESENT)

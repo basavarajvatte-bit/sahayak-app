@@ -80,6 +80,7 @@ class MainActivity : Activity() {
         whenButton.setOnClickListener { todoWhen.open() }
         findViewById<Button>(R.id.todoToday).setOnClickListener { todoWhen.today() }
         findViewById<Button>(R.id.todoTomorrow).setOnClickListener { todoWhen.tomorrow() }
+        findViewById<Button>(R.id.todoShared).setOnClickListener { startActivity(Intent(this, SharedTodoActivity::class.java)) }
         findViewById<Button>(R.id.todoAdd).setOnClickListener {
             val input = findViewById<EditText>(R.id.todoInput)
             Todos.add(this, input.text.toString(), todoWhen.at(), todoWhen.timed)
@@ -182,11 +183,14 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         AssistState.listener = { render() }
+        TodoSync.start(this)
+        TodoSync.listener = { renderTodos() }
         render()
     }
 
     override fun onPause() {
         AssistState.listener = null
+        TodoSync.listener = null
         super.onPause()
     }
 
@@ -328,16 +332,21 @@ class MainActivity : Activity() {
         }
     }
 
-    /** More dabaya ho to aage ke din bhi, warna sirf aaj ke 4 kaam. */
+    /** More dabaya ho to aage ke din bhi, warna aaj ke saare kaam. */
     private var todoOpen = false
     private lateinit var todoWhen: TodoPicker
 
     private fun renderTodos() {
+        findViewById<Button>(R.id.todoShared).text = when (TodoSync.role(this)) {
+            TodoSync.OWNER -> "👥 My list is shared"
+            TodoSync.GUEST -> "👥 " + TodoSync.name(this) + "'s list (" + Todos.pending(this, Todos.PEER).size + ")"
+            else -> "👥 Shared list (brother's phone)"
+        }
         val box = findViewById<LinearLayout>(R.id.todoBox)
         box.removeAllViews()
         val pending = Todos.pending(this)
         val today = Todos.today(this)
-        val shown = if (todoOpen) pending else today.take(TODO_ROWS)
+        val shown = if (todoOpen) pending else today
         var group = ""
         shown.forEach { item ->
             val head = Todos.groupOf(item)
@@ -637,7 +646,6 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        private const val TODO_ROWS = 4
         private const val REQUEST_PERMISSIONS = 1
         private const val REQUEST_SCREEN = 2
         private const val LOW_RATING = 5

@@ -5,7 +5,7 @@ plugins {
 
 // Chhotu aur to-do ka code Sahayak se hi aata hai, do copy nahi rakhni
 val sharedCode = tasks.register<Copy>("sharedCode") {
-    from("../app/src/main/java/com/sahayak/app") { include("MiniBuddy.kt", "Todos.kt", "TodoPopup.kt", "TodoPicker.kt") }
+    from("../app/src/main/java/com/sahayak/app") { include("MiniBuddy.kt", "Todos.kt", "TodoPopup.kt", "TodoPicker.kt", "ShareLogic.kt", "TodoSync.kt", "SharedTodoActivity.kt") }
     into(layout.buildDirectory.dir("shared/com/sahayak/app"))
 }
 
@@ -17,8 +17,8 @@ android {
         applicationId = "com.chhotu.todo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "2.0"
+        versionCode = 12
+        versionName = "2.1"
     }
 
     signingConfigs {
