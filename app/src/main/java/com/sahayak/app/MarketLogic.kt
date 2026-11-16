@@ -432,8 +432,54 @@ object MarketLogic {
     data class Trend(val what: String, val unit: String, val points: List<Pair<String, Double>>)
     data class Depth(
         val company: String, val level: Int, val what: String, val numbers: List<Num>, val past: List<String>, val why: String, val unsure: String,
-        val trends: List<Trend> = emptyList(), val reasons: List<String> = emptyList(), val stocks: List<String> = emptyList()
+        val trends: List<Trend> = emptyList(), val reasons: List<String> = emptyList(), val stocks: List<String> = emptyList(),
+        /** AI ka andaza: share par kya asar ho sakta hai. */
+        val outlook: String = "",
+        /** Isi company ke saath pehle aisa hua tha tab share ne kya kiya. */
+        val sameBefore: List<String> = emptyList(),
+        /** Doosri company ke saath aisa hua tha tab kya hua. */
+        val others: List<String> = emptyList()
     )
+
+    private fun lines(o: JSONObject, name: String, max: Int): List<String> {
+        val a = o.optJSONArray(name) ?: return emptyList()
+        return (0 until a.length()).map { if (a.isNull(it)) "" else a.optString(it).trim() }.filter { it.isNotEmpty() }.take(max)
+    }
+
+    /** Khabar ka Hinglish matlab: heading, share par asar, aam taur par kya hota hai. */
+    data class Explain(val hi: String, val asar: String, val dir: String, val aam: String)
+
+    /** AI ka jawab: {"items":[{"n":1,"hi":"..","asar":"..","dir":"down","aam":".."}]}. n = line ka number. */
+    fun parseExplain(text: String): Map<Int, Explain> {
+        val out = LinkedHashMap<Int, Explain>()
+        try {
+            val items = JSONObject(jsonBlock(text)).optJSONArray("items") ?: return out
+            for (i in 0 until items.length()) {
+                val o = items.optJSONObject(i) ?: continue
+                val n = o.optInt("n", 0)
+                val hi = str(o, "hi")
+                if (n <= 0 || hi.isEmpty()) continue
+                val dir = o.optString("dir").lowercase(Locale.ENGLISH).let { if (it in listOf("up", "down", "mixed")) it else "" }
+                out[n] = Explain(hi.take(220), str(o, "asar").take(400), dir, str(o, "aam").take(300))
+            }
+        } catch (e: JSONException) {
+            // Ajeeb jawab: jo mila wahi
+        }
+        return out
+    }
+
+    fun dirWord(dir: String): String = when (dir) {
+        "up" -> "📈 Share upar ja sakta hai"
+        "down" -> "📉 Share neeche aa sakta hai"
+        "mixed" -> "↕️ Dono taraf ja sakta hai"
+        else -> "➖ Share par seedha asar saaf nahi"
+    }
+
+    fun moodWord(mood: String): String = when (mood) {
+        "Good" -> "Achhi khabar"
+        "Bad" -> "Buri khabar"
+        else -> ""
+    }
 
     /** AI ke jawab mein se JSON wala hissa. */
     fun jsonBlock(text: String): String {
@@ -487,18 +533,19 @@ object MarketLogic {
             val what = str(o, "what")
             if (what.isEmpty() && numbers.isEmpty() && trends.isEmpty()) return null
             return Depth(str(o, "company"), o.optInt("level", 3).coerceIn(1, 5), what, numbers.take(6), past.take(8),
-                str(o, "why"), str(o, "unsure"), trends.take(4), reasons.take(6), stocks.take(6))
+                str(o, "why"), str(o, "unsure"), trends.take(4), reasons.take(6), stocks.take(6),
+                str(o, "outlook"), lines(o, "same_before", 4), lines(o, "others", 4))
         } catch (e: JSONException) {
             return null
         }
     }
 
     fun levelWord(level: Int): String = when (level) {
-        1 -> "Routine"
-        2 -> "Small"
-        3 -> "Worth noting"
-        4 -> "Big"
-        else -> "Very big"
+        1 -> "Roz ki baat"
+        2 -> "Chhoti"
+        3 -> "Dhyan dene layak"
+        4 -> "Badi"
+        else -> "Bahut badi"
     }
 
     /** 25 aur "₹ crore" se "₹25 crore". */

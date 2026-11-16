@@ -325,4 +325,28 @@ class MarketLogicTest {
         assertEquals("🔴 High valuation", MarketLogic.valuationLook("High")!!.first)
         assertNull(MarketLogic.valuationLook("?"))
     }
+
+    @Test fun readsHinglishMeaningOfNews() {
+        val found = MarketLogic.parseExplain("""{"items":[
+            {"n":1,"hi":"Jubilant Pharmova ka Q2 profit 74% gira","asar":"Kamai kam hui, share par dabav aa sakta hai","dir":"DOWN","aam":"Aam taur par share girta hai"},
+            {"n":2,"hi":"","asar":"x","dir":"up"},
+            {"n":3,"hi":"Fauji Foods ne naya CEO banaya","asar":"","dir":"none","aam":""}]}""")
+        assertEquals(setOf(1, 3), found.keys)
+        assertEquals("down", found[1]?.dir)
+        assertEquals("", found[3]?.dir)
+        assertTrue(MarketLogic.dirWord("down").contains("neeche"))
+        assertTrue(MarketLogic.parseExplain("sorry").isEmpty())
+        assertEquals("Buri khabar", MarketLogic.moodWord("Bad"))
+    }
+
+    @Test fun readsOutlookAndPastExamples() {
+        val d = MarketLogic.parseDepth("""{"company":"Jubilant Pharmova","level":4,"what":"Profit gira","outlook":"Share par dabav reh sakta hai",
+            "same_before":["Feb 2026: profit 40% gira, share 6% gira",""],"others":["Laurus Labs, Aug 2025: profit gira, share 8% gira"]}""")!!
+        assertEquals("Share par dabav reh sakta hai", d.outlook)
+        assertEquals(1, d.sameBefore.size)
+        assertEquals(1, d.others.size)
+        val old = MarketLogic.parseDepth("""{"company":"X","level":2,"what":"kuch hua"}""")!!
+        assertEquals("", old.outlook)
+        assertTrue(old.sameBefore.isEmpty())
+    }
 }

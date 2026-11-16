@@ -737,15 +737,60 @@ object Market {
             val all = (add + old).sortedByDescending { it.optLong("at") }.take(MAX_NEWS)
             p.edit().putString("news", JSONArray(all).toString()).putStringSet("news_links", links.toList().takeLast(MAX_LINKS).toSet())
                 .putBoolean("news_started", true).putLong("news_last", now).apply()
+            explainNews(c)
             if (!first && add.isNotEmpty() && alertOn(c)) {
                 val title = if (add.size == 1) "Market news · " + add[0].optString("kind") else add.size.toString() + " new market news"
-                val text = add.take(5).joinToString("\n") { mark(it.optString("mood")) + it.optString("title") }
+                // Hinglish matlab aa gaya ho to wahi dikhao
+                val told = news(c).associateBy { it.optString("link") }
+                val text = add.take(5).joinToString("\n") {
+                    val n = told[it.optString("link")] ?: it
+                    mark(n.optString("mood")) + n.optString("hi").ifEmpty { n.optString("title") } +
+                        (if (add.size == 1 && n.optString("asar").isNotEmpty()) "\n👉 " + n.optString("asar") else "")
+                }
                 Watcher.alertNow(c, NEWS_NOTE, title, text, add[0].optString("link"), MarketActivity::class.java)
             }
             return add.size
         } finally {
             newsBusy.set(false)
         }
+    }
+
+    private const val EXPLAIN_AT_ONCE = 12
+
+    /**
+     * Jin khabron ka Hinglish matlab abhi nahi bana, unme se sabse nayi kuch ka AI se banwao.
+     * Ek hi sawaal mein sab, taaki muft limit bachi rahe. Lautata hai kitni bani; -1 = AI se jawab nahi mila.
+     */
+    fun explainNews(c: Context): Int {
+        val todo = news(c).filter { it.optString("hi").isEmpty() && it.optInt("tried", 0) < 3 }.take(EXPLAIN_AT_ONCE)
+        if (todo.isEmpty()) return 0
+        val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
+        if (key.isEmpty()) {
+            lastError = "Add your Gemini key to get the Hinglish meaning"
+            return -1
+        }
+        val text = todo.mapIndexed { i, n -> (i + 1).toString() + ". [" + n.optString("kind") + "] " + n.optString("title") }.joinToString("\n")
+        val planner = Planner(GeminiLive.newClient(), key, 60L)
+        val found = planner.explainNews(text)?.let { MarketLogic.parseExplain(it) }
+        if (found == null) lastError = planner.lastError
+        val byLink = HashMap<String, MarketLogic.Explain?>()
+        todo.forEachIndexed { i, n -> byLink[n.optString("link")] = found?.get(i + 1) }
+        synchronized(this) {
+            val all = news(c)
+            all.forEach { n ->
+                val link = n.optString("link")
+                if (!byLink.containsKey(link)) return@forEach
+                val e = byLink[link]
+                if (e == null) {
+                    // Jawab aaya par is khabar ka nahi: 3 baar tak hi dobara poochho
+                    if (found != null) n.put("tried", n.optInt("tried", 0) + 1)
+                } else {
+                    n.put("hi", e.hi).put("asar", e.asar).put("dir", e.dir).put("aam", e.aam)
+                }
+            }
+            prefs(c).edit().putString("news", JSONArray(all).toString()).apply()
+        }
+        return found?.size ?: -1
     }
 
     // ---------- Khabar ki gehrai ----------

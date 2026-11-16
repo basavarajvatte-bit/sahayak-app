@@ -125,7 +125,7 @@ class MarketNewsActivity : Activity() {
         }
         if (depth != null) {
             val level = card()
-            level.addView(text("How big is this news", 13f, true, GREY))
+            level.addView(text("Ye khabar kitni badi hai", 13f, true, GREY))
             val color = when (depth.level) {
                 5 -> RED
                 4 -> ORANGE
@@ -142,27 +142,47 @@ class MarketNewsActivity : Activity() {
             showPicks((listOf(depth.company) + depth.stocks).filter { it.isNotEmpty() }.distinctBy { it.lowercase(Locale.ENGLISH) })
             numbers(depth.numbers)
             trends(depth.trends)
+            if (depth.outlook.isNotEmpty()) {
+                val look = card()
+                look.addView(text("AI ka andaza: share par kya asar ho sakta hai", 13f, true, TEAL))
+                look.addView(text(depth.outlook, 15f))
+                look.addView(text("Ye sirf andaza hai, guarantee nahi. Share ulta bhi ja sakta hai.", 12f, false, GREY))
+                body.addCard(look)
+            }
+            val same = card()
+            same.addView(text("Pichli baar isi company ke saath aisa hua tha", 13f, true, GREY))
+            if (depth.sameBefore.isEmpty()) same.addView(text("Search mein is company ka aisa purana example nahi mila.", 14f, false, GREY))
+            depth.sameBefore.forEach { same.addView(text("• $it", 15f)) }
+            body.addCard(same)
+            val others = card()
+            others.addView(text("Doosri company ke saath aisa hua tha", 13f, true, GREY))
+            if (depth.others.isEmpty()) others.addView(text("Search mein doosri company ka pakka example nahi mila.", 14f, false, GREY))
+            depth.others.forEach { others.addView(text("• $it", 15f)) }
+            if (depth.sameBefore.isNotEmpty() || depth.others.isNotEmpty()) {
+                others.addView(text("Ye example AI ne search se nikale hain. Tarikh aur percent kabhi galat ho sakte hain, bada faisla lene se pehle khud dekh lo.", 12f, false, GREY))
+            }
+            body.addCard(others)
             if (depth.reasons.isNotEmpty()) {
                 val reasons = card()
-                reasons.addView(text("Why it changed", 13f, true, GREY))
+                reasons.addView(text("Kyun badla", 13f, true, GREY))
                 depth.reasons.forEach { reasons.addView(text("• $it", 15f)) }
                 body.addCard(reasons)
             }
             if (depth.past.isNotEmpty()) {
                 val past = card()
-                past.addView(text("What happened before", 13f, true, GREY))
+                past.addView(text("Is company mein pehle kya hua", 13f, true, GREY))
                 depth.past.forEach { past.addView(text("• $it", 15f)) }
                 body.addCard(past)
             }
             if (depth.why.isNotEmpty()) {
                 val why = card()
-                why.addView(text("Why it matters", 13f, true, GREY))
+                why.addView(text("Business par asar", 13f, true, GREY))
                 why.addView(text(depth.why, 15f))
                 body.addCard(why)
             }
             if (depth.unsure.isNotEmpty()) {
                 val unsure = card()
-                unsure.addView(text("Not confirmed", 13f, true, GREY))
+                unsure.addView(text("Jo pakka nahi hai", 13f, true, GREY))
                 unsure.addView(text(depth.unsure, 15f))
                 body.addCard(unsure)
             }

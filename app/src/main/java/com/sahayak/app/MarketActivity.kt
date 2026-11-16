@@ -301,9 +301,14 @@ class MarketActivity : Activity() {
         page.addView(HorizontalScrollView(this).apply { addView(every) })
         page.addView(button("Check news now") {
             work(newsStatus, "Checking news") {
-                when (val n = Market.runNews(app, false)) {
+                val n = Market.runNews(app, false)
+                // Purani khabron ka Hinglish matlab bhi bharte chalo
+                val told = if (n == 0) Market.explainNews(app) else 0
+                when (n) {
                     -1 -> "No internet. Try again"
-                    0 -> "No new news right now"
+                    0 -> if (told > 0) "No new news. Hinglish matlab added for $told news"
+                    else if (told < 0) "No new news. Hinglish matlab nahi bana: " + Market.lastError
+                    else "No new news right now"
                     else -> "$n new news"
                 }
             }
@@ -311,7 +316,7 @@ class MarketActivity : Activity() {
         newsStatus = text("", 14f, true)
         page.addView(newsStatus)
         page.addView(text("Good and Bad tags are a guess from the words in the headline. They are not advice.", 12f, false, GREY))
-        page.addView(text("Tap any news to see how big it is, with before and now figures and what happened earlier.", 13f, true, TEAL))
+        page.addView(text("Har khabar ke neeche AI ka andaza hai ki share par kya asar ho sakta hai. Ye andaza hai, guarantee nahi. Khabar dabao to pichli baar ke example aur figures milenge.", 13f, true, TEAL))
         newsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(newsBox)
         page.addView(button("Clear news list") {
@@ -785,10 +790,25 @@ class MarketActivity : Activity() {
                 "Bad" -> RED
                 else -> TEAL
             }
-            val head = time.format(Date(n.optLong("at"))) + "  ·  " + n.optString("kind") + (if (mood.isNotEmpty()) "  ·  $mood" else "")
+            val head = time.format(Date(n.optLong("at"))) + "  ·  " + n.optString("kind") +
+                (if (mood.isNotEmpty()) "  ·  " + MarketLogic.moodWord(mood) else "")
             val box = card()
             box.addView(text(head, 13f, true, color))
-            box.addView(text(n.optString("title"), 15f))
+            val hi = n.optString("hi")
+            box.addView(text(hi.ifEmpty { n.optString("title") }, 16f, hi.isNotEmpty()))
+            if (hi.isNotEmpty()) {
+                val dir = n.optString("dir")
+                val dirColor = when (dir) {
+                    "up" -> GREEN
+                    "down" -> RED
+                    else -> GREY
+                }
+                box.addView(text(MarketLogic.dirWord(dir), 14f, true, dirColor))
+                n.optString("asar").takeIf { it.isNotEmpty() }?.let { box.addView(text("👉 $it", 14f)) }
+                n.optString("aam").takeIf { it.isNotEmpty() }?.let { box.addView(text("📚 $it", 13f, false, GREY)) }
+                box.addView(text("Pichli baar kya hua tha, example ke saath: yahan dabao", 12f, true, TEAL))
+                box.addView(text(n.optString("title"), 11f, false, GREY))
+            }
             n.optString("source").takeIf { it.isNotEmpty() }?.let { box.addView(text(it, 12f, false, GREY)) }
             box.setOnClickListener { startActivity(MarketNewsActivity.forNews(this, n)) }
             newsBox.addCard(box)
