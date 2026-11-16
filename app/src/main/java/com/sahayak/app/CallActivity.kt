@@ -29,6 +29,7 @@ class CallActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var buttons: LinearLayout
     private var wasBusy = false
+    private var asking = false
     private var closing = false
     private var shown = ""
     private var after: (() -> Unit)? = null
@@ -99,8 +100,15 @@ class CallActivity : Activity() {
         setContentView(root)
 
         if (intent.getBooleanExtra(EXTRA_START, false) && Calls.state == Calls.IDLE) {
-            wasBusy = true
-            withPermission(video, { Calls.start(this, video) }) {
+            // Ijazat ka dabba khula ho tab tak screen band mat karo
+            asking = true
+            withPermission(video, {
+                asking = false
+                wasBusy = true
+                Calls.start(this, video)
+                render()
+            }) {
+                asking = false
                 Toast.makeText(this, "Allow the microphone" + (if (video) " and camera" else "") + " to make a call", Toast.LENGTH_LONG).show()
                 finish()
             }
@@ -185,6 +193,11 @@ class CallActivity : Activity() {
 
     private fun render() {
         if (closing) return
+        if (asking) {
+            title.text = TodoSync.peer(this)
+            status.text = "Allow the microphone" + (if (remote != null) " and camera" else "") + " to call"
+            return
+        }
         val state = Calls.state
         if (state != Calls.IDLE) wasBusy = true
         title.text = TodoSync.peer(this)
