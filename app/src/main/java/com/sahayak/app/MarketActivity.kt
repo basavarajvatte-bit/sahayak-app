@@ -653,6 +653,23 @@ class MarketActivity : Activity() {
         box.addView(line("Lock " + MarketLogic.money(saved, currency), 11f, false, soft))
         box.addView(line(day.format(Date(s.optLong("savedAt"))) + if (MarketLogic.indianSymbol(s.optString("symbol"))) "" else "  ·  Foreign", 11f, false, soft))
         valueTag(s.optString("valuation"))?.let { box.addView(it) }
+        // PEG: naye bhaav par har baar naya hisaab
+        val peg = BuffettLogic.pegOf(s.optDouble("pegEps", 0.0), s.optDouble("pegGrowth", Double.NaN), price)
+        if (!peg.isNaN()) {
+            val pegColor = BuffettLogic.pegLook(peg).second
+            box.addView(TextView(this).apply {
+                text = "PEG " + BuffettLogic.num(peg) + " · " + BuffettLogic.pegShort(peg)
+                textSize = 11f
+                setTextColor(0xFFFFFFFF.toInt())
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                maxLines = 1
+                setPadding(dp(5), dp(1), dp(5), dp(1))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(pegColor)
+                    cornerRadius = dp(5).toFloat()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) })
+        }
         s.optString("buffett").takeIf { it.contains('/') }?.let { b ->
             box.addView(TextView(this).apply {
                 text = "🧓 Buffett $b"

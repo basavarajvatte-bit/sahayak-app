@@ -95,4 +95,54 @@ class BuffettLogicTest {
         assertTrue(!BuffettLogic.redFlagNews("ABC Ltd Q2 profit rises 20%"))
         assertEquals(5, BuffettLogic.MORE_INFO.size)
     }
+
+    private fun series(vararg v: Pair<String, Double>) = v.toList()
+
+    @Test fun pegFromEpsGrowth() {
+        // EPS 10 se 20.736 in 4 saal = 20% har saal
+        val d = mapOf("annualDilutedEPS" to series("2021" to 10.0, "2022" to 12.0, "2023" to 14.4, "2024" to 17.28, "2025" to 20.736))
+        val p = BuffettLogic.pegData(d)
+        assertEquals("", p.problem)
+        assertEquals(20.0, p.growth, 0.01)
+        assertEquals(4, p.years)
+        assertEquals("2021", p.from)
+        // Bhaav 414.72 -> P/E 20 -> PEG 1
+        assertEquals(20.0, BuffettLogic.pe(p.eps, 414.72), 0.01)
+        assertEquals(1.0, BuffettLogic.pegOf(p.eps, p.growth, 414.72), 0.01)
+        assertEquals("Theek daam", BuffettLogic.pegLook(1.0).first)
+        assertEquals("Sasta (growth ke hisaab se)", BuffettLogic.pegLook(0.8).first)
+        assertEquals("Mehenga", BuffettLogic.pegLook(2.5).first)
+        assertEquals("Thoda mehenga", BuffettLogic.pegShort(1.7))
+    }
+
+    @Test fun pegUsesTrailingEpsAndLastFourYears() {
+        val d = mapOf(
+            "annualDilutedEPS" to series("2019" to 1.0, "2021" to 10.0, "2022" to 11.0, "2023" to 12.0, "2024" to 13.0, "2025" to 14.641),
+            "trailingDilutedEPS" to series("2025" to 16.0)
+        )
+        val p = BuffettLogic.pegData(d)
+        assertEquals(16.0, p.eps, 0.001)
+        assertEquals("2021", p.from)
+        assertEquals(10.0, p.growth, 0.01)
+    }
+
+    @Test fun pegFallsBackToProfitPerShare() {
+        val d = mapOf(
+            "annualNetIncome" to series("2023" to 100.0, "2024" to 121.0),
+            "annualOrdinarySharesNumber" to series("2023" to 10.0, "2024" to 10.0)
+        )
+        val p = BuffettLogic.pegData(d)
+        assertEquals(21.0, p.growth, 0.01)
+        assertEquals(12.1, p.eps, 0.001)
+    }
+
+    @Test fun pegNotForLossOrNoGrowth() {
+        assertTrue(BuffettLogic.pegData(mapOf("annualDilutedEPS" to series("2024" to 5.0, "2025" to -2.0))).problem.isNotEmpty())
+        assertTrue(BuffettLogic.pegData(mapOf("annualDilutedEPS" to series("2024" to -5.0, "2025" to 2.0))).problem.isNotEmpty())
+        val flat = BuffettLogic.pegData(mapOf("annualDilutedEPS" to series("2024" to 5.0, "2025" to 4.0)))
+        assertTrue(flat.problem.contains("badha nahi"))
+        assertTrue(BuffettLogic.pegData(emptyMap()).problem.isNotEmpty())
+        assertTrue(BuffettLogic.pegOf(5.0, Double.NaN, 100.0).isNaN())
+        assertTrue(BuffettLogic.pegOf(0.0, 10.0, 100.0).isNaN())
+    }
 }

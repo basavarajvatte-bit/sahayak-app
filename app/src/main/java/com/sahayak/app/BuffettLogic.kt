@@ -15,7 +15,82 @@ object BuffettLogic {
     val TYPES = listOf(
         "annualTotalDebt", "annualLongTermDebt", "annualStockholdersEquity", "annualCashAndCashEquivalents",
         "annualCashCashEquivalentsAndShortTermInvestments", "annualRetainedEarnings", "annualNetIncome", "annualCapitalExpenditure",
-        "annualOperatingCashFlow", "annualPreferredStock", "annualRepurchaseOfCapitalStock", "annualTotalRevenue", "annualOrdinarySharesNumber"
+        "annualOperatingCashFlow", "annualPreferredStock", "annualRepurchaseOfCapitalStock", "annualTotalRevenue", "annualOrdinarySharesNumber",
+        "annualDilutedEPS", "trailingDilutedEPS"
+    )
+
+    // ---------- PEG ----------
+
+    /**
+     * PEG ka hisaab. eps = ek share ka saal ka profit (sabse naya), growth = EPS ki saalana ausat badhat % (CAGR).
+     * problem khaali na ho to PEG nahi nikla, aur problem batata hai kyun.
+     */
+    data class Peg(val eps: Double, val growth: Double, val years: Int, val from: String, val to: String, val problem: String)
+
+    /** PEG ke liye EPS aur growth. Bhaav baad mein lagta hai (pegOf), taaki naye bhaav par PEG apne aap badle. */
+    fun pegData(d: Map<String, List<Pair<String, Double>>>): Peg {
+        val annual = d["annualDilutedEPS"].orEmpty().filter { !it.second.isNaN() }
+        // EPS na mile to net profit ÷ kul share
+        val series = if (annual.size >= 2) annual else {
+            val shares = d["annualOrdinarySharesNumber"]?.toMap().orEmpty()
+            d["annualNetIncome"].orEmpty().mapNotNull { (y, p) -> shares[y]?.takeIf { it > 0 }?.let { y to p / it } }
+        }
+        val trailing = d["trailingDilutedEPS"]?.lastOrNull()?.second?.takeIf { !it.isNaN() && it != 0.0 }
+        val eps = trailing ?: series.lastOrNull()?.second ?: Double.NaN
+        if (series.size < 2 || eps.isNaN()) return Peg(eps, Double.NaN, 0, "", "", "Data nahi mila")
+        if (eps <= 0) return Peg(eps, Double.NaN, 0, "", "", "Company ghaate mein hai, PEG nahi nikalta")
+        val use = series.takeLast(PEG_YEARS + 1)
+        val first = use.first()
+        val last = use.last()
+        val gaps = use.size - 1
+        if (first.second <= 0) return Peg(eps, Double.NaN, gaps, first.first, last.first, "Shuru ke saal ghaata tha, growth nahi nikalti")
+        if (last.second <= 0) return Peg(eps, Double.NaN, gaps, first.first, last.first, "Pichhle saal ghaata tha, PEG nahi nikalta")
+        val growth = (Math.pow(last.second / first.second, 1.0 / gaps) - 1) * 100
+        if (growth <= 0) return Peg(eps, growth, gaps, first.first, last.first, "Profit badha nahi (" + String.format(Locale.ENGLISH, "%.1f", growth) + "% har saal), PEG kaam nahi karta")
+        return Peg(eps, growth, gaps, first.first, last.first, "")
+    }
+
+    /** P/E aur PEG. Nahi nikla to NaN. */
+    fun pe(eps: Double, price: Double): Double = if (eps > 0 && price > 0) price / eps else Double.NaN
+
+    fun pegOf(eps: Double, growth: Double, price: Double): Double {
+        val pe = pe(eps, price)
+        return if (pe.isNaN() || growth.isNaN() || growth <= 0) Double.NaN else pe / growth
+    }
+
+    /** PEG ka matlab: (shabd, rang). */
+    fun pegLook(peg: Double): Pair<String, Int> = when {
+        peg.isNaN() -> "PEG nahi nikla" to 0xFF667085.toInt()
+        peg < 1.0 -> "Sasta (growth ke hisaab se)" to 0xFF16A34A.toInt()
+        peg < 1.5 -> "Theek daam" to 0xFF1F5C4D.toInt()
+        peg < 2.0 -> "Thoda mehenga" to 0xFFB54700.toInt()
+        else -> "Mehenga" to 0xFFDC2626.toInt()
+    }
+
+    /** Tile par chhota shabd. */
+    fun pegShort(peg: Double): String = when {
+        peg.isNaN() -> ""
+        peg < 1.0 -> "Sasta"
+        peg < 1.5 -> "Theek"
+        peg < 2.0 -> "Thoda mehenga"
+        else -> "Mehenga"
+    }
+
+    fun num(v: Double, digits: Int = 1): String = String.format(Locale.ENGLISH, "%." + digits + "f", v)
+
+    private const val PEG_YEARS = 4
+    const val PEG_HOT_GROWTH = 50.0
+
+    val PEG_INFO = Info(
+        "PEG ratio",
+        "PEG = P/E ÷ profit ki saalana badhat (%).\n\nP/E = share ka bhaav ÷ ek share ka saal ka profit (EPS). Jaise P/E 30 matlab ₹1 ke saal ke profit ke liye ₹30 de rahe ho.\n\n" +
+            "PEG batata hai ki growth dekhte hue ye daam sahi hai ya nahi. Jaise P/E 30 aur profit har saal 30% badhe to PEG 1. P/E 15 par growth sirf 5% ho to PEG 3, yaani sasta dikhne wala share asal mein mehenga.\n\n" +
+            "Yahan growth = pichhle saalon mein EPS (ek share ka profit) har saal ausatan kitna badha (CAGR). Ye Yahoo Finance ke saalana data se nikla hai.",
+        "PEG 1 se kam: growth ke hisaab se sasta.\nPEG 1 se 1.5: theek daam.\nPEG 1.5 se 2: thoda mehenga. India mein achhi companies aksar yahin milti hain.\nPEG 2 se zyada: mehenga.",
+        "Sirf P/E dekhne se tezi se badhne wali achhi company mehengi aur ruki hui company sasti dikhti hai. PEG dono ko ek tarazu par laata hai. Ye idea Peter Lynch ne mashhoor kiya.\n\n" +
+            "⚠ Dhyan rakho:\n• Growth pichhle saalon ki hai. Aage bhi utni hogi, ye pakka nahi.\n• Growth bahut zyada (50% se upar) ho to PEG jhootha kam dikh sakta hai, itni tezi zyada din nahi chalti.\n" +
+            "• Company ghaate mein ho ya profit na badha ho to PEG nahi nikalta.\n• Bank, NBFC aur cyclical companies (steel, cement, metal) par PEG kam kaam aata hai.\n• PEG kam ho par company kharab ho to wo sasta jaal hai. Saath mein Buffett check bhi dekho.\n\n" +
+            "Ye seekhne ke liye hai, salah nahi."
     )
 
     /** Ek jaanch ka nateeja. */

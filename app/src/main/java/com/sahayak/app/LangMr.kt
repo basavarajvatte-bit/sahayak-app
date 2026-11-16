@@ -745,5 +745,49 @@ After 1 day => 1 दिवसानंतर
 After 1 week => 1 आठवड्यानंतर
 After 1 month => 1 महिन्यानंतर
 After 3 months => 3 महिन्यांनंतर
+// ---------- PEG
+PEG nahi nikla => PEG निघाला नाही
+Sasta (growth ke hisaab se) => स्वस्त (growth च्या हिशोबाने)
+Theek daam => योग्य किंमत
+Thoda mehenga => थोडा महाग
+Mehenga => महाग
+Sasta => स्वस्त
+Theek => ठीक
+PEG # · @ => PEG # · @
+Company ghaate mein hai, PEG nahi nikalta => Company loss मध्ये आहे, PEG निघत नाही
+Shuru ke saal ghaata tha, growth nahi nikalti => सुरुवातीच्या वर्षी loss होता, growth निघत नाही
+Pichhle saal ghaata tha, PEG nahi nikalta => मागच्या वर्षी loss होता, PEG निघत नाही
+Profit badha nahi (# har saal), PEG kaam nahi karta => Profit वाढला नाही (दरवर्षी #), PEG काम करत नाही
+Share ka bhaav abhi nahi mila => Share ची price अजून मिळाली नाही
+P/E #  ÷  Growth # har saal => P/E #  ÷  Growth दरवर्षी #
+Growth: EPS # se # (# saal) => Growth: EPS # ते # (# वर्षे)
+⚠ Growth bahut zyada hai, aage itni nahi rahi to PEG jhootha kam dikh raha hai => ⚠ Growth खूप जास्त आहे, पुढे इतकी राहिली नाही तर PEG खोटा कमी दिसत आहे
+⚠ Bank/NBFC par PEG kam kaam aata hai => ⚠ Bank/NBFC साठी PEG कमी उपयोगी आहे
+Kitna hona chahiye => किती असावा
+PEG = P/E ÷ profit ki saalana badhat (%) => PEG = P/E ÷ profit ची वार्षिक वाढ (%)
+P/E = share ka bhaav ÷ ek share ka saal ka profit (EPS) => P/E = share ची price ÷ एका share चा वर्षाचा profit (EPS)
+Jaise P/E 30 matlab ₹1 ke saal ke profit ke liye ₹30 de rahe ho => उदा. P/E 30 म्हणजे वर्षाच्या ₹1 profit साठी तुम्ही ₹30 देत आहात
+PEG batata hai ki growth dekhte hue ye daam sahi hai ya nahi => Growth पाहता ही किंमत योग्य आहे की नाही, हे PEG सांगतो
+Jaise P/E 30 aur profit har saal 30% badhe to PEG 1 => उदा. P/E 30 आणि profit दरवर्षी 30% वाढला तर PEG 1
+P/E 15 par growth sirf 5% ho to PEG 3, yaani sasta dikhne wala share asal mein mehenga => P/E 15 पण growth फक्त 5% असेल तर PEG 3, म्हणजे स्वस्त दिसणारा share प्रत्यक्षात महाग
+Yahan growth = pichhle saalon mein EPS (ek share ka profit) har saal ausatan kitna badha (CAGR) => इथे growth = मागच्या वर्षांत EPS (एका share चा profit) दरवर्षी सरासरी किती वाढला (CAGR)
+Ye Yahoo Finance ke saalana data se nikla hai => हे Yahoo Finance च्या वार्षिक data वरून काढले आहे
+PEG 1 se kam: growth ke hisaab se sasta => PEG 1 पेक्षा कमी: growth च्या हिशोबाने स्वस्त
+PEG 1 se 1.5: theek daam => PEG 1 ते 1.5: योग्य किंमत
+PEG 1.5 se 2: thoda mehenga => PEG 1.5 ते 2: थोडा महाग
+India mein achhi companies aksar yahin milti hain => India मध्ये चांगल्या companies बहुतेक इथेच मिळतात
+PEG 2 se zyada: mehenga => PEG 2 पेक्षा जास्त: महाग
+Sirf P/E dekhne se tezi se badhne wali achhi company mehengi aur ruki hui company sasti dikhti hai => फक्त P/E पाहिला तर वेगाने वाढणारी चांगली company महाग आणि थांबलेली company स्वस्त दिसते
+PEG dono ko ek tarazu par laata hai => PEG दोघांना एकाच तराजूत आणतो
+Ye idea Peter Lynch ne mashhoor kiya => ही कल्पना Peter Lynch यांनी प्रसिद्ध केली
+⚠ Dhyan rakho => ⚠ लक्षात ठेवा
+• Growth pichhle saalon ki hai => • Growth मागच्या वर्षांची आहे
+Aage bhi utni hogi, ye pakka nahi => पुढेही तेवढीच असेल, हे नक्की नाही
+• Growth bahut zyada (50% se upar) ho to PEG jhootha kam dikh sakta hai, itni tezi zyada din nahi chalti => • Growth खूप जास्त (50% पेक्षा वर) असेल तर PEG खोटा कमी दिसू शकतो, इतका वेग जास्त दिवस टिकत नाही
+• Company ghaate mein ho ya profit na badha ho to PEG nahi nikalta => • Company loss मध्ये असेल किंवा profit वाढला नसेल तर PEG निघत नाही
+• Bank, NBFC aur cyclical companies (steel, cement, metal) par PEG kam kaam aata hai => • Bank, NBFC आणि cyclical companies (steel, cement, metal) साठी PEG कमी उपयोगी आहे
+• PEG kam ho par company kharab ho to wo sasta jaal hai => • PEG कमी पण company वाईट असेल तर तो स्वस्त सापळा आहे
+Saath mein Buffett check bhi dekho => सोबत Buffett check पण पहा
+Ye seekhne ke liye hai, salah nahi => हे शिकण्यासाठी आहे, सल्ला नाही
 """
 }

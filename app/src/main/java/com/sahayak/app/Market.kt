@@ -462,7 +462,8 @@ object Market {
 
     /** Buffett jaanch ka kaccha data (Yahoo, saalana). Hafte bhar yaad. Jawab: JSON text ya null. */
     fun buffettData(c: Context, symbol: String, fresh: Boolean = false): String? {
-        val key = "buffett_$symbol"
+        // v2: PEG ke liye EPS bhi aata hai
+        val key = "buffett2_$symbol"
         if (!fresh) {
             prefs(c).getString(key, null)?.let { saved ->
                 try {
@@ -499,10 +500,22 @@ object Market {
         var changed = false
         val now = System.currentTimeMillis()
         shares(c).forEach { s ->
-            if (!MarketLogic.indianSymbol(s.optString("symbol")) || now - s.optLong("bufAt") < BUFFETT_KEEP_MS) return@forEach
+            // pegAt nahi = PEG abhi tak nahi nikla, to hafta poora hone ka intezaar mat karo
+            val due = now - s.optLong("bufAt") >= BUFFETT_KEEP_MS || !s.has("pegAt")
+            if (!MarketLogic.indianSymbol(s.optString("symbol")) || !due) return@forEach
             val json = buffettData(c, s.optString("symbol"))
             if (json == null && lastError == "No internet") return changed
             setField(c, s.optString("id"), "bufAt", now)
+            setField(c, s.optString("id"), "pegAt", now)
+            val peg = json?.let { BuffettLogic.pegData(BuffettLogic.parse(it)) }
+            if (peg != null && peg.problem.isEmpty()) {
+                setField(c, s.optString("id"), "pegEps", peg.eps)
+                setField(c, s.optString("id"), "pegGrowth", peg.growth)
+                changed = true
+            } else if (s.has("pegEps")) {
+                setField(c, s.optString("id"), "pegEps", 0.0)
+                changed = true
+            }
             val text = json?.let {
                 val (pass, total) = BuffettLogic.score(BuffettLogic.evaluate(BuffettLogic.parse(it), s.optString("sector").equals("Financials", true)))
                 "$pass/$total"

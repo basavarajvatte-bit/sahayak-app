@@ -102,6 +102,7 @@ class BuffettCard(
         section("💵 Profit asli hai?")
         checkRow(BuffettLogic.quality(data))
         section("🏷️ Sasta hai ya mehenga?")
+        pegRow(BuffettLogic.pegData(data))
         checkRow(BuffettLogic.ownerYield(data, price))
         section("🚩 Laal jhande")
         BuffettLogic.dataFlags(data).forEach { checkRow(it) }
@@ -133,6 +134,49 @@ class BuffettCard(
         words.addView(text(c.value, 13f, false, GREY))
         row.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(infoButton { explainMore(c.id) })
+        view.addView(row)
+    }
+
+    /** PEG: bada number, saath mein sasta/mehenga, aur ⓘ. */
+    private fun pegRow(p: BuffettLogic.Peg) {
+        val row = LinearLayout(a).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(4))
+        }
+        val words = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        val peg = BuffettLogic.pegOf(p.eps, p.growth, price)
+        val (look, color) = BuffettLogic.pegLook(peg)
+        val top = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL }
+        top.addView(text(if (peg.isNaN()) "PEG: —" else "PEG " + BuffettLogic.num(peg), 20f, true, color))
+        if (!peg.isNaN()) {
+            top.addView(TextView(a).apply {
+                text = look
+                textSize = 13f
+                setTextColor(0xFFFFFFFF.toInt())
+                setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                setPadding(dp(8), dp(3), dp(8), dp(3))
+                background = rounded(color, 8)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(10) })
+        }
+        words.addView(top)
+        val pe = BuffettLogic.pe(p.eps, price)
+        when {
+            p.problem.isNotEmpty() -> words.addView(text(p.problem + (if (!pe.isNaN()) "  ·  P/E " + BuffettLogic.num(pe) else ""), 13f, false, GREY))
+            price <= 0 -> words.addView(text("Share ka bhaav abhi nahi mila", 13f, false, GREY))
+            else -> {
+                words.addView(text("P/E " + BuffettLogic.num(pe) + "  ÷  Growth " + BuffettLogic.num(p.growth) + "% har saal", 13f, false, GREY))
+                words.addView(text("Growth: EPS " + p.from + " se " + p.to + " (" + p.years + " saal)", 12f, false, GREY))
+                if (p.growth > BuffettLogic.PEG_HOT_GROWTH) {
+                    words.addView(text("⚠ Growth bahut zyada hai, aage itni nahi rahi to PEG jhootha kam dikh raha hai", 12f, false, AMBER))
+                }
+                if (financial) words.addView(text("⚠ Bank/NBFC par PEG kam kaam aata hai", 12f, false, AMBER))
+            }
+        }
+        row.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(infoButton {
+            val info = BuffettLogic.PEG_INFO
+            show(info.title, "📌 Kya hai\n" + info.what + "\n\n✓ Kitna hona chahiye\n" + info.pass + "\n\n💡 Kyun zaroori hai\n" + info.why)
+        })
         view.addView(row)
     }
 
