@@ -76,7 +76,8 @@ object MarketLogic {
     private const val CLOSE_MIN = 15 * 60 + 30
 
     /** Jaanch ke samay (IST): har ghante, aur band hone ke baad ek aakhri. */
-    private val CHECK_MINUTES = listOf(9 * 60 + 20, 10 * 60 + 20, 11 * 60 + 20, 12 * 60 + 20, 13 * 60 + 20, 14 * 60 + 20, 15 * 60 + 20, 15 * 60 + 45)
+    /** Jaanch ke samay (IST): bazaar khula ho to har 15 minute (9:20 se 3:20), aur band hone ke baad 3:45 par aakhri. */
+    private val CHECK_MINUTES = (9 * 60 + 20..15 * 60 + 20 step 15).toList() + (15 * 60 + 45)
 
     private fun weekday(cal: Calendar) = cal.get(Calendar.DAY_OF_WEEK).let { it != Calendar.SATURDAY && it != Calendar.SUNDAY }
 

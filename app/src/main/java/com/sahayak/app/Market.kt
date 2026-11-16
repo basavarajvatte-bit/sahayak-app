@@ -149,6 +149,7 @@ object Market {
     private const val OPEN_TOLERANCE = 1.0
     private const val CLOSED_TOLERANCE = 0.3
     private const val AI_CHECKS = 5
+    private const val AI_GAP_MS = 55 * 60_000L
     private const val QUOTE_BATCH = 40
     private val verifyBusy = AtomicBoolean(false)
 
@@ -205,7 +206,10 @@ object Market {
             val sidOf = list.associate { it.optString("id") to slugOf(c, it).substringAfterLast('-', "") }
             val tapes = tapeQuotes(sidOf.values.toList())
             val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
-            var aiLeft = if (key.isEmpty()) 0 else AI_CHECKS
+            // AI (Gemini) ki free limit bachao: har 15 minute nahi, ghante mein ek baar hi
+            val aiAllowed = !scheduled || now - prefs(c).getLong("verify_ai_at", 0L) > AI_GAP_MS
+            var aiLeft = if (key.isEmpty() || !aiAllowed) 0 else AI_CHECKS
+            if (aiLeft > 0) prefs(c).edit().putLong("verify_ai_at", now).apply()
             var good = 0
             var bad = 0
             var fixed = 0
@@ -270,6 +274,15 @@ object Market {
                 }
             }
             if (only.isEmpty()) prefs(c).edit().putLong("verify_last", System.currentTimeMillis()).putInt("verify_good", good).putInt("verify_bad", bad).apply()
+            // Dummy funds ke bhaav bhi saath mein
+            if (only.isEmpty()) {
+                verifyProgress = "Updating fund prices"
+                try {
+                    Funds.refresh(c)
+                } catch (e: org.json.JSONException) {
+                    // Funds ka bhaav agli baar
+                }
+            }
             return "Checked " + (good + bad) + " shares: $good verified" + (if (bad > 0) ", $bad need a look" else "") +
                 (if (fixed > 0) ". Corrected $fixed lock prices" else "")
         } finally {

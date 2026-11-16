@@ -49,10 +49,12 @@ class MarketActivity : Activity() {
     private val capButtons = mutableMapOf<String, Button>()
     private val greenGroups = mutableSetOf(GreenList.MAX_GREEN, GreenList.MAX_GREEN - 1)
     private lateinit var verifyLine: TextView
+    private lateinit var topStatus: TextView
     private val verifyTick = object : Runnable {
         override fun run() {
             if (!Market.verifying()) return
             shareStatus.text = Market.verifyProgress
+            topStatus.text = Market.verifyProgress
             main.postDelayed(this, 1_000L)
         }
     }
@@ -169,6 +171,20 @@ class MarketActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(page) })
         val app = applicationContext
         page.addView(text("Market Watch", 24f, true))
+        // Sabse upar: bhaav abhi update karo
+        val topRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        topRow.addView(Button(this).apply {
+            text = "🔄 Update prices"
+            isAllCaps = false
+            textSize = 16f
+            setOnClickListener {
+                main.postDelayed(verifyTick, 500L)
+                work(topStatus, "Updating all prices") { Market.verifyAll(applicationContext, false) }
+            }
+        })
+        topStatus = text("", 13f, false, GREY)
+        topRow.addView(topStatus, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(10) })
+        page.addView(topRow)
         page.addView(text("See news that can move the market. Save a share to follow its price every day.", 14f))
 
         // ----- Mere shares -----
@@ -201,7 +217,7 @@ class MarketActivity : Activity() {
             work(shareStatus, "Checking every price from 3 sources") { Market.verifyAll(app, false) }
         })
         page.addView(CheckBox(this).apply {
-            text = "Check prices every hour while the market is open"
+            text = "Update prices every 15 minutes while the market is open"
             isChecked = Market.verifyOn(this@MarketActivity)
             setOnCheckedChangeListener { _, on ->
                 Market.setVerify(this@MarketActivity, on)
@@ -537,6 +553,8 @@ class MarketActivity : Activity() {
         val doubt = ordered.count { it.optJSONObject("check")?.optBoolean("ok") == false }
         val last = Market.lastVerify(this)
         val next = Market.nextVerify(this)
+        if (!Market.verifying()) topStatus.text = (if (last > 0) "Updated " + SimpleDateFormat("h:mm a", Locale.ENGLISH).format(Date(last)) else "Not updated yet") +
+            (if (Market.verifyOn(this) && next > 0) "\nNext " + SimpleDateFormat("h:mm a", Locale.ENGLISH).format(Date(next)) else "")
         verifyLine.text = "✓ $sure verified by 2 or more sources" + (if (doubt > 0) "  ·  ⚠ $doubt need a look" else "") +
             (if (last > 0) "\nLast check " + time.format(Date(last)) else "") +
             (if (Market.verifyOn(this) && next > 0) "  ·  Next " + time.format(Date(next)) else "")
