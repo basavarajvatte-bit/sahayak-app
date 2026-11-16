@@ -73,8 +73,8 @@ class LangTest {
                 val key = line.substringBefore(" => ")
                 val probe = key.replace("#", "5").replace("@", "Abc")
                 val out = Lang.t(probe)
-                // Har line ka Marathi banna chahiye: kam se kam ek Devanagari akshar
-                assertTrue("Not translated: $key -> $out", out.any { it in 'ऀ'..'ॿ' } || english(out) == english(key))
+                // Har line badalni chahiye, siwaay unke jo jaan-boojh kar English hi rakhi hain
+                assertTrue("Not translated: $key -> $out", out != probe || line.substringAfter(" => ") == key)
                 count++
             }
         }

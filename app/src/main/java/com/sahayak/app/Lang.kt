@@ -18,7 +18,7 @@ object Lang {
     var on = false
 
     private const val NUM = "(?:\\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*(?: \\d{4})?(?:, \\d{1,2}:\\d{2} [AP]M)?" +
-        "|\\d{1,2}:\\d{2} [AP]M|[+\\-−]?₹?\\d[\\d,]*(?:\\.\\d+)?%?)"
+        "|\\d{1,2}:\\d{2} [AP]M|[+\\-−]?₹?\\d(?:[\\d,]*\\d)?(?:\\.\\d+)?%?)"
     /** Ek naam: 60 akshar tak, aur agle vaakya mein nahi jaata. */
     private const val NAME = "((?:(?!\\. )[^\\n]){1,60}?)"
     private val numbers = Regex(NUM)
