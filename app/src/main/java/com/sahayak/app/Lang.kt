@@ -19,6 +19,8 @@ object Lang {
 
     private const val NUM = "(?:\\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*(?: \\d{4})?(?:, \\d{1,2}:\\d{2} [AP]M)?" +
         "|\\d{1,2}:\\d{2} [AP]M|[+\\-−]?₹?\\d[\\d,]*(?:\\.\\d+)?%?)"
+    /** Ek naam: 60 akshar tak, aur agle vaakya mein nahi jaata. */
+    private const val NAME = "((?:(?!\\. )[^\\n]){1,60}?)"
     private val numbers = Regex(NUM)
     private val breaks = Regex(" +[·—] +")
     private val sentenceEnd = Regex("(?<=[.!?]) +")
@@ -68,13 +70,13 @@ object Lang {
         }
         key.forEach { ch ->
             when (ch) {
-                '@' -> { flush(); pattern.append("(.+?)"); kinds.add('@') }
+                '@' -> { flush(); pattern.append(NAME); kinds.add('@') }
                 '#' -> { flush(); pattern.append("(").append(NUM).append(")"); kinds.add('#') }
                 else -> plain.append(ch)
             }
         }
         flush()
-        return Template(Regex(pattern.toString(), RegexOption.DOT_MATCHES_ALL), kinds, value, weight)
+        return Template(Regex(pattern.toString()), kinds, value, weight)
     }
 
     /** Jawab mein # aur @ ki jagah asli number aur naam bharo. {2} = doosra number, {@2} = doosra naam. */
@@ -95,9 +97,14 @@ object Lang {
         return text.toString()
     }
 
-    private fun lookup(x: String): String? {
+    private fun exactOf(x: String): String? {
         if (x.isEmpty()) return null
-        exact[normal(x)]?.let { v -> return fill(v, numbers.findAll(x).map { it.value }.toList(), emptyList()) }
+        val v = exact[normal(x)] ?: return null
+        return fill(v, numbers.findAll(x).map { it.value }.toList(), emptyList())
+    }
+
+    private fun templateOf(x: String): String? {
+        if (x.isEmpty()) return null
         for (t in templates) {
             val m = t.regex.matchEntire(x) ?: continue
             val nums = mutableListOf<String>()
@@ -113,15 +120,23 @@ object Lang {
 
     private fun starts(c: Char) = c.isLetterOrDigit() || c in "₹+-−\"(#@"
 
-    /** Poori line, phir aage ke nishaan (✓ 🔒 •) aur peeche ke . : … hata kar dhoondho. */
+    /**
+     * Poori line, phir peeche ke . : … hata kar, phir aage ke nishaan (✓ 🔒 •) hata kar dhoondho.
+     * Pehle teeno tarah se seedha mel, uske baad hi naam wali (@) line: warna "Karz @" jaisi chhoti line sab kuch pakad leti.
+     */
     private fun whole(x: String): String? {
-        lookup(x)?.let { return it }
         val end = x.trimEnd { it.isWhitespace() || it in ".:…!?" }
         if (end.isEmpty()) return null
         val tail = x.substring(end.length)
-        if (tail.isNotEmpty()) lookup(end)?.let { return it + tail }
-        val from = end.indexOfFirst { starts(it) }
-        if (from > 0) lookup(end.substring(from))?.let { return end.substring(0, from) + it + tail }
+        val from = end.indexOfFirst { starts(it) }.coerceAtLeast(0)
+        val head = end.substring(0, from)
+        val core = end.substring(from)
+        exactOf(x)?.let { return it }
+        if (tail.isNotEmpty()) exactOf(end)?.let { return it + tail }
+        if (from > 0) exactOf(core)?.let { return head + it + tail }
+        templateOf(x)?.let { return it }
+        if (tail.isNotEmpty()) templateOf(end)?.let { return it + tail }
+        if (from > 0) templateOf(core)?.let { return head + it + tail }
         return null
     }
 

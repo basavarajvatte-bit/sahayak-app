@@ -736,5 +736,14 @@ Munger kehte the: buri khabar ek baar aaye to aksar aur bhi chhupi hoti hai => M
 Promoter share girvi rakhe to wo paise ki tangi mein hai; auditor chhod de to hisaab mein gadbad ka shak => Promoter ने shares गहाण ठेवले तर त्याला पैशांची चणचण आहे; auditor ने सोडले तर हिशोबात गडबड असल्याचा संशय
 Ye khabron se dhoondha jaata hai, isliye kabhi chhoot bhi sakta hai => हे news मधून शोधले जाते, त्यामुळे कधी सुटूही शकते
 khabar khud padh kar dekho => news स्वतः वाचून पहा
+// ---------- Extra
++ Fund banao => + Fund बनवा
++ Naya fund banao => + नवीन fund बनवा
++ Add another topic => + आणखी एक topic जोडा
+@ green scorecard: # of # green => @ green scorecard: {2} पैकी {1} green
+After 1 day => 1 दिवसानंतर
+After 1 week => 1 आठवड्यानंतर
+After 1 month => 1 महिन्यानंतर
+After 3 months => 3 महिन्यांनंतर
 """
 }

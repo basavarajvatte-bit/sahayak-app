@@ -11,8 +11,6 @@ class LangTest {
     @Before fun marathiOn() { Lang.on = true }
     @After fun marathiOff() { Lang.on = false }
 
-    private fun english(s: String) = Regex("[A-Za-z]{3,}").findAll(s).map { it.value }.toList()
-
     @Test fun offMeansNoChange() {
         Lang.on = false
         assertEquals("My shares", Lang.t("My shares"))
@@ -32,6 +30,8 @@ class LangTest {
             Lang.t("Watching. Last check: 16 Nov, 12:39 PM. Next: 16 Nov, 1:09 PM"))
         assertEquals("▼ 6 पैकी 5 green  (12)", Lang.t("▼ 5 of 6 green  (12)"))
         assertEquals("15 मिनिटे", Lang.t("15 min"))
+        assertEquals("1 आठवड्यानंतर", Lang.t("After 1 week"))
+        assertEquals("+ Fund बनवा", Lang.t("+ Fund banao"))
         assertEquals("आज +1.2%", Lang.t("Aaj +1.2%"))
         assertEquals("500 पैकी 12 shares तपासले", Lang.t("Checked 12 of 500 shares"))
         assertEquals("12 lock केलेले  ·  ▲ 5 वर  ·  ▼ 7 खाली (lock पासून). Chart साठी box वर tap करा.",
@@ -71,7 +71,8 @@ class LangTest {
             part.lineSequence().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("//") }.forEach { line ->
                 assertTrue("No arrow: $line", line.contains(" => "))
                 val key = line.substringBefore(" => ")
-                val out = Lang.t(key)
+                val probe = key.replace("#", "5").replace("@", "Abc")
+                val out = Lang.t(probe)
                 // Har line ka Marathi banna chahiye: kam se kam ek Devanagari akshar
                 assertTrue("Not translated: $key -> $out", out.any { it in 'ऀ'..'ॿ' } || english(out) == english(key))
                 count++
