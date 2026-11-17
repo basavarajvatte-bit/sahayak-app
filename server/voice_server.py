@@ -89,7 +89,9 @@ def healthy(base):
         return False
 
 def log_tail(n=40):
-    return "".join(open(WORK / "server.log", errors="ignore").readlines()[-n:])
+    lines = open(WORK / "server.log", errors="ignore").readlines()
+    errors = [l for l in lines if "Error" in l or "error:" in l][-5:]
+    return "ASLI GALTI:\n" + "".join(errors) + "\n--- poora log (aakhri hissa) ---\n" + "".join(lines[-n:])
 
 start = time.time()
 while not healthy(f"http://127.0.0.1:{PORT}"):
