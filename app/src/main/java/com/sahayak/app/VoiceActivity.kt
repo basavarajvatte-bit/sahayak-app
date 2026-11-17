@@ -261,6 +261,9 @@ class VoiceActivity : Activity() {
     private fun choose(provider: String) {
         if (VoiceClone.recording || busy) return
         VoiceClone.setProvider(this, provider)
+        // Doosri service ka purana sandesh na dikhe
+        cloneStatus.text = ""
+        sayStatus.text = ""
         refresh()
     }
 
