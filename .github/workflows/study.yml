@@ -1,0 +1,30 @@
+name: Pattern study data
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'research/**'
+      - '.github/workflows/study.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect events and prices
+        run: python research/study.py research/out
+      - name: Publish results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete study-data --yes --cleanup-tag || true
+          gh release create study-data research/out/* --title "Pattern study data" --notes "Dividend and split events of Nifty 500 shares, with moves after 1 day, 1 week, 1 month, 3 months vs Nifty."
