@@ -4,7 +4,9 @@ GitHub ke computer par chalta hai (wahan internet khula hai). Sirf Python ki apn
 Nateeja: events.csv (har event ek line) aur summary.md (har pattern ka hisaab).
 """
 import csv
+import http.cookiejar
 import io
+import re
 import json
 import os
 import sys
@@ -23,17 +25,62 @@ HINDALCO GRASIM BAJAJFINSV ADANIPORTS DRREDDY CIPLA DIVISLAB EICHERMOT HEROMOTOC
 TATAMOTORS SBILIFE HDFCLIFE APOLLOHOSP TATACONSUM UPL M&M BAJAJ-AUTO SHREECEM""".split()
 
 
-def get(url, tries=3):
+OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+FAILS = {"yahoo": 0, "nse": 0}
+
+
+def get(url, tries=4):
     for t in range(tries):
         try:
             req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with OPENER.open(req, timeout=30) as r:
                 return r.read()
         except Exception as e:  # noqa: BLE001
             if t == tries - 1:
                 print("fail", url[:90], e, file=sys.stderr)
-            time.sleep(2 * (t + 1))
+            time.sleep(5 * (2 ** t))
     return None
+
+
+def nse_events(sym):
+    """NSE ki corporate actions: dividend, bonus, split, buyback, rights (pichhle 10 saal)."""
+    to = datetime.now(timezone.utc)
+    url = ("https://www.nseindia.com/api/corporates-corporateActions?index=equities&symbol=" + urllib.request.quote(sym)
+           + "&from_date=01-01-" + str(to.year - 10) + "&to_date=" + to.strftime("%d-%m-%Y"))
+    raw = get(url, 2)
+    if not raw:
+        FAILS["nse"] += 1
+        return None
+    try:
+        items = json.loads(raw)
+    except ValueError:
+        FAILS["nse"] += 1
+        return None
+    out = []
+    for it in items if isinstance(items, list) else []:
+        subject = (it.get("subject") or "").strip()
+        low = subject.lower()
+        try:
+            date = datetime.strptime((it.get("exDate") or "").strip(), "%d-%b-%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+        if "bonus" in low:
+            kind = "bonus"
+        elif "split" in low or "sub-division" in low or "sub division" in low:
+            kind = "split"
+        elif "buy back" in low or "buyback" in low or "buy-back" in low:
+            kind = "buyback"
+        elif "rights" in low:
+            kind = "rights"
+        elif "dividend" in low:
+            kind = "dividend"
+        else:
+            continue
+        amount = 0.0
+        if kind == "dividend":
+            amount = sum(float(x) for x in re.findall(r"(?:rs|re)\.?\s*([0-9]+(?:\.[0-9]+)?)", low))
+        out.append((kind, date, amount, subject[:80]))
+    return out
 
 
 def symbols():
@@ -54,7 +101,7 @@ def symbols():
 
 
 def chart(symbol):
-    url = ("https://query1.finance.yahoo.com/v8/finance/chart/" + urllib.request.quote(symbol)
+    url = ("https://query2.finance.yahoo.com/v8/finance/chart/" + urllib.request.quote(symbol)
            + "?range=" + YEARS + "&interval=1d&events=div%2Csplit")
     raw = get(url)
     if not raw:
@@ -83,6 +130,7 @@ def day_of(ts):
 
 def main(out_dir):
     os.makedirs(out_dir, exist_ok=True)
+    get("https://www.nseindia.com/get-quotes/equity?symbol=TCS", 1)  # NSE cookie
     nifty = chart("^NSEI")
     if not nifty:
         sys.exit("Nifty data not found")
@@ -97,11 +145,24 @@ def main(out_dir):
             continue
         ok += 1
         days, adj, close = data["days"], data["adj"], data["close"]
-        found = []
-        for d in (data["events"].get("dividends") or {}).values():
-            found.append(("dividend", day_of(d["date"]), float(d.get("amount", 0)), ""))
-        for s in (data["events"].get("splits") or {}).values():
-            found.append(("split_or_bonus", day_of(s["date"]), 0.0, s.get("splitRatio", "")))
+        found = nse_events(sym)
+        time.sleep(0.4)
+        if found is not None:
+            # Ek hi din ke do dividend (final + special) ek gino
+            merged = {}
+            for kind, date, amount, note in found:
+                k = (kind, date)
+                if k in merged:
+                    merged[k] = (kind, date, merged[k][2] + amount, merged[k][3])
+                else:
+                    merged[k] = (kind, date, amount, note)
+            found = list(merged.values())
+        else:
+            found = []
+            for d in (data["events"].get("dividends") or {}).values():
+                found.append(("dividend", day_of(d["date"]), float(d.get("amount", 0)), ""))
+            for sp in (data["events"].get("splits") or {}).values():
+                found.append(("split", day_of(sp["date"]), 0.0, sp.get("splitRatio", "")))
         for kind, date, amount, ratio in found:
             i = next((k for k, d in enumerate(days) if d >= date), None)
             if i is None or i < 22:
@@ -111,7 +172,7 @@ def main(out_dir):
                 continue
             pre = adj[base] / adj[base - 21] - 1
             row = {"symbol": sym, "industry": industry, "type": kind, "date": date, "amount": round(amount, 4),
-                   "ratio": ratio, "price": round(close[base], 2),
+                   "note": ratio, "price": round(close[base], 2),
                    "yield_pct": round(amount / close[base] * 100, 3) if kind == "dividend" and close[base] else "",
                    "month_before_pct": round(pre * 100, 2)}
             for k, name in zip(STEPS, NAMES):
@@ -129,7 +190,7 @@ def main(out_dir):
         if n % 50 == 0:
             print(n, sym, len(rows), flush=True)
 
-    fields = ["symbol", "industry", "type", "date", "amount", "ratio", "price", "yield_pct", "month_before_pct"]
+    fields = ["symbol", "industry", "type", "date", "amount", "note", "price", "yield_pct", "month_before_pct"]
     for name in NAMES:
         key = name.replace(" ", "_")
         fields += ["share_" + key, "nifty_" + key]
@@ -160,9 +221,12 @@ def main(out_dir):
         ("Dividend, yield under 0.5%", [r for r in rows if r["type"] == "dividend" and r["yield_pct"] != "" and r["yield_pct"] < 0.5]),
         ("Dividend, share fell 5%+ in month before", [r for r in rows if r["type"] == "dividend" and r["month_before_pct"] <= -5]),
         ("Dividend, share rose 5%+ in month before", [r for r in rows if r["type"] == "dividend" and r["month_before_pct"] >= 5]),
-        ("Split or bonus", [r for r in rows if r["type"] == "split_or_bonus"]),
+        ("Bonus shares", [r for r in rows if r["type"] == "bonus"]),
+        ("Stock split", [r for r in rows if r["type"] == "split"]),
+        ("Buyback", [r for r in rows if r["type"] == "buyback"]),
+        ("Rights issue", [r for r in rows if r["type"] == "rights"]),
     ]
-    md = [f"# Pattern study data\n\nShares checked: {ok} of {len(stocks)}. Events: {len(rows)}. Years: {YEARS}.",
+    md = [f"# Pattern study data\n\nShares checked: {ok} of {len(stocks)}. Events: {len(rows)}. Years: {YEARS}. NSE list missing for {FAILS['nse']} shares (Yahoo events used).",
           "Counted from the day before the ex-date (the date the share trades without the dividend/split). Prices adjusted, so the dividend itself is included.\n"]
     for title, g in groups:
         md.append(f"## {title}\n")
