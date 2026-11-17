@@ -156,7 +156,7 @@ object VoiceLogic {
     fun spokenScript(name: String): String = script(name).replace(Regex("\\s+"), " ").trim()
 
     /** Fish ke liye MessagePack: {text, references:[{audio, text}], format:"mp3"}. */
-    fun fishBody(text: String, audio: ByteArray, audioText: String): ByteArray {
+    fun fishBody(text: String, audio: ByteArray, audioText: String, cache: Boolean = false): ByteArray {
         val out = java.io.ByteArrayOutputStream()
         fun len(small: Int, b8: Int, b16: Int, b32: Int, n: Int, fixMax: Int) {
             when {
@@ -175,11 +175,13 @@ object VoiceLogic {
             len(-1, 0xC4, 0xC5, 0xC6, v.size, -1)
             out.write(v)
         }
-        out.write(0x83)
+        out.write(if (cache) 0x84 else 0x83)
         str("text"); str(text)
         str("references"); out.write(0x91)
         out.write(0x82); str("audio"); bin(audio); str("text"); str(audioText)
         str("format"); str("mp3")
+        // Apna server recording ko yaad rakhe, taaki har baar dobara na samjhe (tez)
+        if (cache) { str("use_memory_cache"); str("on") }
         return out.toByteArray()
     }
 
@@ -198,6 +200,31 @@ object VoiceLogic {
             out[i] = (src[a] * (1 - f) + src[b] * f).toInt().toShort()
         }
         return out
+    }
+
+    /** Gemini ko: shabd wahi rakho, sirf lehja batane wale [tag] aur viram lagao. */
+    const val TONE_PROMPT = "You prepare text for an expressive voice model that copies a person's voice. " +
+        "Rewrite the text so it sounds like natural spoken Indian conversation, with feeling, not like reading. " +
+        "Rules: keep every word and the same language and script (Hindi, Marathi or Hinglish in Roman letters stay Roman, English stays English). " +
+        "Do not translate, do not add or remove words. " +
+        "Add short delivery tags in square brackets right before the words they affect, only where a native speaker would really change tone, " +
+        "at most one tag per sentence, for example [excited], [happy], [laughing], [chuckling], [sad], [angry], [surprised], [curious], " +
+        "[soft], [whisper], [sigh], [pause], [emphasis], [teasing], [warm]. " +
+        "Fix punctuation for natural rhythm: commas, ?, !, and ... for small pauses. " +
+        "Answer with only the rewritten text."
+
+    /** Gemini ka jawab saaf karo; shabd badal gaye hon (ya khaali ho) to asli text hi. */
+    fun toneResult(original: String, answer: String): String {
+        val a = answer.trim().removeSurrounding("\"").replace(Regex("\\s+"), " ")
+        if (a.isEmpty()) return original
+        fun words(t: String) = t.replace(Regex("\\[[^\\]]*]"), " ").lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+        val before = words(original)
+        val after = words(a)
+        // Shabd lagbhag wahi hon tabhi maano (Gemini ne anuvaad ya badlaav kiya ho to nahi)
+        if (before.isEmpty() || after.size > before.size + 3 || after.size < before.size - 3) return original
+        val same = after.toSet().intersect(before.toSet()).size
+        if (same < before.toSet().size * 0.8) return original
+        return a.take(TEXT_MAX + 300)
     }
 
     /** Bolne ke liye likha hua saaf karo. */

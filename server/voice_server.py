@@ -105,24 +105,11 @@ _patch("fish_speech/inference_engine/__init__.py",
 print("✓ Sudhaar lag gaye", flush=True)
 
 
-# 4. Server chalu karo (pehli baar 3–5 minute)
+# 4. Server chalu karo (pehli baar 5–10 minute)
 import secrets, urllib.request, urllib.error
 
 PASSWORD = secrets.token_urlsafe(12)
 PORT = 8080
-server_log = open(WORK / "server.log", "w")
-server = subprocess.Popen(
-    [sys.executable, "tools/api_server.py",
-     "--listen", f"0.0.0.0:{PORT}",
-     "--llama-checkpoint-path", "checkpoints/s2-pro",
-     "--decoder-checkpoint-path", "checkpoints/s2-pro/codec.pth",
-     "--decoder-config-name", "modded_dac_vq",
-     "--half",                      # T4 jaise GPU par bf16 nahi hota
-     "--api-key", PASSWORD,
-     "--max-text-length", "1000"],
-    cwd=src, stdout=server_log, stderr=subprocess.STDOUT,
-    env={**os.environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"},
-)
 
 def healthy(base):
     req = urllib.request.Request(base + "/v1/health", headers={"Authorization": "Bearer " + PASSWORD})
@@ -137,14 +124,39 @@ def log_tail(n=40):
     errors = [l for l in lines if "Error" in l or "error:" in l][-5:]
     return "ASLI GALTI:\n" + "".join(errors) + "\n--- poora log (aakhri hissa) ---\n" + "".join(lines[-n:])
 
-start = time.time()
-while not healthy(f"http://127.0.0.1:{PORT}"):
-    if server.poll() is not None:
-        raise RuntimeError("Server ruk gaya. Ye galti thi:\n" + log_tail())
-    if time.time() - start > 1500:
-        raise RuntimeError("Server 25 minute mein chalu nahi hua:\n" + log_tail())
-    time.sleep(10)
-print(f"✓ Server chalu ({int(time.time() - start)} second)")
+def start_server(fast):
+    """fast=True: torch.compile se awaaz kai guna tez banti hai, par chalu hone mein zyada time lagta hai."""
+    global server
+    cmd = [sys.executable, "tools/api_server.py",
+           "--listen", f"0.0.0.0:{PORT}",
+           "--llama-checkpoint-path", "checkpoints/s2-pro",
+           "--decoder-checkpoint-path", "checkpoints/s2-pro/codec.pth",
+           "--decoder-config-name", "modded_dac_vq",
+           "--half",                      # T4 jaise GPU par bf16 nahi hota
+           "--api-key", PASSWORD,
+           "--max-text-length", "1000"]
+    if fast:
+        cmd.append("--compile")
+    server = subprocess.Popen(cmd, cwd=src, stdout=open(WORK / "server.log", "w"), stderr=subprocess.STDOUT,
+                              env={**os.environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
+    start = time.time()
+    while not healthy(f"http://127.0.0.1:{PORT}"):
+        if server.poll() is not None:
+            return "Server ruk gaya. Ye galti thi:\n" + log_tail()
+        if time.time() - start > 1800:
+            server.kill()
+            return "Server 30 minute mein chalu nahi hua:\n" + log_tail()
+        time.sleep(10)
+    print(f"✓ Server chalu ({'tez mode' if fast else 'saadha mode'}, {int(time.time() - start)} second)", flush=True)
+    return ""
+
+problem = start_server(fast=True)
+if problem:
+    print("Tez mode nahi chala, saadhe mode mein chala raha hoon.\n" + problem[-1500:], flush=True)
+    problem = start_server(fast=False)
+if problem:
+    raise RuntimeError(problem)
+
 
 # 5. Internet ka link banao (Cloudflare, free, bina account) aur Sahayak wali line do
 import re

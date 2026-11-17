@@ -44,6 +44,7 @@ class VoiceActivity : Activity() {
     private lateinit var labelField: EditText
     private lateinit var voicesBox: LinearLayout
     private lateinit var usingText: TextView
+    private lateinit var naturalButton: Button
     private lateinit var cloneStatus: TextView
     private lateinit var modelButton: Button
     private lateinit var sayField: EditText
@@ -314,6 +315,11 @@ class VoiceActivity : Activity() {
             filters = arrayOf(InputFilter.LengthFilter(VoiceLogic.TEXT_MAX))
         }
         say.addView(sayField)
+        naturalButton = button("") {
+            VoiceClone.setNatural(this, !VoiceClone.natural(this))
+            refresh()
+        }
+        say.addView(naturalButton)
         say.addView(text("Up to " + VoiceLogic.TEXT_MAX + " letters at a time. Fish Audio and ElevenLabs use some monthly credits each time. Your own server has no limit but is slower: wait up to 2 minutes.", 13f, color = GREY))
         val (sayRow, ss) = withSpin(button("🔊 Speak in the chosen voice") { speakNow() })
         saySpin = ss
@@ -352,7 +358,9 @@ class VoiceActivity : Activity() {
             val file = VoiceClone.speak(this, words)
             if (file == null) VoiceClone.lastError else {
                 runOnUiThread { VoiceClone.play(file) }
-                "Playing ($label). Tap Play again to hear it once more"
+                val toned = VoiceClone.lastToned
+                "Playing ($label). Tap Play again to hear it once more" +
+                    (if (toned.contains("[") || toned != VoiceLogic.cleanText(words)) "\n\nSpoken as: $toned" else "")
             }
         }
     }
@@ -575,6 +583,8 @@ class VoiceActivity : Activity() {
             if (!ready && cloneStatus.text.isNullOrEmpty()) cloneStatus.text = "No voice clone on " + VoiceLogic.label(provider) + " yet"
         }
         cloneStatus.setTextColor(if (ready) GREEN else GREY)
+        naturalButton.text = if (VoiceClone.natural(this)) "🎭 Natural talking style: ON (AI adds feeling and pauses). Tap to turn off"
+        else "📖 Plain reading: ON. Tap for natural talking style"
         modelButton.visibility = if (eleven) android.view.View.VISIBLE else android.view.View.GONE
         modelButton.text = if (VoiceClone.elevenModel(this) == VoiceLogic.ELEVEN_V3) "Model: v3 (Marathi and more). Tap to change" else "Model: Multilingual v2 (Hindi, English). Tap to change"
     }

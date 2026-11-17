@@ -173,6 +173,53 @@ object VoiceClone {
         return true
     }
 
+    /** AI lehja jode (khush, dheere, hansi…) ya bas padhe. Pehle se on. */
+    fun natural(c: Context): Boolean = prefs(c).getBoolean("natural", true)
+
+    fun setNatural(c: Context, on: Boolean) = prefs(c).edit().putBoolean("natural", on).apply()
+
+    /** Pichhli baar AI ne lehje ke saath kya likha (dikhane ke liye). */
+    @Volatile
+    var lastToned = ""
+        private set
+
+    /** Gemini se text mein lehja ([excited], [soft], viram…) jodo. Na ho paye to wahi text. Peeche ke dhaage se. */
+    private fun addTone(c: Context, text: String): String {
+        val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
+        if (key.isEmpty()) return text
+        val parts = org.json.JSONArray().put(JSONObject().put("text", VoiceLogic.TONE_PROMPT + "\n\nText:\n" + text))
+        val body = JSONObject()
+            .put("contents", org.json.JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
+            .put("generationConfig", JSONObject().put("temperature", 0.4).put("maxOutputTokens", 1024)
+                .put("thinkingConfig", JSONObject().put("thinkingBudget", 0)))
+            .toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")
+            .header("x-goog-api-key", key).post(body).build()
+        return try {
+            toneClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return text
+                val got = JSONObject(response.body?.string().orEmpty()).optJSONArray("candidates")
+                    ?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+                val out = StringBuilder()
+                for (i in 0 until (got?.length() ?: 0)) {
+                    val part = got?.optJSONObject(i) ?: continue
+                    if (!part.optBoolean("thought")) out.append(part.optString("text"))
+                }
+                VoiceLogic.toneResult(text, out.toString())
+            }
+        } catch (e: IOException) {
+            text
+        } catch (e: org.json.JSONException) {
+            text
+        }
+    }
+
+    /** Lehja jodne mein zyada der na ho: 15 second mein jawab nahi to bina lehje. */
+    private val toneClient: OkHttpClient by lazy {
+        client.newBuilder().callTimeout(15, TimeUnit.SECONDS).build()
+    }
+
     fun name(c: Context): String = prefs(c).getString("name", "").orEmpty()
 
     fun setName(c: Context, name: String) = prefs(c).edit().putString("name", name.trim().take(40)).apply()
@@ -475,7 +522,7 @@ object VoiceClone {
         val provider = provider(c)
         val key = key(c, provider)
         var voice = voiceId(c, provider)
-        val text = VoiceLogic.cleanText(words)
+        val plain = VoiceLogic.cleanText(words)
         lastError = ""
         // Apna server aur Fish free: recording hi saath jaati hai, alag clone ki zaroorat nahi
         if (voice.isEmpty() && provider != VoiceLogic.ELEVEN && sampleSeconds(c) >= minSeconds(c)) voice = VoiceLogic.FISH_LOCAL
@@ -491,10 +538,14 @@ object VoiceClone {
             lastError = if (sampleSeconds(c) == 0) "Record a voice first" else "Make the voice clone for " + (selectedVoice(c)?.label ?: "this voice") + " first"
             return null
         }
-        if (text.isEmpty()) {
+        if (plain.isEmpty()) {
             lastError = "Write something to say"
             return null
         }
+        // ElevenLabs v2 [tag] ko bol deta hai, isliye wahan lehja nahi
+        val canTone = provider != VoiceLogic.ELEVEN || elevenModel(c) == VoiceLogic.ELEVEN_V3
+        lastToned = if (natural(c) && canTone) addTone(c, plain) else plain
+        val text = lastToned
         val json = "application/json".toMediaType()
         val request = if (provider == VoiceLogic.OWN) {
             val audio = try {
@@ -503,7 +554,7 @@ object VoiceClone {
                 lastError = "Record your voice again first"
                 return null
             }
-            val body = VoiceLogic.fishBody(text, audio, sampleText(c)).toRequestBody("application/msgpack".toMediaType())
+            val body = VoiceLogic.fishBody(text, audio, sampleText(c), cache = true).toRequestBody("application/msgpack".toMediaType())
             auth(Request.Builder().url(serverUrl(c) + "/v1/tts"), provider, key).post(body).build()
         } else if (provider == VoiceLogic.ELEVEN) {
             val body = JSONObject().put("text", text).put("model_id", elevenModel(c)).toString().toRequestBody(json)

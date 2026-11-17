@@ -102,4 +102,15 @@ class VoiceLogicTest {
         assertEquals("Voice 2", VoiceLogic.voiceLabel(" ", listOf("Normal")))
         assertEquals("Voice 3", VoiceLogic.voiceLabel("", listOf("Voice 2", "Normal")))
     }
+
+    @Test fun toneKeepsWords() {
+        val o = "Hello Gattu, kya kar rahi ho. Aaj bahut maza aaya"
+        assertEquals("[warm] Hello Gattu, kya kar rahi ho? [excited] Aaj bahut maza aaya!",
+            VoiceLogic.toneResult(o, " [warm] Hello Gattu, kya kar rahi ho? [excited] Aaj bahut maza aaya! "))
+        assertEquals(o, VoiceLogic.toneResult(o, ""))
+        assertEquals(o, VoiceLogic.toneResult(o, "Hello Gattu, what are you doing? Today was a lot of fun"))
+        val cached = VoiceLogic.fishBody("Hi", ByteArray(10), "x", cache = true)
+        assertEquals(0x84, cached[0].toInt() and 0xFF)
+        assertTrue(String(cached, Charsets.ISO_8859_1).endsWith("use_memory_cache\u00A2on"))
+    }
 }
