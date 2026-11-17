@@ -17,6 +17,7 @@ import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -39,6 +40,8 @@ class VoiceActivity : Activity() {
     private lateinit var sayField: EditText
     private lateinit var sayStatus: TextView
     private var busy = false
+    private lateinit var cloneSpin: ProgressBar
+    private lateinit var saySpin: ProgressBar
 
     private val tick = object : Runnable {
         override fun run() {
@@ -79,10 +82,27 @@ class VoiceActivity : Activity() {
         addView(text(title, 18f, true))
     }
 
+    /** Button ke bagal me ghumta circle, kaam chalte waqt dikhta hai. */
+    private fun withSpin(b: Button): Pair<LinearLayout, ProgressBar> {
+        val spin = ProgressBar(this).apply {
+            isIndeterminate = true
+            visibility = android.view.View.GONE
+            layoutParams = LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginStart = dp(8) }
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            b.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            addView(b)
+            addView(spin)
+        }
+        return row to spin
+    }
+
     private fun toast(words: String) = Toast.makeText(this, words, Toast.LENGTH_LONG).show()
 
     /** Internet wala kaam peeche karo, jawab screen par. */
-    private fun work(status: TextView, doing: String, job: () -> String) {
+    private fun work(status: TextView, doing: String, spin: ProgressBar? = null, job: () -> String) {
         if (busy) {
             toast("Wait, one thing is already going on")
             return
@@ -90,6 +110,7 @@ class VoiceActivity : Activity() {
         busy = true
         status.setTextColor(GREY)
         status.text = doing
+        spin?.visibility = android.view.View.VISIBLE
         Thread {
             val answer = try {
                 job()
@@ -98,6 +119,7 @@ class VoiceActivity : Activity() {
             }
             runOnUiThread {
                 busy = false
+                spin?.visibility = android.view.View.GONE
                 if (isFinishing) return@runOnUiThread
                 status.text = answer
                 refresh()
@@ -189,11 +211,13 @@ class VoiceActivity : Activity() {
 
         // 4. Clone
         val clone = card("4. Make my voice")
-        clone.addView(button("✨ Make my voice clone") {
+        val (cloneRow, cs) = withSpin(button("✨ Make my voice clone") {
             saveName()
             if (VoiceClone.recording) toast("Stop the recording first")
-            else work(cloneStatus, "Sending your recording and making the voice. It can take a minute…") { VoiceClone.create(this) }
+            else work(cloneStatus, "Sending your recording and making the voice. It can take a minute…", cloneSpin) { VoiceClone.create(this) }
         })
+        cloneSpin = cs
+        clone.addView(cloneRow)
         cloneStatus = text("", 14f)
         clone.addView(cloneStatus)
         page.addView(clone)
@@ -214,9 +238,9 @@ class VoiceActivity : Activity() {
         }
         say.addView(sayField)
         say.addView(text("Up to " + VoiceLogic.TEXT_MAX + " letters at a time. Every time uses some of your monthly credits.", 13f, color = GREY))
-        say.addView(button("🔊 Speak in my voice") {
+        val (sayRow, ss) = withSpin(button("🔊 Speak in my voice") {
             val words = sayField.text.toString()
-            work(sayStatus, "Making the sound…") {
+            work(sayStatus, "Making the sound…", saySpin) {
                 val file = VoiceClone.speak(this, words)
                 if (file == null) VoiceClone.lastError else {
                     runOnUiThread { VoiceClone.play(file) }
@@ -224,6 +248,8 @@ class VoiceActivity : Activity() {
                 }
             }
         })
+        saySpin = ss
+        say.addView(sayRow)
         say.addView(button("▶ Play again") { if (!VoiceClone.play(VoiceClone.spoken(this))) toast("Nothing to play yet") })
         say.addView(button("📤 Save and share this audio") { share() })
         sayStatus = text("", 14f)
@@ -235,7 +261,7 @@ class VoiceActivity : Activity() {
             AlertDialog.Builder(this).setTitle("Delete your voice?")
                 .setMessage("This removes the voice clone from the service and the recording from this phone. Your key stays.")
                 .setPositiveButton("Yes, delete") { _, _ ->
-                    work(cloneStatus, "Deleting…") {
+                    work(cloneStatus, "Deleting…", cloneSpin) {
                         VoiceClone.deleteAll(this)
                         "Deleted"
                     }
