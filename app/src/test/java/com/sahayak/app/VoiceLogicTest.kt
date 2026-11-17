@@ -67,4 +67,18 @@ class VoiceLogicTest {
         assertTrue(VoiceLogic.spokenScript("Ram").startsWith("Mera naam Ram hai."))
         assertFalse(VoiceLogic.spokenScript("Ram").contains("\n"))
     }
+
+    @Test fun readsServerLine() {
+        assertEquals("https://abc-def.trycloudflare.com" to "Xy_9-kLm2pQr", VoiceLogic.serverLine("SAHAYAK https://abc-def.trycloudflare.com Xy_9-kLm2pQr"))
+        assertEquals("https://abc.trycloudflare.com" to "pw123", VoiceLogic.serverLine("  SAHAYAK:  abc.trycloudflare.com/ | pw123 \n"))
+        assertEquals("https://abc.trycloudflare.com" to "", VoiceLogic.serverLine("https://abc.trycloudflare.com/v1/tts"))
+        assertEquals(null, VoiceLogic.serverLine("SAHAYAK onlypassword"))
+        assertEquals(null, VoiceLogic.serverLine(""))
+        assertEquals("http://10.0.0.5:8080", VoiceLogic.serverUrl("http://10.0.0.5:8080/v1/health"))
+        assertEquals(null, VoiceLogic.serverUrl("hello"))
+        assertTrue(VoiceLogic.problem(VoiceLogic.OWN, 401, "").contains("password"))
+        assertTrue(VoiceLogic.problem(VoiceLogic.OWN, 530, "").contains("server is off"))
+        assertTrue(VoiceLogic.problem(VoiceLogic.OWN, 500, "").contains("notebook"))
+        assertTrue(VoiceLogic.problem(VoiceLogic.FISH, 502, "").contains("busy"))
+    }
 }

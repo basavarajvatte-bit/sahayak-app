@@ -10,6 +10,12 @@ object VoiceLogic {
     const val FISH = "fish"
     const val ELEVEN = "eleven"
 
+    /** Apna server: Fish ka open-source model (S2-Pro) Kaggle ke free GPU par. */
+    const val OWN = "own"
+
+    /** Notebook jo apna server chalu karta hai (Kaggle mein Import Notebook se kholo). */
+    const val NOTEBOOK = "https://github.com/basavarajvatte-bit/sahayak-app/blob/main/server/voice_server.ipynb"
+
     const val RATE = 24_000
     const val MIN_SECONDS = 20
     const val MAX_SECONDS = 90
@@ -24,7 +30,34 @@ object VoiceLogic {
     const val ELEVEN_V2 = "eleven_multilingual_v2"
     const val ELEVEN_V3 = "eleven_v3"
 
-    fun label(provider: String) = if (provider == ELEVEN) "ElevenLabs" else "Fish Audio"
+    fun label(provider: String) = when (provider) {
+        ELEVEN -> "ElevenLabs"
+        OWN -> "your own server"
+        else -> "Fish Audio"
+    }
+
+    /**
+     * Notebook ek line deta hai: SAHAYAK https://xyz.trycloudflare.com PASSWORD
+     * Usme se link aur password nikalo. Galat ho to null.
+     */
+    fun serverLine(line: String): Pair<String, String>? {
+        val parts = line.trim().split(Regex("[\\s|]+")).filter { it.isNotEmpty() && !it.equals("SAHAYAK", true) && !it.equals("SAHAYAK:", true) }
+        val link = parts.firstOrNull { it.startsWith("http", true) || it.contains(".") } ?: return null
+        val url = serverUrl(link) ?: return null
+        val pass = parts.firstOrNull { it != link }.orEmpty()
+        return url to pass
+    }
+
+    /** Link ko saaf karo: https lagao, aakhri / aur /v1/... hatao. */
+    fun serverUrl(raw: String): String? {
+        var u = raw.trim().trimEnd('/')
+        if (u.isEmpty() || u.contains(" ")) return null
+        if (!u.startsWith("http://", true) && !u.startsWith("https://", true)) u = "https://$u"
+        u = u.replace(Regex("/v1(/.*)?$"), "").trimEnd('/')
+        val host = u.substringAfter("://").substringBefore("/").substringBefore(":")
+        if (!host.contains(".") && host != "localhost") return null
+        return u
+    }
 
     /** Record karte waqt ye padhna hai. Pehli line ijazat hai: awaaz sirf apni hi clone karni hai. */
     fun script(name: String): String {
@@ -74,13 +107,14 @@ object VoiceLogic {
     fun problem(provider: String, code: Int, body: String): String {
         val said = serverMessage(body)
         val base = when (code) {
-            401 -> "The " + label(provider) + " key is not right, or this plan does not allow this"
+            401 -> if (provider == OWN) "The server password is not right. Paste the line from the notebook again" else "The " + label(provider) + " key is not right, or this plan does not allow this"
             402 -> if (provider == ELEVEN) "ElevenLabs credits are finished" else "Fish Audio credits are finished, or this needs a paid plan"
             403 -> label(provider) + " did not allow this on your plan"
             413 -> "The recording is too big. Record a shorter one"
             422 -> label(provider) + " did not accept the recording or the text"
             429 -> "Too many requests. Wait a minute and try again"
-            in 500..599 -> label(provider) + " is busy right now. Try again in a minute"
+            404, 502, 530 -> if (provider == OWN) "Your server is off. Run the notebook again and paste the new line" else if (code == 502) label(provider) + " is busy right now. Try again in a minute" else label(provider) + " answered $code"
+            in 500..599 -> if (provider == OWN) "Your server had a problem making the voice. Look at the notebook for the error, or try a shorter text" else label(provider) + " is busy right now. Try again in a minute"
             else -> label(provider) + " answered $code"
         }
         return if (said.isEmpty()) base else "$base. It said: $said"

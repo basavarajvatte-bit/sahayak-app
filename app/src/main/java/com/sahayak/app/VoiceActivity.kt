@@ -28,6 +28,12 @@ class VoiceActivity : Activity() {
     private lateinit var page: LinearLayout
     private lateinit var fishButton: Button
     private lateinit var elevenButton: Button
+    private lateinit var ownButton: Button
+    private lateinit var keyTitle: TextView
+    private lateinit var saveKeyButton: Button
+    private lateinit var keyNote: TextView
+    private lateinit var serverRow: LinearLayout
+    private lateinit var testSpin: ProgressBar
     private lateinit var providerNote: TextView
     private lateinit var keyField: EditText
     private lateinit var keyStatus: TextView
@@ -152,21 +158,45 @@ class VoiceActivity : Activity() {
         row.addView(fishButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(elevenButton, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         service.addView(row)
+        ownButton = button("My own server (free)") { choose(VoiceLogic.OWN) }
+        service.addView(ownButton)
         providerNote = text("", 14f, color = GREY)
         service.addView(providerNote)
         page.addView(service)
 
         // 2. Key
         val keyCard = card("2. Your key")
+        keyTitle = keyCard.getChildAt(0) as TextView
+        serverRow = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        serverRow.addView(button("🚀 Open the server notebook") {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(VoiceLogic.NOTEBOOK)))
+            } catch (e: RuntimeException) {
+                toast("No browser found")
+            }
+        })
+        serverRow.addView(text("Run the notebook on Kaggle (free GPU, 30 hours a week). In 10 to 20 minutes it shows one line starting with SAHAYAK. Copy that whole line and paste it below.", 13f, color = GREY))
+        keyCard.addView(serverRow)
         keyField = EditText(this).apply {
             hint = "Paste the API key here"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             maxLines = 1
         }
         keyCard.addView(keyField)
-        keyCard.addView(button("Save key") {
+        saveKeyButton = button("Save key") {
             val key = keyField.text.toString().trim()
-            if (key.length < 10) {
+            if (VoiceClone.provider(this) == VoiceLogic.OWN) {
+                if (!VoiceClone.saveServerLine(this, key)) {
+                    toast("This is not the SAHAYAK line. Copy the whole line from the notebook and paste")
+                } else {
+                    keyField.setText("")
+                    refresh()
+                    work(keyStatus, "Checking your server…", testSpin) {
+                        val problem = VoiceClone.checkServer(this)
+                        if (problem.isEmpty()) "✓ Your server is on and ready" else problem
+                    }
+                }
+            } else if (key.length < 10) {
                 toast("This key looks too short. Copy it again and paste")
             } else {
                 VoiceClone.saveKey(this, VoiceClone.provider(this), key)
@@ -174,10 +204,14 @@ class VoiceActivity : Activity() {
                 toast("Key saved on this phone")
                 refresh()
             }
-        })
+        }
+        val (saveRow, ts) = withSpin(saveKeyButton)
+        testSpin = ts
+        keyCard.addView(saveRow)
         keyStatus = text("", 14f)
         keyCard.addView(keyStatus)
-        keyCard.addView(text("The key stays locked on this phone only. Never send it to anyone, not in chat either.", 13f, color = GREY))
+        keyNote = text("", 13f, color = GREY)
+        keyCard.addView(keyNote)
         page.addView(keyCard)
 
         // 3. Record
@@ -237,7 +271,7 @@ class VoiceActivity : Activity() {
             filters = arrayOf(InputFilter.LengthFilter(VoiceLogic.TEXT_MAX))
         }
         say.addView(sayField)
-        say.addView(text("Up to " + VoiceLogic.TEXT_MAX + " letters at a time. Every time uses some of your monthly credits.", 13f, color = GREY))
+        say.addView(text("Up to " + VoiceLogic.TEXT_MAX + " letters at a time. Fish Audio and ElevenLabs use some monthly credits each time. Your own server has no limit but is slower: wait up to 2 minutes.", 13f, color = GREY))
         val (sayRow, ss) = withSpin(button("🔊 Speak in my voice") {
             val words = sayField.text.toString()
             work(sayStatus, "Making the sound…", saySpin) {
@@ -290,6 +324,7 @@ class VoiceActivity : Activity() {
         // Doosri service ka purana sandesh na dikhe
         cloneStatus.text = ""
         sayStatus.text = ""
+        keyStatus.text = ""
         refresh()
     }
 
@@ -340,16 +375,38 @@ class VoiceActivity : Activity() {
     private fun refresh() {
         val provider = VoiceClone.provider(this)
         val eleven = provider == VoiceLogic.ELEVEN
-        fishButton.text = (if (!eleven) "✓ " else "") + "Fish Audio (free)"
+        val own = provider == VoiceLogic.OWN
+        fishButton.text = (if (provider == VoiceLogic.FISH) "✓ " else "") + "Fish Audio (free)"
         elevenButton.text = (if (eleven) "✓ " else "") + "ElevenLabs (paid)"
-        providerNote.text = if (eleven) {
-            "ElevenLabs: best quality. Cloning your voice needs the Starter plan (about \$5 a month). Get the key at elevenlabs.io → Developers → API Keys."
-        } else {
-            "Fish Audio: free plan gives a few minutes of voice every month. Get the key at fish.audio → API → API Keys."
+        ownButton.text = (if (own) "✓ " else "") + "My own server (free)"
+        providerNote.text = when {
+            eleven -> "ElevenLabs: best quality. Cloning your voice needs the Starter plan (about \$5 a month). Get the key at elevenlabs.io → Developers → API Keys."
+            own -> "Your own server: Fish Audio's open-source S2-Pro model runs on Kaggle's free GPU. No credits, no card. It stays on up to 12 hours; when it stops, run the notebook again and paste the new line."
+            else -> "Fish Audio: free plan gives a few minutes of voice every month. Get the key at fish.audio → API → API Keys."
         }
-        val hasKey = VoiceClone.key(this, provider).isNotEmpty()
-        keyStatus.setTextColor(if (hasKey) GREEN else GREY)
-        keyStatus.text = if (hasKey) "✓ " + VoiceLogic.label(provider) + " key is saved" else "No " + VoiceLogic.label(provider) + " key yet"
+        keyTitle.text = if (own) "2. Start your server" else "2. Your key"
+        serverRow.visibility = if (own) android.view.View.VISIBLE else android.view.View.GONE
+        keyField.hint = if (own) "Paste the SAHAYAK line here" else "Paste the API key here"
+        saveKeyButton.text = if (own) "Save and check server" else "Save key"
+        keyNote.text = if (own) "The line has your server's password. It stays locked on this phone. Do not send it to anyone, not in chat either."
+        else "The key stays locked on this phone only. Never send it to anyone, not in chat either."
+        if (!busy) {
+            val hasKey = if (own) VoiceClone.serverUrl(this).isNotEmpty() else VoiceClone.key(this, provider).isNotEmpty()
+            val now = keyStatus.text.toString()
+            // Server jaanch ka jawab (theek ya galti) tab tak dikhe jab tak service na badle
+            val auto = now.isEmpty() || now.startsWith("No ") || now.startsWith("✓ Server link") || now.endsWith("key is saved")
+            if (auto) {
+                keyStatus.setTextColor(if (hasKey) GREEN else GREY)
+                keyStatus.text = when {
+                    own && hasKey -> "✓ Server link saved: " + VoiceClone.serverUrl(this).substringAfter("://")
+                    own -> "No server yet"
+                    hasKey -> "✓ " + VoiceLogic.label(provider) + " key is saved"
+                    else -> "No " + VoiceLogic.label(provider) + " key yet"
+                }
+            } else {
+                keyStatus.setTextColor(if (now.startsWith("✓")) GREEN else RED)
+            }
+        }
         scriptText.text = VoiceLogic.script(VoiceClone.name(this))
         showRecord()
         val ready = VoiceClone.voiceId(this, provider).isNotEmpty()

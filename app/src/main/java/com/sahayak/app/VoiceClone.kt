@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Apni awaaz ka clone. Awaaz ka namoona phone par record hota hai, phir chuni hui service
- * (Fish Audio ya ElevenLabs) ko jaata hai. Key sirf phone mein, taale mein rehti hai.
+ * (Fish Audio, ElevenLabs, ya apna server jisme Fish ka open-source model chalta hai) ko jaata hai.
+ * Key aur server ka password sirf phone mein, taale mein rehte hain.
  */
 object VoiceClone {
     private const val PREFS = "sahayak_voice"
@@ -49,6 +50,13 @@ object VoiceClone {
         OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).readTimeout(TIMEOUT_S, TimeUnit.SECONDS).writeTimeout(TIMEOUT_S, TimeUnit.SECONDS).build()
     }
 
+    /** Apna server free GPU par dheere chalta hai, isliye zyada intezaar. */
+    private val slowClient: OkHttpClient by lazy {
+        client.newBuilder().readTimeout(OWN_TIMEOUT_S, TimeUnit.SECONDS).build()
+    }
+
+    private const val OWN_TIMEOUT_S = 360L
+
     private fun prefs(c: Context) = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun provider(c: Context): String = prefs(c).getString("provider", VoiceLogic.FISH) ?: VoiceLogic.FISH
@@ -61,6 +69,17 @@ object VoiceClone {
 
     /** Is service par bana clone. Khaali = abhi nahi bana. */
     fun voiceId(c: Context, provider: String = provider(c)): String = prefs(c).getString("voice_$provider", "").orEmpty()
+
+    /** Apne server ka link (notebook se). Khaali = abhi nahi diya. */
+    fun serverUrl(c: Context): String = prefs(c).getString("server_url", "").orEmpty()
+
+    /** Notebook wali line se link aur password dono rakho. Galat line ho to false. */
+    fun saveServerLine(c: Context, line: String): Boolean {
+        val (url, pass) = VoiceLogic.serverLine(line) ?: return false
+        prefs(c).edit().putString("server_url", url).apply()
+        saveKey(c, VoiceLogic.OWN, pass)
+        return true
+    }
 
     fun name(c: Context): String = prefs(c).getString("name", "").orEmpty()
 
@@ -180,20 +199,37 @@ object VoiceClone {
     // ---------- Service se baat ----------
 
     private fun call(provider: String, request: Request): ByteArray? = try {
-        client.newCall(request).execute().use { response ->
+        (if (provider == VoiceLogic.OWN) slowClient else client).newCall(request).execute().use { response ->
             val bytes = response.body?.bytes() ?: ByteArray(0)
             if (response.isSuccessful) bytes else {
                 lastError = VoiceLogic.problem(provider, response.code, String(bytes, Charsets.UTF_8))
                 null
             }
         }
+    } catch (e: java.net.SocketTimeoutException) {
+        lastError = if (provider == VoiceLogic.OWN) "Your server took too long. Try a shorter text" else VoiceLogic.label(provider) + " took too long. Try again"
+        null
     } catch (e: IOException) {
-        lastError = "No internet, or " + VoiceLogic.label(provider) + " did not answer. Try again"
+        lastError = if (provider == VoiceLogic.OWN) "Could not reach your server. Check the internet, or run the notebook again and paste the new line"
+        else "No internet, or " + VoiceLogic.label(provider) + " did not answer. Try again"
         null
     }
 
-    private fun auth(builder: Request.Builder, provider: String, key: String) =
-        if (provider == VoiceLogic.ELEVEN) builder.header("xi-api-key", key) else builder.header("Authorization", "Bearer $key")
+    private fun auth(builder: Request.Builder, provider: String, key: String) = when {
+        provider == VoiceLogic.ELEVEN -> builder.header("xi-api-key", key)
+        key.isEmpty() -> builder
+        else -> builder.header("Authorization", "Bearer $key")
+    }
+
+    /** Apna server chalu hai ya nahi. Khaali = theek; warna galti. Peeche ke dhaage se bulao. */
+    fun checkServer(c: Context): String {
+        val url = serverUrl(c)
+        if (url.isEmpty()) return "Paste the line from the notebook first"
+        val request = auth(Request.Builder().url("$url/v1/health"), VoiceLogic.OWN, key(c, VoiceLogic.OWN)).get().build()
+        lastError = ""
+        call(VoiceLogic.OWN, request) ?: return lastError
+        return ""
+    }
 
     /** Record kiye namoone se clone banao. Jawab user ko dikhane ke liye. Peeche ke dhaage se bulao. */
     fun create(c: Context): String {
@@ -201,6 +237,14 @@ object VoiceClone {
         val key = key(c, provider)
         val file = sample(c)
         lastError = ""
+        if (provider == VoiceLogic.OWN) {
+            if (sampleSeconds(c) < VoiceLogic.MIN_SECONDS) return "Record at least " + VoiceLogic.MIN_SECONDS + " seconds first"
+            // Apne server par kuch save nahi hota: recording phone mein rehti hai aur har baar saath jaati hai.
+            val problem = checkServer(c)
+            if (problem.isNotEmpty()) return problem
+            prefs(c).edit().putString("voice_$provider", VoiceLogic.FISH_LOCAL).apply()
+            return "✓ Your voice is ready on your own server. Your recording is sent along each time you speak"
+        }
         if (key.isEmpty()) return "Add your " + VoiceLogic.label(provider) + " key first"
         if (sampleSeconds(c) < VoiceLogic.MIN_SECONDS) return "Record at least " + VoiceLogic.MIN_SECONDS + " seconds first"
         if (provider == VoiceLogic.FISH) {
@@ -237,7 +281,11 @@ object VoiceClone {
         val voice = voiceId(c, provider)
         val text = VoiceLogic.cleanText(words)
         lastError = ""
-        if (key.isEmpty()) {
+        if (provider == VoiceLogic.OWN && serverUrl(c).isEmpty()) {
+            lastError = "Paste the line from the notebook first"
+            return null
+        }
+        if (key.isEmpty() && provider != VoiceLogic.OWN) {
             lastError = "Add your " + VoiceLogic.label(provider) + " key first"
             return null
         }
@@ -250,7 +298,16 @@ object VoiceClone {
             return null
         }
         val json = "application/json".toMediaType()
-        val request = if (provider == VoiceLogic.ELEVEN) {
+        val request = if (provider == VoiceLogic.OWN) {
+            val audio = try {
+                sample(c).readBytes()
+            } catch (e: IOException) {
+                lastError = "Record your voice again first"
+                return null
+            }
+            val body = VoiceLogic.fishBody(text, audio, VoiceLogic.spokenScript(name(c))).toRequestBody("application/msgpack".toMediaType())
+            auth(Request.Builder().url(serverUrl(c) + "/v1/tts"), provider, key).post(body).build()
+        } else if (provider == VoiceLogic.ELEVEN) {
             val body = JSONObject().put("text", text).put("model_id", elevenModel(c)).toString().toRequestBody(json)
             auth(Request.Builder().url("https://api.elevenlabs.io/v1/text-to-speech/$voice?output_format=mp3_44100_128"), provider, key).post(body).build()
         } else {
@@ -297,7 +354,7 @@ object VoiceClone {
 
     /** Clone aur recording dono hatao (service se bhi). Peeche ke dhaage se bulao. */
     fun deleteAll(c: Context) {
-        listOf(VoiceLogic.FISH, VoiceLogic.ELEVEN).forEach { deleteRemote(c, it) }
+        listOf(VoiceLogic.FISH, VoiceLogic.ELEVEN, VoiceLogic.OWN).forEach { deleteRemote(c, it) }
         sample(c).delete()
         spoken(c).delete()
     }
