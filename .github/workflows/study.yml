@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Collect events and prices
-        run: python research/study.py research/out
+        run: python research/probe.py && exit 0; python research/study.py research/out
       - name: Publish results
         env:
           GH_TOKEN: ${{ github.token }}
