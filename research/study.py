@@ -14,7 +14,9 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
+UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9"}
+CRUMB = [""]
 STEPS = [1, 5, 21, 63]
 NAMES = ["1 day", "1 week", "1 month", "3 months"]
 YEARS = "10y"
@@ -102,7 +104,7 @@ def symbols():
 
 def chart(symbol):
     url = ("https://query2.finance.yahoo.com/v8/finance/chart/" + urllib.request.quote(symbol)
-           + "?range=" + YEARS + "&interval=1d&events=div%2Csplit")
+           + "?range=" + YEARS + "&interval=1d&events=div%2Csplit" + ("&crumb=" + urllib.request.quote(CRUMB[0]) if CRUMB[0] else ""))
     raw = get(url)
     if not raw:
         return None
@@ -130,7 +132,14 @@ def day_of(ts):
 
 def main(out_dir):
     os.makedirs(out_dir, exist_ok=True)
-    get("https://www.nseindia.com/get-quotes/equity?symbol=TCS", 1)  # NSE cookie
+    # Yahoo ki pehchaan (cookie + crumb), warna wo "too many requests" bolta hai
+    for _ in range(3):
+        c = get("https://query2.finance.yahoo.com/v1/test/getcrumb", 2)
+        if c and len(c) < 40:
+            CRUMB[0] = c.decode().strip()
+            break
+        time.sleep(10)
+    print("yahoo crumb", bool(CRUMB[0]))
     # Nifty index Yahoo par kabhi rok deta hai; tab NIFTYBEES (Nifty jaisa hi chalne wala ETF) lo
     nifty = chart("NIFTYBEES.NS") or chart("^NSEI")
     if not nifty:
