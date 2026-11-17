@@ -18,6 +18,9 @@ object VoiceLogic {
 
     const val RATE = 24_000
     const val MIN_SECONDS = 20
+
+    /** Apni clip itni chhoti bhi chal jaati hai (shabd saath jaate hain). */
+    const val CLIP_MIN_SECONDS = 8
     const val MAX_SECONDS = 90
 
     /** Ek baar mein itne akshar tak bolwao, taaki credit jaldi khatm na hon. */
@@ -149,6 +152,23 @@ object VoiceLogic {
         out.write(0x82); str("audio"); bin(audio); str("text"); str(audioText)
         str("format"); str("mp3")
         return out.toByteArray()
+    }
+
+    /** Awaaz ko doosre rate par lao (seedhi line wala tarika, bolne ki awaaz ke liye kaafi). */
+    fun resample(src: ShortArray, from: Int, to: Int): ShortArray {
+        if (src.isEmpty() || from <= 0 || to <= 0) return ShortArray(0)
+        if (from == to) return src
+        val n = (src.size.toLong() * to / from).toInt()
+        val out = ShortArray(n)
+        val step = from.toDouble() / to
+        for (i in 0 until n) {
+            val x = i * step
+            val a = x.toInt().coerceAtMost(src.size - 1)
+            val b = (a + 1).coerceAtMost(src.size - 1)
+            val f = x - a
+            out[i] = (src[a] * (1 - f) + src[b] * f).toInt().toShort()
+        }
+        return out
     }
 
     /** Bolne ke liye likha hua saaf karo. */

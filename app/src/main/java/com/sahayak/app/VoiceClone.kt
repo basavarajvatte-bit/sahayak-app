@@ -94,6 +94,17 @@ object VoiceClone {
 
     fun spoken(c: Context) = File(c.cacheDir, "voice_out.mp3")
 
+    /** Namoone mein kya bola gaya hai. Apni clip daali ho to uske shabd, warna padhne wala script. */
+    fun sampleText(c: Context): String =
+        prefs(c).getString("sample_text", "").orEmpty().ifBlank { VoiceLogic.spokenScript(name(c)) }
+
+    /** Clip ke shabd. Khaali = mic wali recording (script). */
+    fun clipText(c: Context): String = prefs(c).getString("sample_text", "").orEmpty()
+
+    fun setClipText(c: Context, text: String) = prefs(c).edit().putString("sample_text", text.trim().take(2000)).apply()
+
+    private fun minSeconds(c: Context) = if (clipText(c).isNotEmpty()) VoiceLogic.CLIP_MIN_SECONDS else VoiceLogic.MIN_SECONDS
+
     fun sampleSeconds(c: Context): Int = sample(c).let { if (it.exists()) VoiceLogic.seconds(it.length()) else 0 }
 
     // ---------- Record ----------
@@ -119,6 +130,7 @@ object VoiceClone {
             return false
         }
         val file = sample(c)
+        setClipText(c, "")
         recording = true
         recordedMs = 0L
         recorder = Thread({
@@ -165,6 +177,93 @@ object VoiceClone {
             Thread.currentThread().interrupt()
         }
         recorder = null
+    }
+
+    // ---------- Apni clip ----------
+
+    /**
+     * Phone ki audio clip ko namoona banao, aur Gemini se uske shabd likhwao (awaaz copy karne ke liye zaroori).
+     * Jawab user ko dikhane ke liye. Peeche ke dhaage se bulao.
+     */
+    fun importClip(c: Context, uri: Uri): String {
+        stopPlaying()
+        val temp = File(c.cacheDir, "clip_import.wav")
+        val seconds = AudioImport.toWav(c, uri, temp, VoiceLogic.MAX_SECONDS)
+        if (seconds < 0) return AudioImport.lastError
+        if (seconds < VoiceLogic.CLIP_MIN_SECONDS) {
+            temp.delete()
+            return "This clip is only $seconds seconds. Choose a clip of at least " + VoiceLogic.CLIP_MIN_SECONDS + " seconds where only you speak"
+        }
+        if (!temp.renameTo(sample(c))) {
+            try {
+                temp.copyTo(sample(c), overwrite = true)
+                temp.delete()
+            } catch (e: IOException) {
+                return "Could not save the clip"
+            }
+        }
+        // Purana clone purani awaaz ka hai; naye namoone se dobara banana padega
+        prefs(c).edit().remove("voice_" + VoiceLogic.FISH).remove("voice_" + VoiceLogic.OWN).apply()
+        setClipText(c, "")
+        val words = transcribe(c, sample(c))
+        val cut = if (seconds >= VoiceLogic.MAX_SECONDS) " (only the first " + VoiceLogic.MAX_SECONDS + " seconds are used)" else ""
+        return if (words.isNotEmpty()) {
+            setClipText(c, words)
+            "✓ Clip added: $seconds seconds$cut. Check the words below, then tap Make my voice clone"
+        } else {
+            "✓ Clip added: $seconds seconds$cut. " + lastError + ". Type below exactly what you say in the clip"
+        }
+    }
+
+    /** Gemini se clip ke shabd. Na ho paye to khaali (tab lastError). */
+    private fun transcribe(c: Context, wav: File): String {
+        lastError = ""
+        val key = SecureStore(c.getSharedPreferences("sahayak", Context.MODE_PRIVATE)).load()
+        if (key.isEmpty()) {
+            lastError = "No Gemini key in Sahayak, so the words could not be written automatically"
+            return ""
+        }
+        val data = try {
+            android.util.Base64.encodeToString(wav.readBytes(), android.util.Base64.NO_WRAP)
+        } catch (e: IOException) {
+            return ""
+        }
+        val parts = org.json.JSONArray()
+            .put(JSONObject().put("text", "Write down exactly what is spoken in this audio, word for word, in the same language and script the speaker would use when typing on a phone (Hindi or Marathi in Roman letters is fine, English as English). Only the words, nothing else. If nobody speaks, answer NONE."))
+            .put(JSONObject().put("inlineData", JSONObject().put("mimeType", "audio/wav").put("data", data)))
+        val body = JSONObject()
+            .put("contents", org.json.JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
+            .put("generationConfig", JSONObject().put("temperature", 0.0).put("maxOutputTokens", 2048))
+            .toString().toRequestBody("application/json".toMediaType())
+        for (model in listOf("gemini-2.5-flash", "gemini-flash-latest")) {
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+                .header("x-goog-api-key", key).post(body).build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        lastError = if (response.code == 429) "Gemini limit is used up for now, so the words could not be written automatically"
+                        else "Gemini could not write the words"
+                        return@use
+                    }
+                    val parts2 = JSONObject(response.body?.string().orEmpty()).optJSONArray("candidates")
+                        ?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+                    val text = StringBuilder()
+                    for (i in 0 until (parts2?.length() ?: 0)) {
+                        val part = parts2?.optJSONObject(i) ?: continue
+                        if (!part.optBoolean("thought")) text.append(part.optString("text"))
+                    }
+                    val words = text.toString().trim()
+                    if (words.isEmpty() || words.equals("NONE", true)) lastError = "No speech was found in the clip"
+                    else return words.replace(Regex("\\s+"), " ")
+                }
+            } catch (e: IOException) {
+                lastError = "No internet, so the words could not be written automatically"
+            } catch (e: org.json.JSONException) {
+                lastError = "Gemini could not write the words"
+            }
+        }
+        return ""
     }
 
     // ---------- Sunna ----------
@@ -238,7 +337,7 @@ object VoiceClone {
         val file = sample(c)
         lastError = ""
         if (provider == VoiceLogic.OWN) {
-            if (sampleSeconds(c) < VoiceLogic.MIN_SECONDS) return "Record at least " + VoiceLogic.MIN_SECONDS + " seconds first"
+            if (sampleSeconds(c) < minSeconds(c)) return "Record at least " + minSeconds(c) + " seconds first, or add an audio clip"
             // Apne server par kuch save nahi hota: recording phone mein rehti hai aur har baar saath jaati hai.
             val problem = checkServer(c)
             if (problem.isNotEmpty()) return problem
@@ -246,7 +345,7 @@ object VoiceClone {
             return "✓ Your voice is ready on your own server. Your recording is sent along each time you speak"
         }
         if (key.isEmpty()) return "Add your " + VoiceLogic.label(provider) + " key first"
-        if (sampleSeconds(c) < VoiceLogic.MIN_SECONDS) return "Record at least " + VoiceLogic.MIN_SECONDS + " seconds first"
+        if (sampleSeconds(c) < minSeconds(c)) return "Record at least " + minSeconds(c) + " seconds first, or add an audio clip"
         if (provider == VoiceLogic.FISH) {
             // Fish free plan par clone save karna mana hai (0/0), isliye recording phone mein rehti hai
             // aur har baar bolwate waqt saath jaati hai. Free model isi tarah awaaz copy karta hai.
@@ -305,7 +404,7 @@ object VoiceClone {
                 lastError = "Record your voice again first"
                 return null
             }
-            val body = VoiceLogic.fishBody(text, audio, VoiceLogic.spokenScript(name(c))).toRequestBody("application/msgpack".toMediaType())
+            val body = VoiceLogic.fishBody(text, audio, sampleText(c)).toRequestBody("application/msgpack".toMediaType())
             auth(Request.Builder().url(serverUrl(c) + "/v1/tts"), provider, key).post(body).build()
         } else if (provider == VoiceLogic.ELEVEN) {
             val body = JSONObject().put("text", text).put("model_id", elevenModel(c)).toString().toRequestBody(json)
@@ -318,7 +417,7 @@ object VoiceClone {
                     lastError = "Record your voice again first"
                     return null
                 }
-                VoiceLogic.fishBody(text, audio, VoiceLogic.spokenScript(name(c))).toRequestBody("application/msgpack".toMediaType())
+                VoiceLogic.fishBody(text, audio, sampleText(c)).toRequestBody("application/msgpack".toMediaType())
             } else {
                 JSONObject().put("text", text).put("reference_id", voice).put("format", "mp3").toString().toRequestBody(json)
             }
@@ -357,6 +456,7 @@ object VoiceClone {
         listOf(VoiceLogic.FISH, VoiceLogic.ELEVEN, VoiceLogic.OWN).forEach { deleteRemote(c, it) }
         sample(c).delete()
         spoken(c).delete()
+        setClipText(c, "")
     }
 
     /** Bani hui awaaz phone ke Music/Sahayak mein rakho, taaki bhej sako. Android 10 se. */

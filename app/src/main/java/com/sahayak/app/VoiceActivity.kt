@@ -46,6 +46,9 @@ class VoiceActivity : Activity() {
     private lateinit var sayField: EditText
     private lateinit var sayStatus: TextView
     private var busy = false
+    private lateinit var clipSpin: ProgressBar
+    private lateinit var clipStatus: TextView
+    private lateinit var clipField: EditText
     private lateinit var cloneSpin: ProgressBar
     private lateinit var saySpin: ProgressBar
 
@@ -241,12 +244,37 @@ class VoiceActivity : Activity() {
             if (VoiceClone.recording) toast("Stop the recording first")
             else if (!VoiceClone.play(VoiceClone.sample(this))) toast("No recording yet")
         })
+
+        // Ya phone ki koi audio clip
+        record.addView(text("Or use an audio clip from your phone (a voice note or recording where only you speak, 10 seconds to 1.5 minutes):", 14f, color = GREY))
+        val (clipRow, cps) = withSpin(button("📂 Use an audio clip") {
+            if (VoiceClone.recording) toast("Stop the recording first")
+            else if (busy) toast("Wait, one thing is already going on")
+            else try {
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*"), PICK_CLIP)
+            } catch (e: RuntimeException) {
+                toast("No file picker found on this phone")
+            }
+        })
+        clipSpin = cps
+        record.addView(clipRow)
+        clipStatus = text("", 14f)
+        record.addView(clipStatus)
+        clipField = EditText(this).apply {
+            hint = "Exactly what you say in the clip"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 2
+            setText(VoiceClone.clipText(this@VoiceActivity))
+            setOnFocusChangeListener { _, has -> if (!has) saveClipText() }
+        }
+        record.addView(clipField)
         page.addView(record)
 
         // 4. Clone
         val clone = card("4. Make my voice")
         val (cloneRow, cs) = withSpin(button("✨ Make my voice clone") {
             saveName()
+            saveClipText()
             if (VoiceClone.recording) toast("Stop the recording first")
             else work(cloneStatus, "Sending your recording and making the voice. It can take a minute…", cloneSpin) { VoiceClone.create(this) }
         })
@@ -274,6 +302,7 @@ class VoiceActivity : Activity() {
         say.addView(text("Up to " + VoiceLogic.TEXT_MAX + " letters at a time. Fish Audio and ElevenLabs use some monthly credits each time. Your own server has no limit but is slower: wait up to 2 minutes.", 13f, color = GREY))
         val (sayRow, ss) = withSpin(button("🔊 Speak in my voice") {
             val words = sayField.text.toString()
+            saveClipText()
             work(sayStatus, "Making the sound…", saySpin) {
                 val file = VoiceClone.speak(this, words)
                 if (file == null) VoiceClone.lastError else {
@@ -297,6 +326,11 @@ class VoiceActivity : Activity() {
                 .setPositiveButton("Yes, delete") { _, _ ->
                     work(cloneStatus, "Deleting…", cloneSpin) {
                         VoiceClone.deleteAll(this)
+                        runOnUiThread {
+                            clipField.setText("")
+                            clipStatus.text = ""
+                            showRecord()
+                        }
                         "Deleted"
                     }
                 }
@@ -310,7 +344,32 @@ class VoiceActivity : Activity() {
         VoiceClone.stopPlaying()
         main.removeCallbacks(tick)
         saveName()
+        saveClipText()
         super.onPause()
+    }
+
+    /** Clip ke shabd sudhaare hon to rakho (sirf jab clip daali ho). */
+    private fun saveClipText() {
+        if (VoiceClone.clipText(this).isNotEmpty() || clipField.text.isNotBlank()) {
+            if (VoiceClone.sampleSeconds(this) > 0) VoiceClone.setClipText(this, clipField.text.toString())
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (requestCode != PICK_CLIP || resultCode != RESULT_OK || uri == null) return
+        clipField.setText("")
+        work(clipStatus, "Reading the clip and writing down its words…", clipSpin) {
+            val answer = VoiceClone.importClip(this, uri)
+            runOnUiThread {
+                clipField.setText(VoiceClone.clipText(this))
+                showRecord()
+                clipStatus.setTextColor(if (answer.startsWith("✓")) GREEN else RED)
+            }
+            answer
+        }
     }
 
     private fun saveName() {
@@ -343,6 +402,8 @@ class VoiceActivity : Activity() {
             toast(VoiceClone.lastError)
             return
         }
+        clipField.setText("")
+        clipStatus.text = ""
         main.post(tick)
     }
 
@@ -362,10 +423,10 @@ class VoiceActivity : Activity() {
         } else {
             val s = VoiceClone.sampleSeconds(this)
             recordButton.text = if (s > 0) "● Record again" else "● Start recording"
-            recordStatus.setTextColor(if (s >= VoiceLogic.MIN_SECONDS) GREEN else GREY)
+            recordStatus.setTextColor(if (s >= VoiceLogic.MIN_SECONDS || (s > 0 && VoiceClone.clipText(this).isNotEmpty())) GREEN else GREY)
             recordStatus.text = when {
                 s == 0 -> "No recording yet. Read for 30 to 60 seconds."
-                s < VoiceLogic.MIN_SECONDS -> "Recording is $s seconds. Too short, record again for at least " + VoiceLogic.MIN_SECONDS + " seconds."
+                s < VoiceLogic.MIN_SECONDS && VoiceClone.clipText(this).isEmpty() -> "Recording is $s seconds. Too short, record again for at least " + VoiceLogic.MIN_SECONDS + " seconds."
                 else -> "✓ Recording saved: $s seconds"
             }
         }
@@ -437,6 +498,7 @@ class VoiceActivity : Activity() {
 
     companion object {
         private const val ASK_MIC = 81
+        private const val PICK_CLIP = 82
         private const val INK = 0xFF1D2433.toInt()
         private const val GREY = 0xFF475467.toInt()
         private const val GREEN = 0xFF1F7A4D.toInt()

@@ -81,4 +81,15 @@ class VoiceLogicTest {
         assertTrue(VoiceLogic.problem(VoiceLogic.OWN, 500, "").contains("notebook"))
         assertTrue(VoiceLogic.problem(VoiceLogic.FISH, 502, "").contains("busy"))
     }
+
+    @Test fun resampleKeepsLengthAndShape() {
+        val src = ShortArray(48_000) { (it % 100).toShort() }
+        val out = VoiceLogic.resample(src, 48_000, 24_000)
+        assertEquals(24_000, out.size)
+        assertEquals(src[2], out[1])
+        assertEquals(0, VoiceLogic.resample(ShortArray(0), 44_100, 24_000).size)
+        val up = VoiceLogic.resample(shortArrayOf(0, 100), 12_000, 24_000)
+        assertEquals(4, up.size)
+        assertEquals(50, up[1].toInt())
+    }
 }
