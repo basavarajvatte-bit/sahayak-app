@@ -2,6 +2,8 @@ name: Pattern study data
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 20 * * 6'   # har Sunday raat 1:47 (India) ko naya data
   push:
     branches: [main]
     paths:
@@ -14,17 +16,20 @@ permissions:
 jobs:
   study:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Collect events and prices
-        run: python research/probe.py && exit 0; python research/study.py research/out
+        run: python research/study.py research/out
+      - name: News from the day it came out
+        continue-on-error: true
+        run: python research/news_study.py research/out
       - name: Publish results
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete study-data --yes --cleanup-tag || true
-          gh release create study-data research/out/* --title "Pattern study data" --notes "Dividend and split events of Nifty 500 shares, with moves after 1 day, 1 week, 1 month, 3 months vs Nifty."
+          gh release create study-data research/out/* --title "Pattern study data" --notes "Nifty 500 shares, 10 years: corporate actions (summary.md, events.csv) and NSE news from the day it came out (news_summary.md, news_patterns.json, news_events.csv). Moves after 1 day, 1 week, 1 month, 3 months vs Nifty."

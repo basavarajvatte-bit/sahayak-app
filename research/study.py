@@ -130,8 +130,7 @@ def day_of(ts):
     return datetime.fromtimestamp(int(ts), timezone.utc).strftime("%Y-%m-%d")
 
 
-def main(out_dir):
-    os.makedirs(out_dir, exist_ok=True)
+def yahoo_login():
     # Yahoo ki pehchaan (cookie + crumb), warna wo "too many requests" bolta hai
     for _ in range(3):
         c = get("https://query2.finance.yahoo.com/v1/test/getcrumb", 2)
@@ -140,6 +139,11 @@ def main(out_dir):
             break
         time.sleep(10)
     print("yahoo crumb", bool(CRUMB[0]))
+
+
+def main(out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    yahoo_login()
     # Nifty index Yahoo par kabhi rok deta hai; tab NIFTYBEES (Nifty jaisa hi chalne wala ETF) lo
     nifty = chart("NIFTYBEES.NS") or chart("^NSEI")
     if not nifty:
