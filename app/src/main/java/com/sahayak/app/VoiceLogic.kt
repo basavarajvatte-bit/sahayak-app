@@ -62,6 +62,35 @@ object VoiceLogic {
         return u
     }
 
+    /** Phone mein rakhi ek awaaz (alag pitch ya andaaz): naam, aur namoone mein kya bola (khaali = script). */
+    data class SavedVoice(val id: String, val label: String, val text: String = "")
+
+    fun voicesFromJson(json: String): List<SavedVoice> = try {
+        val a = org.json.JSONArray(json)
+        (0 until a.length()).mapNotNull { i ->
+            val o = a.optJSONObject(i) ?: return@mapNotNull null
+            val id = o.optString("id")
+            if (id.isEmpty()) null else SavedVoice(id, o.optString("label").ifEmpty { "Voice" }, o.optString("text"))
+        }
+    } catch (e: JSONException) {
+        emptyList()
+    }
+
+    fun voicesToJson(list: List<SavedVoice>): String {
+        val a = org.json.JSONArray()
+        list.forEach { a.put(JSONObject().put("id", it.id).put("label", it.label).put("text", it.text)) }
+        return a.toString()
+    }
+
+    /** Naam na diya ho to "Voice 1", "Voice 2"… jo pehle se na ho. */
+    fun voiceLabel(typed: String, existing: List<String>): String {
+        val t = typed.trim().replace(Regex("\\s+"), " ").take(30)
+        if (t.isNotEmpty()) return t
+        var n = existing.size + 1
+        while (existing.any { it.equals("Voice $n", true) }) n++
+        return "Voice $n"
+    }
+
     /** Record karte waqt ye padhna hai. Pehli line ijazat hai: awaaz sirf apni hi clone karni hai. */
     fun script(name: String): String {
         val who = name.trim().ifEmpty { "______" }

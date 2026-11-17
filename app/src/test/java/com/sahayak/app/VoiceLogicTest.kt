@@ -92,4 +92,14 @@ class VoiceLogicTest {
         assertEquals(4, up.size)
         assertEquals(50, up[1].toInt())
     }
+
+    @Test fun savedVoicesRoundTrip() {
+        val list = listOf(VoiceLogic.SavedVoice("a1", "Normal"), VoiceLogic.SavedVoice("b2", "Khush", "Namaste dosto"))
+        assertEquals(list, VoiceLogic.voicesFromJson(VoiceLogic.voicesToJson(list)))
+        assertEquals(emptyList<VoiceLogic.SavedVoice>(), VoiceLogic.voicesFromJson("oops"))
+        assertEquals(emptyList<VoiceLogic.SavedVoice>(), VoiceLogic.voicesFromJson("""[{"label":"x"}]"""))
+        assertEquals("Gussa", VoiceLogic.voiceLabel("  Gussa ", listOf("Normal")))
+        assertEquals("Voice 2", VoiceLogic.voiceLabel(" ", listOf("Normal")))
+        assertEquals("Voice 3", VoiceLogic.voiceLabel("", listOf("Voice 2", "Normal")))
+    }
 }

@@ -41,6 +41,9 @@ class VoiceActivity : Activity() {
     private lateinit var scriptText: TextView
     private lateinit var recordButton: Button
     private lateinit var recordStatus: TextView
+    private lateinit var labelField: EditText
+    private lateinit var voicesBox: LinearLayout
+    private lateinit var usingText: TextView
     private lateinit var cloneStatus: TextView
     private lateinit var modelButton: Button
     private lateinit var sayField: EditText
@@ -58,7 +61,7 @@ class VoiceActivity : Activity() {
                 showRecord()
                 main.postDelayed(this, 500)
             } else {
-                showRecord()
+                refresh()
             }
         }
     }
@@ -236,11 +239,18 @@ class VoiceActivity : Activity() {
             }
         }
         record.addView(scriptText)
-        recordButton = button("● Start recording") { toggleRecord() }
+        record.addView(text("You can save many voices: record the same lines again in a different pitch or mood (normal, happy, soft, angry, child-like…). Give each one a name first.", 14f, color = GREY))
+        labelField = EditText(this).apply {
+            hint = "Name for this voice (e.g. Normal, Khush, Dheere)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            maxLines = 1
+        }
+        record.addView(labelField)
+        recordButton = button("● Record a new voice") { toggleRecord() }
         record.addView(recordButton)
         recordStatus = text("", 14f)
         record.addView(recordStatus)
-        record.addView(button("▶ Play my recording") {
+        record.addView(button("▶ Play the chosen voice's recording") {
             if (VoiceClone.recording) toast("Stop the recording first")
             else if (!VoiceClone.play(VoiceClone.sample(this))) toast("No recording yet")
         })
@@ -292,6 +302,11 @@ class VoiceActivity : Activity() {
             refresh()
         }
         say.addView(modelButton)
+        say.addView(text("My saved voices. Tap a name to choose it, or 🔊 to speak the text below in that voice:", 14f, color = GREY))
+        voicesBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        say.addView(voicesBox)
+        usingText = text("", 14f, true)
+        say.addView(usingText)
         sayField = EditText(this).apply {
             hint = "Write what to say, in Hindi, Marathi or English"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -300,17 +315,7 @@ class VoiceActivity : Activity() {
         }
         say.addView(sayField)
         say.addView(text("Up to " + VoiceLogic.TEXT_MAX + " letters at a time. Fish Audio and ElevenLabs use some monthly credits each time. Your own server has no limit but is slower: wait up to 2 minutes.", 13f, color = GREY))
-        val (sayRow, ss) = withSpin(button("🔊 Speak in my voice") {
-            val words = sayField.text.toString()
-            saveClipText()
-            work(sayStatus, "Making the sound…", saySpin) {
-                val file = VoiceClone.speak(this, words)
-                if (file == null) VoiceClone.lastError else {
-                    runOnUiThread { VoiceClone.play(file) }
-                    "Playing. Tap Play again to hear it once more"
-                }
-            }
-        })
+        val (sayRow, ss) = withSpin(button("🔊 Speak in the chosen voice") { speakNow() })
         saySpin = ss
         say.addView(sayRow)
         say.addView(button("▶ Play again") { if (!VoiceClone.play(VoiceClone.spoken(this))) toast("Nothing to play yet") })
@@ -320,9 +325,9 @@ class VoiceActivity : Activity() {
         page.addView(say)
 
         page.addView(text("The cloned voice can sound a little different from you. It is made by the service you chose, so your recording and text go to that service.", 13f, color = GREY))
-        page.addView(button("Delete my voice clone and recording") {
+        page.addView(button("Delete all my voices") {
             AlertDialog.Builder(this).setTitle("Delete your voice?")
-                .setMessage("This removes the voice clone from the service and the recording from this phone. Your key stays.")
+                .setMessage("This removes ALL your saved voices from this phone and their clones from the service. Your key stays.")
                 .setPositiveButton("Yes, delete") { _, _ ->
                     work(cloneStatus, "Deleting…", cloneSpin) {
                         VoiceClone.deleteAll(this)
@@ -337,6 +342,89 @@ class VoiceActivity : Activity() {
                 .setNegativeButton("No", null).show()
         })
         refresh()
+    }
+
+    private fun speakNow() {
+        val words = sayField.text.toString()
+        saveClipText()
+        val label = VoiceClone.selectedVoice(this)?.label ?: ""
+        work(sayStatus, "Making the sound in " + label.ifEmpty { "your" } + " voice…", saySpin) {
+            val file = VoiceClone.speak(this, words)
+            if (file == null) VoiceClone.lastError else {
+                runOnUiThread { VoiceClone.play(file) }
+                "Playing ($label). Tap Play again to hear it once more"
+            }
+        }
+    }
+
+    private fun chooseVoice(id: String) {
+        if (VoiceClone.recording || busy) return
+        saveClipText()
+        VoiceClone.select(this, id)
+        clipField.setText(VoiceClone.clipText(this))
+        clipStatus.text = ""
+        cloneStatus.text = ""
+        refresh()
+    }
+
+    /** Bachi hui awaazon ki list: naam (chuno), ▶ suno, 🔊 is awaaz mein bolo, 🗑 hatao. */
+    @SuppressLint("SetTextI18n")
+    private fun showVoices() {
+        voicesBox.removeAllViews()
+        val list = VoiceClone.voices(this)
+        val sel = VoiceClone.selected(this)
+        if (list.isEmpty()) {
+            voicesBox.addView(text("No voice yet. Record one in step 3.", 14f, color = GREY))
+        }
+        for (v in list) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            val chosen = v.id == sel
+            val name = button((if (chosen) "✓ " else "") + v.label + " · " + VoiceClone.secondsOf(this, v.id) + "s") { chooseVoice(v.id) }.apply {
+                if (chosen) setTypeface(typeface, Typeface.BOLD)
+                setOnLongClickListener { renameVoice(v.id, v.label); true }
+            }
+            row.addView(name, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(button("▶") {
+                if (!VoiceClone.recording && !VoiceClone.play(VoiceClone.fileFor(this, v.id))) toast("No recording")
+            }, LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT))
+            row.addView(button("🔊") {
+                if (VoiceClone.recording || busy) return@button
+                chooseVoice(v.id)
+                speakNow()
+            }, LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT))
+            row.addView(button("🗑") {
+                if (VoiceClone.recording || busy) return@button
+                AlertDialog.Builder(this).setTitle("Delete " + v.label + "?")
+                    .setMessage("This voice's recording is removed from this phone.")
+                    .setPositiveButton("Yes, delete") { _, _ ->
+                        work(sayStatus, "Deleting…", saySpin) {
+                            VoiceClone.removeVoice(this, v.id)
+                            runOnUiThread { clipField.setText(VoiceClone.clipText(this)) }
+                            "Deleted " + v.label
+                        }
+                    }
+                    .setNegativeButton("No", null).show()
+            }, LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT))
+            voicesBox.addView(row)
+        }
+        val chosen = list.firstOrNull { it.id == sel }
+        usingText.text = if (chosen == null) "" else "Speaking with: " + chosen.label + "  (long-press a name to rename)"
+    }
+
+    private fun renameVoice(id: String, old: String) {
+        val field = EditText(this).apply {
+            setText(old)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        }
+        AlertDialog.Builder(this).setTitle("Rename voice").setView(field)
+            .setPositiveButton("Save") { _, _ ->
+                VoiceClone.rename(this, id, field.text.toString())
+                refresh()
+            }
+            .setNegativeButton("Cancel", null).show()
     }
 
     override fun onPause() {
@@ -361,8 +449,12 @@ class VoiceActivity : Activity() {
         val uri = data?.data
         if (requestCode != PICK_CLIP || resultCode != RESULT_OK || uri == null) return
         clipField.setText("")
+        saveClipText()
+        val newId = VoiceClone.newVoice(this, labelField.text.toString())
+        labelField.setText("")
         work(clipStatus, "Reading the clip and writing down its words…", clipSpin) {
             val answer = VoiceClone.importClip(this, uri)
+            if (!answer.startsWith("✓")) VoiceClone.removeVoice(this, newId)
             runOnUiThread {
                 clipField.setText(VoiceClone.clipText(this))
                 showRecord()
@@ -390,7 +482,7 @@ class VoiceActivity : Activity() {
     private fun toggleRecord() {
         if (VoiceClone.recording) {
             VoiceClone.stopRecording()
-            showRecord()
+            refresh()
             return
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -398,10 +490,14 @@ class VoiceActivity : Activity() {
             return
         }
         saveName()
+        saveClipText()
+        val newId = VoiceClone.newVoice(this, labelField.text.toString())
         if (!VoiceClone.startRecording(this)) {
+            Thread { VoiceClone.removeVoice(this, newId) }.start()
             toast(VoiceClone.lastError)
             return
         }
+        labelField.setText("")
         clipField.setText("")
         clipStatus.text = ""
         main.post(tick)
@@ -422,12 +518,12 @@ class VoiceActivity : Activity() {
             recordStatus.text = "● Recording: $s seconds" + (if (s < VoiceLogic.MIN_SECONDS) "  (keep reading, at least " + VoiceLogic.MIN_SECONDS + ")" else "  (enough, you can stop)")
         } else {
             val s = VoiceClone.sampleSeconds(this)
-            recordButton.text = if (s > 0) "● Record again" else "● Start recording"
+            recordButton.text = "● Record a new voice"
             recordStatus.setTextColor(if (s >= VoiceLogic.MIN_SECONDS || (s > 0 && VoiceClone.clipText(this).isNotEmpty())) GREEN else GREY)
             recordStatus.text = when {
                 s == 0 -> "No recording yet. Read for 30 to 60 seconds."
                 s < VoiceLogic.MIN_SECONDS && VoiceClone.clipText(this).isEmpty() -> "Recording is $s seconds. Too short, record again for at least " + VoiceLogic.MIN_SECONDS + " seconds."
-                else -> "✓ Recording saved: $s seconds"
+                else -> "✓ " + (VoiceClone.selectedVoice(this)?.label ?: "Recording") + " saved: $s seconds"
             }
         }
     }
@@ -470,7 +566,9 @@ class VoiceActivity : Activity() {
         }
         scriptText.text = VoiceLogic.script(VoiceClone.name(this))
         showRecord()
-        val ready = VoiceClone.voiceId(this, provider).isNotEmpty()
+        showVoices()
+        // Apna server aur Fish free mein recording hi kaafi hai; ElevenLabs mein clone banana padta hai
+        val ready = VoiceClone.voiceId(this, provider).isNotEmpty() || (!eleven && VoiceClone.sampleSeconds(this) > 0)
         if (cloneStatus.text.isNullOrEmpty() || !busy) {
             if (ready && cloneStatus.text.isNullOrEmpty()) cloneStatus.text = "✓ Your voice is ready on " + VoiceLogic.label(provider)
             if (!ready && cloneStatus.text.toString().startsWith("✓")) cloneStatus.text = ""
