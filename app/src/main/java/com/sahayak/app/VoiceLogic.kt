@@ -18,6 +18,9 @@ object VoiceLogic {
     const val TEXT_MAX = 500
 
     const val FISH_MODEL = "s2.1-pro-free"
+
+    /** Fish free plan par clone save nahi hota; recording har baar saath jaati hai. */
+    const val FISH_LOCAL = "local"
     const val ELEVEN_V2 = "eleven_multilingual_v2"
     const val ELEVEN_V3 = "eleven_v3"
 
@@ -81,6 +84,37 @@ object VoiceLogic {
             else -> label(provider) + " answered $code"
         }
         return if (said.isEmpty()) base else "$base. It said: $said"
+    }
+
+    /** Recording mein jo padha tha, wahi likha hua (Fish ko saath bhejna hai). */
+    fun spokenScript(name: String): String = script(name).replace(Regex("\\s+"), " ").trim()
+
+    /** Fish ke liye MessagePack: {text, references:[{audio, text}], format:"mp3"}. */
+    fun fishBody(text: String, audio: ByteArray, audioText: String): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        fun len(small: Int, b8: Int, b16: Int, b32: Int, n: Int, fixMax: Int) {
+            when {
+                small >= 0 && n <= fixMax -> out.write(small or n)
+                b8 >= 0 && n <= 0xFF -> { out.write(b8); out.write(n) }
+                n <= 0xFFFF -> { out.write(b16); out.write(n shr 8); out.write(n and 0xFF) }
+                else -> { out.write(b32); out.write(n ushr 24); out.write((n shr 16) and 0xFF); out.write((n shr 8) and 0xFF); out.write(n and 0xFF) }
+            }
+        }
+        fun str(v: String) {
+            val b = v.toByteArray(Charsets.UTF_8)
+            len(0xA0, 0xD9, 0xDA, 0xDB, b.size, 31)
+            out.write(b)
+        }
+        fun bin(v: ByteArray) {
+            len(-1, 0xC4, 0xC5, 0xC6, v.size, -1)
+            out.write(v)
+        }
+        out.write(0x83)
+        str("text"); str(text)
+        str("references"); out.write(0x91)
+        out.write(0x82); str("audio"); bin(audio); str("text"); str(audioText)
+        str("format"); str("mp3")
+        return out.toByteArray()
     }
 
     /** Bolne ke liye likha hua saaf karo. */

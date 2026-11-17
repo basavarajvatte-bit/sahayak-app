@@ -1,6 +1,7 @@
 package com.sahayak.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
@@ -49,5 +50,21 @@ class VoiceLogicTest {
         assertTrue(VoiceLogic.script(" ").contains("______"))
         assertEquals("Namaste Atul", VoiceLogic.cleanText("  Namaste \n  Atul "))
         assertEquals(VoiceLogic.TEXT_MAX, VoiceLogic.cleanText("a".repeat(900)).length)
+    }
+
+    @Test fun fishBodyIsMessagePack() {
+        val audio = ByteArray(70_000) { 7 }
+        val b = VoiceLogic.fishBody("Namaste", audio, "x".repeat(300))
+        assertEquals(0x83, b[0].toInt() and 0xFF)
+        assertEquals(0xA4, b[1].toInt() and 0xFF) // "text"
+        val s = String(b, Charsets.ISO_8859_1)
+        val bin = s.indexOf("audio") + 5
+        assertEquals(0xC6, b[bin].toInt() and 0xFF) // bin32 for big audio
+        assertEquals(70_000, ((b[bin + 1].toInt() and 0xFF) shl 24) or ((b[bin + 2].toInt() and 0xFF) shl 16) or ((b[bin + 3].toInt() and 0xFF) shl 8) or (b[bin + 4].toInt() and 0xFF))
+        val ref = s.indexOf("text", bin + 5 + 70_000) + 4
+        assertEquals(0xDA, b[ref].toInt() and 0xFF) // str16 for 300 letters
+        assertTrue(s.endsWith("\u00A3mp3"))
+        assertTrue(VoiceLogic.spokenScript("Ram").startsWith("Mera naam Ram hai."))
+        assertFalse(VoiceLogic.spokenScript("Ram").contains("\n"))
     }
 }

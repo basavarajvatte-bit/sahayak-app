@@ -203,6 +203,13 @@ object VoiceClone {
         lastError = ""
         if (key.isEmpty()) return "Add your " + VoiceLogic.label(provider) + " key first"
         if (sampleSeconds(c) < VoiceLogic.MIN_SECONDS) return "Record at least " + VoiceLogic.MIN_SECONDS + " seconds first"
+        if (provider == VoiceLogic.FISH) {
+            // Fish free plan par clone save karna mana hai (0/0), isliye recording phone mein rehti hai
+            // aur har baar bolwate waqt saath jaati hai. Free model isi tarah awaaz copy karta hai.
+            deleteRemote(c, provider)
+            prefs(c).edit().putString("voice_$provider", VoiceLogic.FISH_LOCAL).apply()
+            return "✓ Your voice is ready. On the free Fish Audio plan your recording is sent along each time you speak"
+        }
         val title = name(c).ifEmpty { "My voice" } + " (Sahayak)"
         val audio = file.asRequestBody("audio/wav".toMediaType())
         val form = MultipartBody.Builder().setType(MultipartBody.FORM)
@@ -247,7 +254,17 @@ object VoiceClone {
             val body = JSONObject().put("text", text).put("model_id", elevenModel(c)).toString().toRequestBody(json)
             auth(Request.Builder().url("https://api.elevenlabs.io/v1/text-to-speech/$voice?output_format=mp3_44100_128"), provider, key).post(body).build()
         } else {
-            val body = JSONObject().put("text", text).put("reference_id", voice).put("format", "mp3").toString().toRequestBody(json)
+            val body = if (voice == VoiceLogic.FISH_LOCAL) {
+                val audio = try {
+                    sample(c).readBytes()
+                } catch (e: IOException) {
+                    lastError = "Record your voice again first"
+                    return null
+                }
+                VoiceLogic.fishBody(text, audio, VoiceLogic.spokenScript(name(c))).toRequestBody("application/msgpack".toMediaType())
+            } else {
+                JSONObject().put("text", text).put("reference_id", voice).put("format", "mp3").toString().toRequestBody(json)
+            }
             auth(Request.Builder().url("https://api.fish.audio/v1/tts"), provider, key).header("model", VoiceLogic.FISH_MODEL).post(body).build()
         }
         val bytes = call(provider, request) ?: return null
@@ -266,6 +283,10 @@ object VoiceClone {
     private fun deleteRemote(c: Context, provider: String) {
         val voice = voiceId(c, provider)
         val key = key(c, provider)
+        if (voice == VoiceLogic.FISH_LOCAL) {
+            prefs(c).edit().remove("voice_$provider").apply()
+            return
+        }
         if (voice.isEmpty() || key.isEmpty()) return
         val url = if (provider == VoiceLogic.ELEVEN) "https://api.elevenlabs.io/v1/voices/$voice" else "https://api.fish.audio/model/$voice"
         val keep = lastError
