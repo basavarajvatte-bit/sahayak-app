@@ -131,7 +131,8 @@ def day_of(ts):
 def main(out_dir):
     os.makedirs(out_dir, exist_ok=True)
     get("https://www.nseindia.com/get-quotes/equity?symbol=TCS", 1)  # NSE cookie
-    nifty = chart("^NSEI")
+    # Nifty index Yahoo par kabhi rok deta hai; tab NIFTYBEES (Nifty jaisa hi chalne wala ETF) lo
+    nifty = chart("NIFTYBEES.NS") or chart("^NSEI")
     if not nifty:
         sys.exit("Nifty data not found")
     nmap = dict(zip(nifty["days"], nifty["close"]))
