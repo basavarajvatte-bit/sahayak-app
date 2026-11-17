@@ -248,6 +248,10 @@ def main():
     model = load("model.json", {})
     if not model.get("made", "").startswith(today):
         model = morning(symbols) or model
+    if now().hour < 8:
+        print("before 8 am: only the model was made", flush=True)
+        publish(["model.json"])
+        return
     w = model.get("weights") or {**{k: 0.0 for k in FEATURES}, "bias": 0.0}
 
     log = []
