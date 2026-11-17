@@ -76,6 +76,35 @@ _shrink(cfg)
 cfg_path.write_text(_json.dumps(cfg, indent=2))
 print("✓ Model ready:", ckpt)
 
+# 3b. Fish Speech mein chhote sudhaar (T4 ke liye)
+def _patch(rel, old, new):
+    p = src / rel
+    s = p.read_text()
+    if new in s:
+        return
+    if old not in s:
+        print("⚠ patch nahi laga:", rel, flush=True)
+        return
+    p.write_text(s.replace(old, new, 1))
+
+# Galti ho to asli wajah app tak jaaye
+_patch("tools/server/views.py",
+       'HTTPStatus.INTERNAL_SERVER_ERROR, content="Failed to generate speech"',
+       'HTTPStatus.INTERNAL_SERVER_ERROR, content=("Failed to generate speech: " + type(e).__name__ + ": " + str(e))[:300]')
+# Recording seedha soundfile se padho (torchaudio ke backend par bharosa nahi)
+_patch("fish_speech/inference_engine/reference_loader.py",
+       "waveform, original_sr = torchaudio.load(reference_audio, backend=self.backend)",
+       "import soundfile as _sf\n        _data, original_sr = _sf.read(reference_audio, dtype='float32', always_2d=True)\n        waveform = torch.from_numpy(_data.T.copy())")
+# Do GPU hon to awaaz wala hissa (codec) doosre GPU par, taaki pehle GPU par model ko poori jagah mile
+_patch("tools/server/model_manager.py",
+       "decoder_config_name, decoder_checkpoint_path, self.device",
+       "decoder_config_name, decoder_checkpoint_path, ('cuda:1' if self.model_family != 'drama3' and torch.cuda.device_count() > 1 else self.device)")
+_patch("fish_speech/inference_engine/__init__.py",
+       "            device=self.decoder_model.device,\n            text=req.text,",
+       "            device=(torch.device('cuda:0') if self.decoder_model.device.type == 'cuda' else self.decoder_model.device),\n            text=req.text,")
+print("✓ Sudhaar lag gaye", flush=True)
+
+
 # 4. Server chalu karo (pehli baar 3–5 minute)
 import secrets, urllib.request, urllib.error
 
@@ -92,7 +121,7 @@ server = subprocess.Popen(
      "--api-key", PASSWORD,
      "--max-text-length", "1000"],
     cwd=src, stdout=server_log, stderr=subprocess.STDOUT,
-    env={**os.environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True", "CUDA_VISIBLE_DEVICES": "0"},
+    env={**os.environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"},
 )
 
 def healthy(base):
@@ -155,6 +184,7 @@ print("=" * 70, flush=True)
 
 # 6. Server ko chalta rakho. Ye cell chalta rahega; rok doge to server band.
 checks = 0
+seen = 0
 while True:
     time.sleep(60)
     checks += 1
@@ -168,5 +198,16 @@ while True:
             print("Naya link nahi bana. Notebook dobara chalao.")
             break
         print("NAYA line (purani kaam nahi karegi):\n" + f"SAHAYAK {URL} {PASSWORD}", flush=True)
+    # Server ki galtiyan yahan bhi dikhao (Kaggle Logs mein)
+    try:
+        with open(WORK / "server.log", errors="ignore") as f:
+            f.seek(seen)
+            new = f.read()
+            seen = f.tell()
+        for l in new.splitlines():
+            if "ERROR" in l or "Error" in l or "error:" in l:
+                print("SERVER GALTI:", l[:400], flush=True)
+    except OSError:
+        pass
     if checks % 15 == 0:
         print(time.strftime("%H:%M"), "✓ server chal raha hai:", f"SAHAYAK {URL} {PASSWORD}", flush=True)
