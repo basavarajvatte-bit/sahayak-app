@@ -60,6 +60,20 @@ if not (ckpt / "codec.pth").exists():
             "phir huggingface.co → Settings → Access Tokens se Read token banao aur use is notebook ke Secrets mein HF_TOKEN naam se daalo. "
             "Token kabhi chat mein mat bhejna."
         )
+# T4 mein 15 GB hai. Model apni yaad (KV cache) 32k lambi banata hai, jo GPU bhar deti hai.
+# 6144 kaafi hai: 90 second ki recording + 500 akshar.
+import json as _json
+cfg_path = ckpt / "config.json"
+cfg = _json.loads(cfg_path.read_text())
+def _shrink(d):
+    if isinstance(d, dict):
+        for k, v in d.items():
+            if k == "max_seq_len" and isinstance(v, int) and v > 6144:
+                d[k] = 6144
+            else:
+                _shrink(v)
+_shrink(cfg)
+cfg_path.write_text(_json.dumps(cfg, indent=2))
 print("✓ Model ready:", ckpt)
 
 # 4. Server chalu karo (pehli baar 3–5 minute)
@@ -78,6 +92,7 @@ server = subprocess.Popen(
      "--api-key", PASSWORD,
      "--max-text-length", "1000"],
     cwd=src, stdout=server_log, stderr=subprocess.STDOUT,
+    env={**os.environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True", "CUDA_VISIBLE_DEVICES": "0"},
 )
 
 def healthy(base):
