@@ -67,6 +67,12 @@
             android:theme="@android:style/Theme.Material.NoActionBar" />
 
         <activity
+            android:name=".VoiceActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".SharedTodoActivity"
             android:exported="false"
             android:theme="@android:style/Theme.Material.Light.NoActionBar"

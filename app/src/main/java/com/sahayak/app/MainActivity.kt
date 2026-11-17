@@ -97,6 +97,7 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.watchButton).setOnClickListener {
             startActivity(Intent(this, WatchActivity::class.java))
         }
+        findViewById<Button>(R.id.voiceButton).setOnClickListener { startActivity(Intent(this, VoiceActivity::class.java)) }
         findViewById<Button>(R.id.marketButton).setOnClickListener {
             startActivity(Intent(this, MarketActivity::class.java))
         }
