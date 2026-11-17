@@ -1,0 +1,34 @@
+name: 10 minute game
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 3 * * 1-5'    # 8:37 subah (India): model seekhe, 9:15 se khel, 12:25 tak
+    - cron: '23 6 * * 1-5'   # 11:53 (India): 12:25 ke baad se 3:30 tak
+
+permissions:
+  contents: write
+
+concurrency:
+  group: game
+  cancel-in-progress: false
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Get saved game data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p research/game
+          gh release download game -D research/game --clobber || true
+      - name: Play
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python research/game.py research/game

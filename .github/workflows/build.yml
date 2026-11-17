@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - 'research/**'
       - '.github/workflows/study.yml'
+      - '.github/workflows/game.yml'
   workflow_dispatch:
 
 permissions:
