@@ -30,4 +30,42 @@ object PdfLogic {
         if (n.isEmpty()) return "PDF"
         return if (n.endsWith(".pdf", ignoreCase = true)) n.dropLast(4) else n
     }
+
+    /** Page par ek akshar ki jagah, 0 se 1 ke hisaab mein (baayein, upar, daayein, neeche). */
+    data class Box(val l: Float, val t: Float, val r: Float, val b: Float)
+
+    /** Ek mila hua shabd: kaunsa page, page ke text mein kahan se kahan tak. */
+    data class Match(val page: Int, val start: Int, val end: Int)
+
+    /** Saare pages mein dhoondo (chhote-bade akshar ka fark nahi, beech ke kai space ek gine). */
+    fun find(pages: List<String>, query: String, limit: Int = 2000): List<Match> {
+        val q = query.trim().replace(Regex("\\s+"), " ").lowercase()
+        if (q.isEmpty()) return emptyList()
+        val out = mutableListOf<Match>()
+        pages.forEachIndexed { p, text ->
+            val low = text.lowercase()
+            var i = low.indexOf(q)
+            while (i >= 0 && out.size < limit) {
+                out += Match(p, i, i + q.length)
+                i = low.indexOf(q, i + 1)
+            }
+        }
+        return out
+    }
+
+    /** Mile hue aksharon ke dabbe, har line ka ek bada dabba. */
+    fun boxes(chars: List<Box?>, start: Int, end: Int): List<Box> {
+        val out = mutableListOf<Box>()
+        for (i in start until minOf(end, chars.size)) {
+            val b = chars[i] ?: continue
+            val last = out.lastOrNull()
+            val sameLine = last != null && b.t < last.b && b.b > last.t
+            if (sameLine) out[out.size - 1] = Box(minOf(last!!.l, b.l), minOf(last.t, b.t), maxOf(last.r, b.r), maxOf(last.b, b.b))
+            else out += b
+        }
+        return out
+    }
+
+    /** "3 / 17" ya "Nahi mila" */
+    fun resultLabel(current: Int, total: Int): String = if (total == 0) "Nahi mila" else "${current + 1} / $total"
 }

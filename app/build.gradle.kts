@@ -11,8 +11,8 @@ android {
         applicationId = "com.sahayak.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 152
-        versionName = "16.4"
+        versionCode = 153
+        versionName = "16.5"
         // Call wali library ke sirf phone wale hisse, taaki app chhota rahe
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
@@ -47,6 +47,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Awaaz aur video call (WebRTC)
     implementation("io.getstream:stream-webrtc-android:1.3.9")
+    // PDF ke andar ke shabd padhne ke liye (search)
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

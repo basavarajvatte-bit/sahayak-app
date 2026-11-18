@@ -3,7 +3,9 @@ package com.sahayak.app
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
@@ -14,10 +16,17 @@ import android.provider.OpenableColumns
 import android.util.LruCache
 import android.view.Gravity
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
+import com.tom_roush.pdfbox.text.TextPosition
 import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -52,6 +61,19 @@ class PdfActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var zoomText: TextView
     private val adapter = Pages()
+
+    // ----- Search -----
+    private val indexer = Executors.newSingleThreadExecutor()
+    @Volatile private var openId = 0
+    private val pageTexts = mutableListOf<String>()
+    private val pageChars = mutableListOf<List<PdfLogic.Box?>>()
+    private var indexDone = false
+    private var matches = emptyList<PdfLogic.Match>()
+    private var current = 0
+    private lateinit var searchRow: LinearLayout
+    private lateinit var searchField: EditText
+    private lateinit var searchText: TextView
+    private val searchSoon = Runnable { runSearch(false) }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -99,9 +121,46 @@ class PdfActivity : Activity() {
             gravity = Gravity.CENTER
         }
         buttons.addView(pageText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        buttons.addView(small("📤 Share") { share() })
+        buttons.addView(small("🔍") { toggleSearch() })
+        buttons.addView(small("📤") { share() })
         buttons.addView(small("📂") { pick() })
         bar.addView(buttons)
+        searchRow = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = View.GONE
+        }
+        searchField = EditText(this).apply {
+            hint = "PDF mein dhoondo"
+            textSize = 16f
+            isSingleLine = true
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            setOnEditorActionListener { _, action, _ ->
+                if (action == EditorInfo.IME_ACTION_SEARCH) {
+                    runSearch(true)
+                    hideKeyboard()
+                    true
+                } else false
+            }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    main.removeCallbacks(searchSoon)
+                    main.postDelayed(searchSoon, 400)
+                }
+            })
+        }
+        searchRow.addView(searchField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        searchText = TextView(this).apply {
+            textSize = 13f
+            setTextColor(0xFF667085.toInt())
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+        searchRow.addView(searchText)
+        searchRow.addView(small("◀") { step(-1) })
+        searchRow.addView(small("▶") { step(1) })
+        searchRow.addView(small("✕") { toggleSearch() })
+        bar.addView(searchRow)
         page.addView(bar)
         status = TextView(this).apply {
             textSize = 16f
@@ -204,6 +263,7 @@ class PdfActivity : Activity() {
                     pageText.text = PdfLogic.pageLabel(1, count)
                     adapter.notifyDataSetChanged()
                     this.list.setSelection(0)
+                    startIndex(copy)
                 }
                 null
             } catch (e: SecurityException) {
@@ -258,6 +318,8 @@ class PdfActivity : Activity() {
     }
 
     override fun onDestroy() {
+        openId++
+        indexer.shutdownNow()
         worker.shutdownNow()
         synchronized(this) { closeRenderer() }
         super.onDestroy()
@@ -287,7 +349,7 @@ class PdfActivity : Activity() {
         override fun getItemId(position: Int) = position.toLong()
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val view = (convertView as? ImageView) ?: ImageView(this@PdfActivity).apply {
+            val view = (convertView as? PageView) ?: PageView().apply {
                 adjustViewBounds = true
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -300,6 +362,7 @@ class PdfActivity : Activity() {
             view.minimumHeight = h
             val have = cache.get(key)
             view.layoutParams = AbsListView.LayoutParams(w + dp(8), h + dp(8))
+            view.marks = marksFor(position)
             if (have != null) {
                 view.setImageBitmap(have)
             } else {
@@ -314,6 +377,182 @@ class PdfActivity : Activity() {
                 }
             }
             return view
+        }
+    }
+
+    // ---------- Search ----------
+
+    /** Mile hue shabdon ke dabbe is page par: (sab, abhi wala). */
+    private fun marksFor(page: Int): Pair<List<PdfLogic.Box>, List<PdfLogic.Box>> {
+        if (matches.isEmpty() || page >= pageChars.size) return emptyList<PdfLogic.Box>() to emptyList()
+        val chars = pageChars[page]
+        val all = mutableListOf<PdfLogic.Box>()
+        var now = emptyList<PdfLogic.Box>()
+        matches.forEachIndexed { i, m ->
+            if (m.page != page) return@forEachIndexed
+            val b = PdfLogic.boxes(chars, m.start, m.end)
+            if (i == current) now = b else all += b
+        }
+        return all to now
+    }
+
+    private fun toggleSearch() {
+        if (searchRow.visibility == View.VISIBLE) {
+            searchRow.visibility = View.GONE
+            matches = emptyList()
+            adapter.notifyDataSetChanged()
+            hideKeyboard()
+        } else {
+            searchRow.visibility = View.VISIBLE
+            searchField.requestFocus()
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(searchField, InputMethodManager.SHOW_IMPLICIT)
+            if (!indexDone) searchText.text = "Taiyaar ho raha hai…"
+        }
+    }
+
+    private fun hideKeyboard() {
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(searchField.windowToken, 0)
+    }
+
+    /** PDF ke andar ke shabd aur unki jagah padho (peeche, page-page karke). */
+    private fun startIndex(copy: File) {
+        val id = ++openId
+        pageTexts.clear()
+        pageChars.clear()
+        indexDone = false
+        matches = emptyList()
+        indexer.execute {
+            try {
+                PDFBoxResourceLoader.init(applicationContext)
+                PDDocument.load(copy).use { doc ->
+                    val n = doc.numberOfPages
+                    for (i in 0 until n) {
+                        if (id != openId) return@use
+                        val pg = doc.getPage(i)
+                        val box = pg.cropBox
+                        val turned = pg.rotation % 180 != 0
+                        val w = if (turned) box.height else box.width
+                        val h = if (turned) box.width else box.height
+                        val sb = StringBuilder()
+                        val chars = ArrayList<PdfLogic.Box?>()
+                        val stripper = object : PDFTextStripper() {
+                            override fun writeString(text: String?, positions: MutableList<TextPosition>?) {
+                                positions?.forEach { tp ->
+                                    val u = tp.unicode ?: return@forEach
+                                    val bx = PdfLogic.Box(tp.xDirAdj / w, (tp.yDirAdj - tp.heightDir) / h, (tp.xDirAdj + tp.widthDirAdj) / w, tp.yDirAdj / h)
+                                    for (ch in u) {
+                                        sb.append(ch)
+                                        chars.add(bx)
+                                    }
+                                }
+                            }
+
+                            override fun writeWordSeparator() = space()
+                            override fun writeLineSeparator() = space()
+
+                            private fun space() {
+                                if (sb.isNotEmpty() && sb[sb.length - 1] != ' ') {
+                                    sb.append(' ')
+                                    chars.add(null)
+                                }
+                            }
+                        }
+                        stripper.sortByPosition = true
+                        stripper.startPage = i + 1
+                        stripper.endPage = i + 1
+                        try {
+                            stripper.getText(doc)
+                        } catch (e: Exception) {
+                            // Ye page padha nahi gaya; khaali maano
+                        }
+                        main.post {
+                            if (id != openId) return@post
+                            pageTexts += sb.toString()
+                            pageChars += chars
+                            if (searchRow.visibility == View.VISIBLE && searchField.text.isNotBlank() && (i % 10 == 9 || i == n - 1)) runSearch(false)
+                            else if (searchRow.visibility == View.VISIBLE && searchField.text.isBlank()) searchText.text = "Padh raha hoon ${i + 1}/$n"
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Password ya kharab file: search nahi hoga
+            } catch (e: OutOfMemoryError) {
+                // Bahut badi PDF
+            }
+            main.post {
+                if (id != openId) return@post
+                indexDone = true
+                if (searchRow.visibility == View.VISIBLE) runSearch(false)
+            }
+        }
+    }
+
+    private fun runSearch(jump: Boolean) {
+        val q = searchField.text.toString()
+        if (q.isBlank()) {
+            matches = emptyList()
+            searchText.text = ""
+            adapter.notifyDataSetChanged()
+            return
+        }
+        val before = matches.getOrNull(current)
+        matches = PdfLogic.find(pageTexts, q)
+        current = if (before != null) matches.indexOfFirst { it.page >= before.page }.coerceAtLeast(0) else 0
+        searchText.text = when {
+            matches.isNotEmpty() -> PdfLogic.resultLabel(current, matches.size) + if (!indexDone) " …" else ""
+            !indexDone -> "Dhoondh raha hoon ${pageTexts.size}/$count"
+            pageTexts.all { it.isBlank() } -> "Is PDF mein likha hua text nahi hai (scan ki hui photo hai)"
+            else -> "Nahi mila"
+        }
+        adapter.notifyDataSetChanged()
+        if (matches.isNotEmpty() && (jump || before == null)) show(current)
+    }
+
+    private fun step(d: Int) {
+        if (matches.isEmpty()) {
+            runSearch(true)
+            return
+        }
+        current = (current + d + matches.size) % matches.size
+        searchText.text = PdfLogic.resultLabel(current, matches.size)
+        adapter.notifyDataSetChanged()
+        show(current)
+        hideKeyboard()
+    }
+
+    /** Mile hue shabd tak le jao: sahi page, aur page mein us jagah tak. */
+    private fun show(i: Int) {
+        val m = matches.getOrNull(i) ?: return
+        val b = PdfLogic.boxes(pageChars[m.page], m.start, m.end).firstOrNull()
+        val (pw, ph) = sizes.getOrNull(m.page) ?: (1 to 1)
+        val (w, h) = PdfLogic.bitmapSize(resources.displayMetrics.widthPixels - dp(8), zoom, pw, ph)
+        val top = if (b != null) (b.t * h).toInt() else 0
+        list.setSelectionFromTop(m.page, -top + list.height / 3)
+        if (b != null) scroller.smoothScrollTo(((b.l * w).toInt() - resources.displayMetrics.widthPixels / 3).coerceAtLeast(0), 0)
+        else scroller.smoothScrollTo(0, 0)
+    }
+
+    /** Page ki tasveer, upar peele (aur abhi wale par narangi) nishaan. */
+    private inner class PageView : ImageView(this@PdfActivity) {
+        var marks: Pair<List<PdfLogic.Box>, List<PdfLogic.Box>> = emptyList<PdfLogic.Box>() to emptyList()
+            set(v) {
+                field = v
+                invalidate()
+            }
+        private val yellow = Paint().apply { color = 0x66FFD600 }
+        private val orange = Paint().apply { color = 0x88FF7A00.toInt() }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            if (marks.first.isEmpty() && marks.second.isEmpty()) return
+            val l = paddingLeft.toFloat()
+            val t = paddingTop.toFloat()
+            val w = (width - paddingLeft - paddingRight).toFloat()
+            val h = (height - paddingTop - paddingBottom).toFloat()
+            val pad = 2f
+            for ((list, paint) in listOf(marks.first to yellow, marks.second to orange)) {
+                for (b in list) canvas.drawRect(l + b.l * w - pad, t + b.t * h - pad, l + b.r * w + pad, t + b.b * h + pad, paint)
+            }
         }
     }
 
