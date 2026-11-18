@@ -8,7 +8,6 @@ on:
       - '.github/workflows/study.yml'
       - '.github/workflows/game.yml'
       - '.github/workflows/index.yml'
-      - '.github/workflows/probe.yml'
   workflow_dispatch:
 
 permissions:

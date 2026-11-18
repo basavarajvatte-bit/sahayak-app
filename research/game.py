@@ -21,6 +21,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import index_game  # noqa: E402
 import study  # noqa: E402
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -214,7 +215,12 @@ def morning(symbols):
             "always_up_pct": pct(sum(y for _, y, _ in rows), n),
         }
         weights[str(h)] = train([(f, y) for f, y, _ in samples(hist, nifty, days, h)])
-    model = {"made": now().strftime("%Y-%m-%d %H:%M"), "weights": weights, "train_days": days, "check": check}
+    try:
+        idx = index_game.morning()
+    except Exception as e:  # noqa: BLE001
+        print("index model failed", e, flush=True)
+        idx = {}
+    model = {"made": now().strftime("%Y-%m-%d %H:%M"), "weights": weights, "train_days": days, "check": check, "index": idx}
     save("model.json", model)
     print("model", json.dumps(check), flush=True)
     return model
@@ -282,7 +288,7 @@ def main():
     symbols = nifty50() + ["NIFTYBEES"]
     today = now().strftime("%Y-%m-%d")
     model = load("model.json", {})
-    if not model.get("made", "").startswith(today) or "10" not in (model.get("weights") or {}):
+    if not model.get("made", "").startswith(today) or "10" not in (model.get("weights") or {}) or "index" not in model:
         model = morning(symbols) or model
     if now().hour < 8:
         print("before 8 am: only the model was made", flush=True)
@@ -291,6 +297,7 @@ def main():
     blank = {**{k: 0.0 for k in FEATURES}, "bias": 0.0}
     weights = {str(h): (model.get("weights") or {}).get(str(h), blank) for h in HORIZONS}
     stats = news_stats()
+    idx = index_game.Game(DIR, model.get("index"))
 
     log = []
     if os.path.exists(os.path.join(DIR, "today.jsonl")):
@@ -327,6 +334,10 @@ def main():
                 bars[s] = minutes(s + ".NS", "1d").get(today, [])
                 time.sleep(0.25)
         resolve(log, bars)
+        try:
+            idx.tick(tick)
+        except Exception as e:  # noqa: BLE001
+            print("index tick failed", e, flush=True)
         fresh = []
         for s in symbols:
             f = feats(bars.get(s) or [], nifty, tick, 1.0 if s in news else 0.0)
@@ -349,18 +360,18 @@ def main():
         log += fresh
         with open(os.path.join(DIR, "today.jsonl"), "w") as f:
             f.write("\n".join(json.dumps(e) for e in log))
-        save("live.json", live(log, model, tick))
-        publish(["live.json", "today.jsonl", "model.json"])
+        save("live.json", {**live(log, model, tick), "index": idx.live(tick)})
+        publish(["live.json", "today.jsonl", "index_today.jsonl", "model.json"])
         print(datetime.now(IST).strftime("%H:%M"), "tick", tick, "guesses", len(fresh), "news", len(news), flush=True)
         time.sleep(60)
 
     if ended_day and log:
         hist = load("history.json", [])
         hist = [h for h in hist if h.get("day") != today]
-        hist.append({"day": today, **score(log), "check": model.get("check")})
+        hist.append({"day": today, **score(log), "check": model.get("check"), "index": idx.score()})
         save("history.json", hist[-400:])
-        save("live.json", live(log, model, None))
-        publish(["live.json", "today.jsonl", "history.json", "model.json"])
+        save("live.json", {**live(log, model, None), "index": idx.live(None)})
+        publish(["live.json", "today.jsonl", "index_today.jsonl", "history.json", "model.json"])
 
 
 def score(log):
