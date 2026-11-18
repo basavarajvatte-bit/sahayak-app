@@ -36,6 +36,7 @@
 
         <activity android:name="com.sahayak.app.MarketActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.sahayak.app.MarketNewsActivity" android:exported="false" />
+        <activity android:name="com.sahayak.app.GameActivity" android:exported="false" />
         <activity android:name="com.sahayak.app.ShareActivity" android:exported="false" />
         <activity android:name="com.sahayak.app.PatternActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name="com.sahayak.app.PatternLockActivity" android:exported="false" />
