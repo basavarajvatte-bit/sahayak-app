@@ -282,8 +282,8 @@ class PdfActivity : Activity() {
     }
 
     private inner class Pages : BaseAdapter() {
-        override fun getCount() = count
-        override fun getItem(position: Int) = position
+        override fun getCount(): Int = this@PdfActivity.count
+        override fun getItem(position: Int): Any = position
         override fun getItemId(position: Int) = position.toLong()
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
