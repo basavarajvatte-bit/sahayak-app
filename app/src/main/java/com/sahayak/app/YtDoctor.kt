@@ -81,45 +81,83 @@ class YtDoctor(private val context: Context, private val apiKey: String) {
         return generate(parts, false)
     }
 
+    /** Jis model ki limit khatam ho gayi, wo is jaanch mein dobara nahi lagega. */
+    private val tired = HashSet<String>()
+    var lastModel = ""
+        private set
+    var onSwitch: ((String) -> Unit)? = null
+
     private fun generate(parts: JSONArray, json: Boolean): String? {
         val config = JSONObject().put("temperature", 0.4).put("maxOutputTokens", 4096)
         if (json) config.put("responseMimeType", "application/json")
         val body = JSONObject()
             .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
             .put("generationConfig", config).toString()
-        for (model in MODELS) {
-            val request = Request.Builder().url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
-                .header("x-goog-api-key", apiKey)
-                .post(body.toRequestBody("application/json".toMediaType())).build()
-            try {
-                client.newCall(request).execute().use { r ->
-                    val text = r.body?.string().orEmpty()
-                    if (!r.isSuccessful) {
-                        lastError = when (r.code) {
-                            429 -> "Gemini free limit reached. Try after some time"
-                            400 -> "Gemini could not open the video (it must be Public)"
-                            403 -> "Gemini key problem"
-                            else -> "Gemini error " + r.code
-                        }
-                        RunLog.add(context, "yt doctor $model ${r.code} ${text.take(150)}")
-                        return@use null
-                    }
-                    val out = StringBuilder()
-                    val p = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)
-                        ?.optJSONObject("content")?.optJSONArray("parts")
-                    for (i in 0 until (p?.length() ?: 0)) {
-                        val part = p?.optJSONObject(i) ?: continue
-                        if (!part.optBoolean("thought")) out.append(part.optString("text"))
-                    }
-                    out.toString().ifBlank { null }
-                }?.let { return it }
-            } catch (e: IOException) {
-                lastError = if (e is java.net.UnknownHostException) "No internet" else "Gemini took too long"
-            } catch (e: org.json.JSONException) {
-                lastError = "Strange reply from Gemini"
+        val models = GeminiModels.forKey(apiKey, client)
+        // Do chakkar: pehle sab models, phir sabki limit khatam ho to 1 minute ruk kar ek baar aur (minute waali limit khul jaati hai)
+        for (round in 0..1) {
+            if (round == 1) {
+                if (tired.isEmpty()) break
+                onSwitch?.invoke("Teeno models ki limit bhari, 1 minute ruk raha hun…")
+                Thread.sleep(WAIT_MS)
+                tired.clear()
+            }
+            for (model in models) {
+                if (model in tired) continue
+                val result = call(model, body)
+                if (result != null) {
+                    lastModel = model
+                    return result
+                }
+                if (busy) {
+                    tired.add(model)
+                    models.firstOrNull { it !in tired }?.let { onSwitch?.invoke("${GeminiModels.label(model)} ki limit khatam, ab ${GeminiModels.label(it)} kaam kar raha hai…") }
+                }
             }
         }
         return null
+    }
+
+    private var busy = false
+
+    private fun call(model: String, body: String): String? {
+        busy = false
+        val request = Request.Builder().url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+            .header("x-goog-api-key", apiKey)
+            .post(body.toRequestBody("application/json".toMediaType())).build()
+        return try {
+            client.newCall(request).execute().use { r ->
+                val text = r.body?.string().orEmpty()
+                if (!r.isSuccessful) {
+                    busy = r.code == 429 || r.code == 503 || r.code == 500
+                    lastError = when (r.code) {
+                        429 -> "Sab Gemini models ki free limit khatam. Kal phir try kijiye"
+                        400 -> "Gemini video nahi khol paaya (video Public honi chahiye)"
+                        403 -> "Gemini key problem"
+                        404 -> "Model nahi mila"
+                        500, 503 -> "Gemini busy hai"
+                        else -> "Gemini error " + r.code
+                    }
+                    if (r.code == 404) busy = true
+                    RunLog.add(context, "yt doctor $model ${r.code} ${text.take(150)}")
+                    return@use null
+                }
+                val out = StringBuilder()
+                val p = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)
+                    ?.optJSONObject("content")?.optJSONArray("parts")
+                for (i in 0 until (p?.length() ?: 0)) {
+                    val part = p?.optJSONObject(i) ?: continue
+                    if (!part.optBoolean("thought")) out.append(part.optString("text"))
+                }
+                out.toString().ifBlank { null }
+            }
+        } catch (e: IOException) {
+            lastError = if (e is java.net.UnknownHostException) "No internet" else "Gemini took too long"
+            null
+        } catch (e: org.json.JSONException) {
+            lastError = "Strange reply from Gemini"
+            null
+        }
     }
 
     /** Studio ka screenshot chhota karke JPEG (Gemini ko bhejne layak). */
@@ -142,6 +180,6 @@ class YtDoctor(private val context: Context, private val apiKey: String) {
     }
 
     companion object {
-        private val MODELS = listOf("gemini-2.5-flash", "gemini-flash-latest")
+        private const val WAIT_MS = 65_000L
     }
 }

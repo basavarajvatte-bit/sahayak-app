@@ -147,6 +147,7 @@ class YtDoctorActivity : Activity() {
         fun say(line: String) = runOnUiThread { status.text = line }
         Thread {
             val doctor = YtDoctor(app, key)
+            doctor.onSwitch = { say(it) }
             val now = System.currentTimeMillis()
             val out = StringBuilder()
             try {
@@ -163,9 +164,12 @@ class YtDoctorActivity : Activity() {
                     val parts = StringBuilder()
                     videos.take(want).forEachIndexed { i, v ->
                         say("Gemini video ${i + 1}/${minOf(want, videos.size)} dekh raha hai…")
+                        if (i > 0) Thread.sleep(GAP_MS)
                         val r = doctor.check(v, now, aim)
                         if (r != null) checked.add(v to r)
-                        parts.append(YtDoctorLogic.reportText(v, r, YtDoctorLogic.videoIssues(v, now, usAudience))).append("\n\n")
+                        parts.append(YtDoctorLogic.reportText(v, r, YtDoctorLogic.videoIssues(v, now, usAudience)))
+                        if (r != null) parts.append("\n(AI: ").append(GeminiModels.label(doctor.lastModel)).append(")")
+                        parts.append("\n\n")
                     }
                     say("Poore channel ka plan bana raha hun…")
                     val images = pics.mapNotNull { doctor.shrink(it) }
@@ -212,5 +216,6 @@ class YtDoctorActivity : Activity() {
         private const val PICK_SHOTS = 5_201
         private const val COUNT_IDS = 6_200
         private const val MAX_SHOTS = 8
+        private const val GAP_MS = 4_000L
     }
 }

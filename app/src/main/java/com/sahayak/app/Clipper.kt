@@ -157,7 +157,7 @@ class Clipper(private val context: Context, private val apiKey: String) {
                 .put("generationConfig", JSONObject().put("temperature", 0.3).put("maxOutputTokens", 4096)
                     .put("responseMimeType", "application/json"))
                 .toString()
-            for (model in MODELS) {
+            for (model in GeminiModels.forKey(apiKey, client)) {
                 progress("Gemini is choosing the best parts")
                 val reply = generate(model, body) ?: continue
                 val picks = ClipLogic.parse(reply, totalS, count)
@@ -588,6 +588,5 @@ class Clipper(private val context: Context, private val apiKey: String) {
         private const val WAIT_MS = 5_000L
         private const val API = "https://generativelanguage.googleapis.com/v1beta/"
         private const val UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files"
-        private val MODELS = listOf("gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite")
     }
 }

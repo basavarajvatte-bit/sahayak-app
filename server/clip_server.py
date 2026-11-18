@@ -34,7 +34,43 @@ W, H = 1080, 1920
 MIN_LEN, MAX_LEN = 20.0, 90.0
 FONT_LATIN = "Anton"
 FONT_DEVA = "Noto Sans Devanagari"
-MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
+MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+_models = {"list": [], "at": 0.0}
+_tired = {}
+SKIP_MODELS = re.compile(r"(image|tts|audio|live|embedding|aqa|learnlm|gemma|computer-use|robotics|veo|imagen|nano|banana|search)", re.I)
+
+
+def rank_models(names):
+    """Teen alag free limits: flash > flash-lite > pro, naya version pehle."""
+    ok = sorted({n.replace("models/", "") for n in names})
+    ok = [n for n in ok if n.startswith("gemini-") and not SKIP_MODELS.search(n) and ("flash" in n or "pro" in n)]
+
+    def key(n):
+        fam = 1 if "flash-lite" in n else 0 if "flash" in n else 2
+        m = re.match(r"gemini-(\d+(?:\.\d+)?)", n)
+        ver = float(m.group(1)) if m else 0.0
+        shaky = 1 if re.search(r"(preview|exp|latest|\d{2}-\d{2})", n) else 0
+        return (fam, -ver, shaky, len(n))
+    ok.sort(key=key)
+    real = [n for n in ok if not n.endswith("-latest")]
+    return (real if len(real) >= 2 else ok)[:4]
+
+
+def model_list(key):
+    if _models["list"] and time.time() - _models["at"] < 6 * 3600:
+        return _models["list"]
+    names = []
+    try:
+        req = urllib.request.Request("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", headers={"x-goog-api-key": key})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read())
+        names = [m["name"] for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
+    except Exception:  # noqa: BLE001
+        pass
+    ranked = rank_models(names)
+    _models["list"] = ranked if len(ranked) >= 2 else MODELS
+    _models["at"] = time.time()
+    return _models["list"]
 STOP = set("""a an and are as at be been but by can do does for from had has have he her his how i if in into is it its
 just me my no not of on or our she so than that the their them then there these they this to too up us was we were what
 when which who why will with you your about would could should very also more most must make made clip clips content
@@ -239,7 +275,9 @@ def ask_gemini(key, prompt, log, images=None, temperature=0.4):
         "generationConfig": {"temperature": temperature, "maxOutputTokens": 8192, "responseMimeType": "application/json"},
     }).encode()
     last = ""
-    for model in MODELS:
+    models = model_list(key)
+    fresh = [m for m in models if time.time() - _tired.get(m, 0) > 600] or models
+    for model in fresh:
         req = urllib.request.Request(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             data=body, headers={"Content-Type": "application/json", "x-goog-api-key": key})
@@ -251,10 +289,12 @@ def ask_gemini(key, prompt, log, images=None, temperature=0.4):
             if text.strip():
                 return text
         except urllib.error.HTTPError as e:
+            if e.code in (429, 404, 500, 503):
+                _tired[model] = time.time()
             last = {429: "Gemini free limit reached", 400: "Gemini key problem", 403: "Gemini key problem"}.get(e.code, f"Gemini error {e.code}")
         except Exception as e:  # noqa: BLE001
             last = f"Gemini: {type(e).__name__}"
-        log(f"{model} failed: {last}")
+        log(f"{model} failed: {last}, trying the next model")
     return None
 
 
