@@ -1,0 +1,32 @@
+package com.sahayak.app
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class PdfLogicTest {
+    @Test fun zoomSteps() {
+        assertEquals(1.5f, PdfLogic.zoomIn(1.0f))
+        assertEquals(3.0f, PdfLogic.zoomIn(3.0f))
+        assertEquals(1.0f, PdfLogic.zoomOut(1.5f))
+        assertEquals(1.0f, PdfLogic.zoomOut(1.0f))
+    }
+
+    @Test fun labelsAndTitles() {
+        assertEquals("Page 3 / 12", PdfLogic.pageLabel(3, 12))
+        assertEquals("Page 12 / 12", PdfLogic.pageLabel(20, 12))
+        assertEquals("", PdfLogic.pageLabel(1, 0))
+        assertEquals("Bill march", PdfLogic.title("Bill march.pdf"))
+        assertEquals("report", PdfLogic.title("/x/y/report.PDF"))
+        assertEquals("PDF", PdfLogic.title(null))
+    }
+
+    @Test fun bitmapKeepsShapeAndLimit() {
+        val (w, h) = PdfLogic.bitmapSize(1000, 1f, 595, 842)
+        assertEquals(1000, w)
+        assertEquals(1415, h)
+        val (bw, bh) = PdfLogic.bitmapSize(1080, 3f, 595, 842)
+        assertTrue(bw.toLong() * bh <= 12_000_000)
+        assertEquals(842.0 / 595, bh.toDouble() / bw, 0.01)
+    }
+}
