@@ -10,6 +10,9 @@ class PdfLogicTest {
         assertEquals(3.0f, PdfLogic.zoomIn(3.0f))
         assertEquals(1.0f, PdfLogic.zoomOut(1.5f))
         assertEquals(1.0f, PdfLogic.zoomOut(1.0f))
+        assertEquals(2.0f, PdfLogic.doubleTapZoom(1.0f))
+        assertEquals(1.0f, PdfLogic.doubleTapZoom(2.0f))
+        assertEquals(1.0f, PdfLogic.doubleTapZoom(1.5f))
     }
 
     @Test fun labelsAndTitles() {

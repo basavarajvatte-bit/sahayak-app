@@ -6,6 +6,9 @@ object PdfLogic {
 
     fun zoomIn(z: Float): Float = ZOOMS.firstOrNull { it > z + 0.01f } ?: ZOOMS.last()
 
+    /** Double tap: 100% par ho to 200%, warna wapas 100%. */
+    fun doubleTapZoom(z: Float): Float = if (z < 1.25f) 2.0f else 1.0f
+
     fun zoomOut(z: Float): Float = ZOOMS.lastOrNull { it < z - 0.01f } ?: ZOOMS.first()
 
     /** "Page 3 / 12" */

@@ -174,6 +174,10 @@ class PdfActivity : Activity() {
             divider = null
             dividerHeight = 0
             adapter = this@PdfActivity.adapter
+            setOnTouchListener { _, e ->
+                taps.onTouchEvent(e)
+                false
+            }
             setOnScrollListener(object : AbsListView.OnScrollListener {
                 override fun onScrollStateChanged(view: AbsListView?, state: Int) = Unit
                 override fun onScroll(view: AbsListView?, first: Int, visible: Int, total: Int) {
@@ -280,15 +284,34 @@ class PdfActivity : Activity() {
         }
     }
 
-    private fun setZoom(z: Float) {
+    /** Zoom badlo. fx, fy = jis jagah ungli ne double tap kiya (list ke andar); wahi jagah screen par wahin rahe. */
+    private fun setZoom(z: Float, fx: Float = -1f, fy: Float = -1f) {
         if (z == zoom || renderer == null) return
-        val first = list.firstVisiblePosition
+        val f = z / zoom
+        val y = if (fy >= 0) fy.toInt() else 0
+        var pos = if (fy >= 0) list.pointToPosition(maxOf(0, fx.toInt()), y) else AbsListView.INVALID_POSITION
+        if (pos == AbsListView.INVALID_POSITION) pos = list.firstVisiblePosition
+        val child = list.getChildAt(pos - list.firstVisiblePosition)
+        val inside = if (child != null) y - child.top else 0
+        val screenX = if (fx >= 0) fx - scroller.scrollX else 0f
         zoom = z
         zoomText.text = "${(z * 100).toInt()}%"
         cache.evictAll()
         list.layoutParams = list.layoutParams.apply { width = (resources.displayMetrics.widthPixels * z).toInt() }
         adapter.notifyDataSetChanged()
-        list.setSelection(first)
+        list.setSelectionFromTop(pos, (y - inside * f).toInt())
+        val newX = if (fx >= 0) (fx * f - screenX).toInt() else (scroller.scrollX * f).toInt()
+        scroller.post { scroller.scrollTo(newX.coerceAtLeast(0), 0) }
+    }
+
+    /** Double tap: chhota ho to 200% (tap wali jagah par), bada ho to wapas 100%. */
+    private val taps by lazy {
+        android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                setZoom(PdfLogic.doubleTapZoom(zoom), e.x, e.y)
+                return true
+            }
+        })
     }
 
     private fun share() {
