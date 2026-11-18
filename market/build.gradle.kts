@@ -25,8 +25,8 @@ android {
         applicationId = "com.sahayak.market"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "1.9"
     }
 
     // Do app: hi = Hinglish (pehle wala), mr = Marathi (alag app, dono saath install ho sakte hain)

@@ -194,7 +194,7 @@ class MarketActivity : Activity() {
         page.addView(button("📊 Pattern study: dividend, split, buyback and more") {
             startActivity(Intent(this, PatternActivity::class.java))
         })
-        page.addView(button("🎯 10 min game: Nifty, Bank Nifty and options (dummy)") {
+        page.addView(button("🎯 10 minute ka khel: Nifty, Bank Nifty (nakli paise)") {
             startActivity(Intent(this, GameActivity::class.java))
         })
         page.addView(text("My shares", 18f, true))

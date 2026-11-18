@@ -2,6 +2,7 @@ package com.sahayak.app
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,26 +13,38 @@ class GameLogicTest {
         assertEquals("₹0", GameLogic.rupees(-0.2))
     }
 
-    @Test fun guessWords() {
-        assertEquals("▲ up 61%", GameLogic.guess(0.61))
-        assertEquals("▼ down 58%", GameLogic.guess(0.42))
+    @Test fun guessWordsAreSimple() {
+        assertEquals("❔ Pata nahi", GameLogic.guess(0.52))
+        assertEquals("❔ Pata nahi", GameLogic.guess(0.48))
+        assertEquals("⬆️ Upar jayega (shayad)", GameLogic.guess(0.57))
+        assertEquals("⬇️ Neeche jayega (kaafi pakka)", GameLogic.guess(0.38))
+        assertEquals("⬆️ Upar jayega (bahut pakka)", GameLogic.guess(0.7))
+        assertTrue(GameLogic.isSure(0.56))
+        assertFalse(GameLogic.isSure(0.55))
+        assertEquals("100 mein se 47 sahi", GameLogic.outOf100(46.8))
     }
 
     @Test fun verdictComparesWithBestSimpleWay() {
         val falling = JSONObject("""{"guesses":137,"model_pct":64.2,"coin_pct":50,"repeat_last_pct":37.2,"always_up_pct":35.8}""")
-        // Hamesha neeche bolna 64.2% hota, isliye model aage nahi
+        // Hamesha neeche bolna 64.2% hota, isliye computer aage nahi
         assertEquals(64.2, GameLogic.bestSimple(falling), 0.01)
-        assertTrue(GameLogic.verdict(falling).startsWith("Model is not better"))
+        assertEquals("😐", GameLogic.verdict(falling).first)
         val good = JSONObject("""{"guesses":200,"model_pct":58,"coin_pct":50,"repeat_last_pct":51,"always_up_pct":49}""")
-        assertTrue(GameLogic.verdict(good).startsWith("Model is ahead"))
-        assertEquals("No guesses checked yet", GameLogic.verdict(JSONObject("""{"guesses":0}""")))
+        assertEquals("🙂", GameLogic.verdict(good).first)
+        val bad = JSONObject("""{"guesses":746,"model_pct":47,"coin_pct":50,"repeat_last_pct":49,"always_up_pct":52}""")
+        assertEquals("😟", GameLogic.verdict(bad).first)
+        assertEquals("⏳", GameLogic.verdict(JSONObject("""{"guesses":0}""")).first)
+        assertEquals("⏳", GameLogic.verdict(null).first)
     }
 
-    @Test fun lines() {
-        val s = JSONObject("""{"guesses":238,"model_pct":53.8,"repeat_last_pct":47.9,"always_up_pct":45.4,"trades":3,"trades_won":1,"pnl":-146.0,"costs":120.0}""")
-        assertEquals("54% right of 238 · coin 50 · repeat last 48% · always up 45%", GameLogic.scoreLine(s))
-        assertEquals("3 trades · 1 won · −₹146 after costs (costs ₹120)", GameLogic.moneyLine(s))
+    @Test fun moneyWords() {
+        assertTrue(GameLogic.moneyWords(0, 0.0).startsWith("Aaj abhi tak koi nakli trade nahi"))
+        assertEquals("Aaj 3 baar khela: ₹146 ganvaye 😟", GameLogic.moneyWords(3, -146.0))
+        assertEquals("Aaj 2 baar khela: ₹80 kamaye 🙂", GameLogic.moneyWords(2, 80.0))
+        assertEquals("+₹62 🙂", GameLogic.tradeResult(62.0))
+        assertEquals("−₹71 😟", GameLogic.tradeResult(-71.0))
+        assertEquals("Call (upar ka daav)", GameLogic.optionWords("CE"))
         assertTrue(GameLogic.marketHours(4, 10 * 60))
-        assertTrue(!GameLogic.marketHours(1, 10 * 60))
+        assertFalse(GameLogic.marketHours(1, 10 * 60))
     }
 }
