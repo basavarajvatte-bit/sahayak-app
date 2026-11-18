@@ -7,6 +7,7 @@ on:
       - 'research/**'
       - '.github/workflows/study.yml'
       - '.github/workflows/game.yml'
+      - '.github/workflows/index.yml'
   workflow_dispatch:
 
 permissions:

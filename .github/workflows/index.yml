@@ -1,0 +1,32 @@
+name: Nifty and Bank Nifty study
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 21 * * 6'   # har Sunday subah 3:11 (India)
+  push:
+    branches: [main]
+    paths:
+      - 'research/index_study.py'
+      - '.github/workflows/index.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Study
+        run: python research/index_study.py research/index_out
+      - name: Publish results
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete index-study --yes --cleanup-tag || true
+          gh release create index-study research/index_out/* --title "Nifty and Bank Nifty study" --notes "Daily patterns (about 18 years) and last 60 days of 5-minute data. Learning only, not investment advice."
