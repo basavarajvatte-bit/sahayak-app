@@ -365,6 +365,7 @@ class Clipper(private val context: Context, private val apiKey: String) {
 
         val ex = MediaExtractor()
         val format: MediaFormat
+        var held = false
         try {
             ex.setDataSource(context, uri, null)
             ex.selectTrack(src.videoTrack)
@@ -377,7 +378,6 @@ class Clipper(private val context: Context, private val apiKey: String) {
             val dInfo = MediaCodec.BufferInfo()
             var inputDone = false
             var outputDone = false
-            var held = false
             while (!outputDone) {
                 if (!inputDone) {
                     val inIndex = decoder.dequeueInputBuffer(WAIT_US)
