@@ -124,6 +124,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".ClipActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".UnlockActivity"
             android:excludeFromRecents="true"
             android:exported="false"
