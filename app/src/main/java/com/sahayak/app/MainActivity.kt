@@ -108,6 +108,9 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.clipButton).setOnClickListener {
             startActivity(Intent(this, ClipActivity::class.java))
         }
+        findViewById<Button>(R.id.ytDoctorButton).setOnClickListener {
+            startActivity(Intent(this, YtDoctorActivity::class.java))
+        }
         val learnBox = findViewById<CheckBox>(R.id.learnBox)
         learnBox.isChecked = DailyLearning.isEnabled(this)
         learnBox.setOnCheckedChangeListener { _, on ->

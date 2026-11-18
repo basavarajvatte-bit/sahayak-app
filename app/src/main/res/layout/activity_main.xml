@@ -269,6 +269,15 @@
                 android:textSize="17sp" />
 
             <Button
+                android:id="@+id/ytDoctorButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="8dp"
+                android:text="📈 YouTube Doctor (why no views?)"
+                android:textAllCaps="false"
+                android:textSize="17sp" />
+
+            <Button
                 android:id="@+id/watchButton"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
