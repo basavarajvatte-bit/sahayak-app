@@ -23,7 +23,7 @@ WEEKLY_SWITCH = "2025-09-01"   # is din se Nifty weekly expiry Thursday se Tuesd
 def yahoo(symbol, rng, interval):
     for host in ("query1", "query2"):
         url = ("https://" + host + ".finance.yahoo.com/v8/finance/chart/" + urllib.request.quote(symbol)
-               + "?range=" + rng + "&interval=" + interval + ("&crumb=" + urllib.request.quote(study.CRUMB[0]) if study.CRUMB[0] else ""))
+               + ("?period1=946684800&period2=" + str(int(time.time())) if rng == "max" else "?range=" + rng) + "&interval=" + interval + ("&crumb=" + urllib.request.quote(study.CRUMB[0]) if study.CRUMB[0] else ""))
         raw = study.get(url, 3)
         if not raw:
             continue
@@ -57,6 +57,8 @@ def nse_history(name, years=18):
         time.sleep(1)
         if not raw:
             continue
+        if k == 0:
+            print("nse sample", raw[:300], flush=True)
         try:
             data = json.loads(raw)
         except ValueError:
