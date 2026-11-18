@@ -545,11 +545,15 @@ def download(url, folder, log):
 
 
 TRANSCRIBE = r'''
-import json, sys
+import json, sys, wave
+import numpy as np
 from faster_whisper import WhisperModel
 src, out, device, model, lang = sys.argv[1:6]
+# Awaaz khud padho (16 kHz wav), PyAV ki zaroorat nahi: Kaggle ka purana PyAV toot jaata hai
+with wave.open(src, "rb") as w:
+    audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
 m = WhisperModel(model, device=device, compute_type="float16" if device == "cuda" else "int8")
-segs, info = m.transcribe(src, word_timestamps=True, vad_filter=True, language=None if lang == "auto" else lang, beam_size=5 if device == "cuda" else 1)
+segs, info = m.transcribe(audio, word_timestamps=True, vad_filter=True, language=None if lang == "auto" else lang, beam_size=5 if device == "cuda" else 1)
 res = []
 for s in segs:
     res.append({"s": s.start, "e": s.end, "text": s.text, "words": [{"w": w.word, "s": w.start, "e": w.end} for w in (s.words or [])]})
@@ -576,7 +580,7 @@ def has_gpu():
 
 def transcribe(video, folder, lang, total, log):
     wav = folder / "audio.wav"
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(wav)], check=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)], check=True)
     script = folder / "transcribe.py"
     script.write_text(TRANSCRIBE)
     out = folder / "transcript.json"
