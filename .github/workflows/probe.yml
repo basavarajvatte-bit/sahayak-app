@@ -1,0 +1,11 @@
+name: probe
+on:
+  push:
+    branches: [main]
+    paths: ['research/probe.py']
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python research/probe.py
