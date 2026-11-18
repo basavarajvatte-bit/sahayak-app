@@ -113,4 +113,12 @@ class VoiceLogicTest {
         assertEquals(0x84, cached[0].toInt() and 0xFF)
         assertTrue(String(cached, Charsets.ISO_8859_1).endsWith("use_memory_cache\u00A2on"))
     }
+
+    @Test fun convertBodyCarriesBothRecordings() {
+        val o = org.json.JSONObject(VoiceLogic.convertBody(byteArrayOf(1, 2, 3), byteArrayOf(9), 99, -40))
+        assertEquals("AQID", o.getString("source"))
+        assertEquals("CQ==", o.getString("target"))
+        assertEquals(50, o.getInt("steps"))
+        assertEquals(-12, o.getInt("pitch"))
+    }
 }

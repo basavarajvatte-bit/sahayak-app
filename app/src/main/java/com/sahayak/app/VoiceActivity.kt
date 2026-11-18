@@ -45,6 +45,11 @@ class VoiceActivity : Activity() {
     private lateinit var voicesBox: LinearLayout
     private lateinit var usingText: TextView
     private lateinit var naturalButton: Button
+    private lateinit var speechButton: Button
+    private lateinit var speechStatus: TextView
+    private lateinit var convertStatus: TextView
+    private lateinit var convertSpin: ProgressBar
+    private var recordingSpeech = false
     private lateinit var cloneStatus: TextView
     private lateinit var modelButton: Button
     private lateinit var sayField: EditText
@@ -330,6 +335,34 @@ class VoiceActivity : Activity() {
         say.addView(sayStatus)
         page.addView(say)
 
+        // 6. Apni boli ko chuni awaaz mein badlo
+        val change = card("6. Change my speech into a saved voice")
+        change.addView(text("Speak in your own way: your pauses, the words you stress, your feeling. The app keeps all of that and only changes the voice into the one you choose. Works on your own server.", 14f, color = GREY))
+        speechButton = button("● Record my speech") { toggleSpeech() }
+        change.addView(speechButton)
+        speechStatus = text("", 14f)
+        change.addView(speechStatus)
+        change.addView(button("▶ Play my speech") {
+            if (VoiceClone.recording) toast("Stop the recording first")
+            else if (!VoiceClone.play(VoiceClone.speech(this))) toast("No speech yet")
+        })
+        change.addView(button("📂 Use an audio clip as my speech") {
+            if (VoiceClone.recording) toast("Stop the recording first")
+            else if (busy) toast("Wait, one thing is already going on")
+            else try {
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("audio/*"), PICK_SPEECH)
+            } catch (e: RuntimeException) {
+                toast("No file picker found on this phone")
+            }
+        })
+        val (convertRow, cvs) = withSpin(button("🔄 Change into the chosen voice") { convertNow() })
+        convertSpin = cvs
+        change.addView(convertRow)
+        change.addView(text("Tip: tap 🔄 next to any saved voice in step 5 to hear your speech in that voice. Use Play again or Save and share in step 5 for the result.", 13f, color = GREY))
+        convertStatus = text("", 14f)
+        change.addView(convertStatus)
+        page.addView(change)
+
         page.addView(text("The cloned voice can sound a little different from you. It is made by the service you chose, so your recording and text go to that service.", 13f, color = GREY))
         page.addView(button("Delete all my voices") {
             AlertDialog.Builder(this).setTitle("Delete your voice?")
@@ -365,6 +398,42 @@ class VoiceActivity : Activity() {
         }
     }
 
+    private fun convertNow() {
+        if (VoiceClone.recording) {
+            toast("Stop the recording first")
+            return
+        }
+        val label = VoiceClone.selectedVoice(this)?.label ?: ""
+        work(convertStatus, "Changing your speech into " + label.ifEmpty { "the chosen" } + " voice…", convertSpin) {
+            val file = VoiceClone.convert(this)
+            if (file == null) VoiceClone.lastError else {
+                runOnUiThread { VoiceClone.play(file) }
+                "Playing your speech in $label voice. Tap Play again in step 5 to hear it once more"
+            }
+        }
+    }
+
+    private fun toggleSpeech() {
+        if (VoiceClone.recording) {
+            VoiceClone.stopRecording()
+            recordingSpeech = false
+            refresh()
+            return
+        }
+        if (busy) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), ASK_MIC_SPEECH)
+            return
+        }
+        if (!VoiceClone.startRecording(this, VoiceClone.speech(this))) {
+            toast(VoiceClone.lastError)
+            return
+        }
+        recordingSpeech = true
+        convertStatus.text = ""
+        main.post(tick)
+    }
+
     private fun chooseVoice(id: String) {
         if (VoiceClone.recording || busy) return
         saveClipText()
@@ -397,12 +466,17 @@ class VoiceActivity : Activity() {
             row.addView(name, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             row.addView(button("▶") {
                 if (!VoiceClone.recording && !VoiceClone.play(VoiceClone.fileFor(this, v.id))) toast("No recording")
-            }, LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT))
+            }, LinearLayout.LayoutParams(dp(52), LinearLayout.LayoutParams.WRAP_CONTENT))
             row.addView(button("🔊") {
                 if (VoiceClone.recording || busy) return@button
                 chooseVoice(v.id)
                 speakNow()
-            }, LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT))
+            }, LinearLayout.LayoutParams(dp(52), LinearLayout.LayoutParams.WRAP_CONTENT))
+            row.addView(button("🔄") {
+                if (VoiceClone.recording || busy) return@button
+                chooseVoice(v.id)
+                convertNow()
+            }, LinearLayout.LayoutParams(dp(52), LinearLayout.LayoutParams.WRAP_CONTENT))
             row.addView(button("🗑") {
                 if (VoiceClone.recording || busy) return@button
                 AlertDialog.Builder(this).setTitle("Delete " + v.label + "?")
@@ -415,7 +489,7 @@ class VoiceActivity : Activity() {
                         }
                     }
                     .setNegativeButton("No", null).show()
-            }, LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT))
+            }, LinearLayout.LayoutParams(dp(52), LinearLayout.LayoutParams.WRAP_CONTENT))
             voicesBox.addView(row)
         }
         val chosen = list.firstOrNull { it.id == sel }
@@ -455,6 +529,14 @@ class VoiceActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = data?.data
+        if (requestCode == PICK_SPEECH && resultCode == RESULT_OK && uri != null) {
+            work(speechStatus, "Reading the clip…", convertSpin) {
+                val answer = VoiceClone.importSpeech(this, uri)
+                runOnUiThread { speechStatus.setTextColor(if (answer.startsWith("✓")) GREEN else RED) }
+                answer
+            }
+            return
+        }
         if (requestCode != PICK_CLIP || resultCode != RESULT_OK || uri == null) return
         clipField.setText("")
         saveClipText()
@@ -490,6 +572,7 @@ class VoiceActivity : Activity() {
     private fun toggleRecord() {
         if (VoiceClone.recording) {
             VoiceClone.stopRecording()
+            recordingSpeech = false
             refresh()
             return
         }
@@ -513,12 +596,16 @@ class VoiceActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == ASK_MIC && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) toggleRecord()
+        if (requestCode == ASK_MIC_SPEECH && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) toggleSpeech()
+        else if (requestCode == ASK_MIC_SPEECH) toast("Allow the microphone to record your speech")
+        else if (requestCode == ASK_MIC && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) toggleRecord()
         else if (requestCode == ASK_MIC) toast("Allow the microphone to record your voice")
     }
 
     @SuppressLint("SetTextI18n")
     private fun showRecord() {
+        showSpeech()
+        if (VoiceClone.recording && recordingSpeech) return
         if (VoiceClone.recording) {
             val s = VoiceClone.recordedMs / 1000
             recordButton.text = "■ Stop recording"
@@ -533,6 +620,23 @@ class VoiceActivity : Activity() {
                 s < VoiceLogic.MIN_SECONDS && VoiceClone.clipText(this).isEmpty() -> "Recording is $s seconds. Too short, record again for at least " + VoiceLogic.MIN_SECONDS + " seconds."
                 else -> "✓ " + (VoiceClone.selectedVoice(this)?.label ?: "Recording") + " saved: $s seconds"
             }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun showSpeech() {
+        if (VoiceClone.recording && recordingSpeech) {
+            speechButton.text = "■ Stop recording my speech"
+            speechStatus.setTextColor(RED)
+            speechStatus.text = "● Recording your speech: " + VoiceClone.recordedMs / 1000 + " seconds"
+            return
+        }
+        if (!VoiceClone.recording) recordingSpeech = false
+        val s = VoiceClone.speechSeconds(this)
+        speechButton.text = if (s > 0) "● Record my speech again" else "● Record my speech"
+        if (!busy && !speechStatus.text.startsWith("✓ Speech added") && !speechStatus.text.startsWith("This") ) {
+            speechStatus.setTextColor(if (s > 0) GREEN else GREY)
+            speechStatus.text = if (s > 0) "✓ Your speech is saved: $s seconds" else "No speech yet. Say anything, up to " + VoiceLogic.MAX_SECONDS + " seconds."
         }
     }
 
@@ -607,6 +711,8 @@ class VoiceActivity : Activity() {
     companion object {
         private const val ASK_MIC = 81
         private const val PICK_CLIP = 82
+        private const val PICK_SPEECH = 83
+        private const val ASK_MIC_SPEECH = 84
         private const val INK = 0xFF1D2433.toInt()
         private const val GREY = 0xFF475467.toInt()
         private const val GREEN = 0xFF1F7A4D.toInt()

@@ -202,6 +202,20 @@ object VoiceLogic {
         return out
     }
 
+    /** Awaaz badalne mein kitne kadam: zyada = saaf, kam = tez. */
+    const val CONVERT_STEPS = 25
+
+    /** Apne server ko: meri boli (source) + chuni awaaz ki recording (target). */
+    fun convertBody(source: ByteArray, target: ByteArray, steps: Int, pitch: Int): String {
+        val b64 = java.util.Base64.getEncoder()
+        return JSONObject()
+            .put("source", b64.encodeToString(source))
+            .put("target", b64.encodeToString(target))
+            .put("steps", steps.coerceIn(4, 50))
+            .put("pitch", pitch.coerceIn(-12, 12))
+            .toString()
+    }
+
     /** Gemini ko: shabd wahi rakho, sirf lehja batane wale [tag] aur viram lagao. */
     const val TONE_PROMPT = "You prepare text for an expressive voice model that copies a person's voice. " +
         "Rewrite the text so it sounds like natural spoken Indian conversation, with feeling, not like reading. " +

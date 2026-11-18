@@ -11,8 +11,8 @@ android {
         applicationId = "com.sahayak.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 147
-        versionName = "15.9"
+        versionCode = 148
+        versionName = "16.0"
         // Call wali library ke sirf phone wale hisse, taaki app chhota rahe
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }

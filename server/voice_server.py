@@ -31,6 +31,29 @@ run([sys.executable, "-m", "pip", "install", "-q", "--extra-index-url", "https:/
 run([sys.executable, "-m", "pip", "install", "-q", "-U", "huggingface_hub[cli]"])
 print("✓ Install ho gaya")
 
+# 2b. Voice changer (Seed-VC) apne alag Python mein, peeche chalu karo. Ye Fish ke saath-saath taiyaar hota hai.
+import secrets
+PASSWORD = secrets.token_urlsafe(12)
+VC_PORT = 8081
+SEED_VC_COMMIT = "51383efd921027683c89e5348211d93ff12ac2a8"
+VC_SCRIPT = "https://raw.githubusercontent.com/basavarajvatte-bit/sahayak-app/main/server/vc_server.py"
+vc_setup = f"""
+set -e
+cd {WORK}
+{sys.executable} -m pip install -q uv
+[ -d seed-vc ] || git clone -q https://github.com/Plachtaa/seed-vc.git seed-vc
+git -C seed-vc checkout -q {SEED_VC_COMMIT}
+[ -x vcenv/bin/python ] || {sys.executable} -m uv venv -q -p 3.10 vcenv
+{sys.executable} -m uv pip install -q -p vcenv/bin/python torch==2.4.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+{sys.executable} -m uv pip install -q -p vcenv/bin/python scipy==1.13.1 librosa==0.10.2 "huggingface-hub>=0.28.1,<1.0" munch==4.0.0 einops==0.8.0 descript-audio-codec==1.0.0 pydub==0.25.1 transformers==4.46.3 soundfile==0.12.1 numpy==1.26.4 pyyaml onnxruntime
+curl -sSL -o seed-vc/vc_server.py {VC_SCRIPT}
+echo "✓ Voice changer install ho gaya"
+cd seed-vc && exec ../vcenv/bin/python vc_server.py {VC_PORT} {PASSWORD}
+"""
+vc_proc = subprocess.Popen(["bash", "-c", vc_setup], stdout=open(WORK / "vc.log", "w"), stderr=subprocess.STDOUT)
+print("Voice changer peeche taiyaar ho raha hai", flush=True)
+
+
 # 3. S2-Pro model download (~9 GB, 3–8 minute)
 token = None
 try:  # Kaggle: Add-ons → Secrets → HF_TOKEN (sirf zaroorat ho to)
@@ -106,9 +129,8 @@ print("✓ Sudhaar lag gaye", flush=True)
 
 
 # 4. Server chalu karo (pehli baar 5–10 minute)
-import secrets, urllib.request, urllib.error
+import urllib.request, urllib.error
 
-PASSWORD = secrets.token_urlsafe(12)
 PORT = 8080
 
 def healthy(base):
@@ -158,6 +180,47 @@ if problem:
     raise RuntimeError(problem)
 
 
+# 4b. Ek hi darwaza: /v1/convert voice changer ko, baaki sab Fish ko
+import http.client, http.server, threading
+
+FRONT = 8090
+VC_PATHS = ("/v1/convert", "/v1/vc_health")
+
+class Front(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *args):
+        pass
+
+    def _forward(self):
+        port = VC_PORT if self.path.startswith(VC_PATHS) else PORT
+        n = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(n) if n else None
+        headers = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "connection", "content-length", "transfer-encoding")}
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=900)
+            conn.request(self.command, self.path, body=body, headers=headers)
+            r = conn.getresponse()
+            status, data, out_headers = r.status, r.read(), r.getheaders()
+            conn.close()
+        except Exception as e:
+            status, out_headers = 503, [("Content-Type", "text/plain; charset=utf-8")]
+            data = (("Voice changer is still starting, try again in a few minutes" if port == VC_PORT else "Server is busy") + ": " + str(e)[:150]).encode()
+        self.send_response(status)
+        for k, v in out_headers:
+            if k.lower() not in ("transfer-encoding", "connection", "content-length"):
+                self.send_header(k, v)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    do_GET = _forward
+    do_POST = _forward
+
+threading.Thread(target=http.server.ThreadingHTTPServer(("127.0.0.1", FRONT), Front).serve_forever, daemon=True).start()
+print("✓ Darwaza khula", flush=True)
+
+
 # 5. Internet ka link banao (Cloudflare, free, bina account) aur Sahayak wali line do
 import re
 
@@ -168,7 +231,7 @@ if not cf.exists():
 
 def open_tunnel():
     log_path = WORK / "tunnel.log"
-    proc = subprocess.Popen([str(cf), "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{PORT}"],
+    proc = subprocess.Popen([str(cf), "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{FRONT}"],
                             stdout=open(log_path, "w"), stderr=subprocess.STDOUT)
     for _ in range(90):
         time.sleep(2)
@@ -197,6 +260,8 @@ print("=" * 70, flush=True)
 # 6. Server ko chalta rakho. Ye cell chalta rahega; rok doge to server band.
 checks = 0
 seen = 0
+vc_seen = 0
+vc_dead = False
 while True:
     time.sleep(60)
     checks += 1
@@ -221,5 +286,19 @@ while True:
                 print("SERVER GALTI:", l[:400], flush=True)
     except OSError:
         pass
+    # Voice changer ki khabar
+    try:
+        with open(WORK / "vc.log", errors="ignore") as f:
+            f.seek(vc_seen)
+            new = f.read()
+            vc_seen = f.tell()
+        for l in new.splitlines():
+            if "✓" in l or "Error" in l or "error:" in l or "Traceback" in l:
+                print("VOICE CHANGER:", l[:400], flush=True)
+    except OSError:
+        pass
+    if vc_proc.poll() is not None and not vc_dead:
+        vc_dead = True
+        print("VOICE CHANGER ruk gaya (Fish wali awaaz phir bhi chalegi). Aakhri log:\n" + "".join(open(WORK / "vc.log", errors="ignore").readlines()[-25:]), flush=True)
     if checks % 15 == 0:
         print(time.strftime("%H:%M"), "✓ server chal raha hai:", f"SAHAYAK {URL} {PASSWORD}", flush=True)

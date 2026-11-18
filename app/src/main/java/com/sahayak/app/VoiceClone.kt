@@ -255,7 +255,7 @@ object VoiceClone {
 
     /** Mic se namoona record karo (WAV). Mic ki ijazat pehle mil chuki honi chahiye. */
     @SuppressLint("MissingPermission")
-    fun startRecording(c: Context): Boolean {
+    fun startRecording(c: Context, into: File? = null): Boolean {
         if (recording) return true
         stopPlaying()
         val min = AudioRecord.getMinBufferSize(VoiceLogic.RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -273,8 +273,8 @@ object VoiceClone {
             lastError = "Microphone is busy. Close other apps that use the mic and try again"
             return false
         }
-        val file = sample(c)
-        setClipText(c, "")
+        val file = into ?: sample(c)
+        if (into == null) setClipText(c, "")
         recording = true
         recordedMs = 0L
         recorder = Thread({
@@ -408,6 +408,62 @@ object VoiceClone {
             }
         }
         return ""
+    }
+
+    // ---------- Apni boli ko chuni awaaz mein badlo ----------
+
+    /** Aapki boli hui baat (rukna, zor, lehja wahi), jise chuni awaaz mein badalna hai. */
+    fun speech(c: Context) = File(c.filesDir, "my_speech.wav")
+
+    fun speechSeconds(c: Context): Int = speech(c).let { if (it.exists()) VoiceLogic.seconds(it.length()) else 0 }
+
+    /** Phone ki clip ko apni boli banao. Jawab user ke liye. Peeche ke dhaage se. */
+    fun importSpeech(c: Context, uri: Uri): String {
+        stopPlaying()
+        val seconds = AudioImport.toWav(c, uri, speech(c), VoiceLogic.MAX_SECONDS)
+        if (seconds < 0) return AudioImport.lastError
+        if (seconds < 1) return "This clip has no sound"
+        val cut = if (seconds >= VoiceLogic.MAX_SECONDS) " (only the first " + VoiceLogic.MAX_SECONDS + " seconds)" else ""
+        return "✓ Speech added: $seconds seconds$cut"
+    }
+
+    /**
+     * Aapki boli ko chuni hui awaaz mein badlo (apne server par). Rukna, zor aur utaar-chadhaav aapka; awaaz chuni hui.
+     * File mile to wahi, warna null aur lastError. Peeche ke dhaage se bulao.
+     */
+    fun convert(c: Context, pitch: Int = 0): File? {
+        lastError = ""
+        if (serverUrl(c).isEmpty()) {
+            lastError = "Changing your speech works on your own server. Choose My own server in step 1 and paste the SAHAYAK line"
+            return null
+        }
+        if (speechSeconds(c) < 1) {
+            lastError = "Record your speech first"
+            return null
+        }
+        if (sampleSeconds(c) < 3) {
+            lastError = "Choose a saved voice first"
+            return null
+        }
+        val body = try {
+            VoiceLogic.convertBody(speech(c).readBytes(), sample(c).readBytes(), VoiceLogic.CONVERT_STEPS, pitch)
+        } catch (e: IOException) {
+            lastError = "Could not read the recordings"
+            return null
+        }
+        val request = auth(Request.Builder().url(serverUrl(c) + "/v1/convert"), VoiceLogic.OWN, key(c, VoiceLogic.OWN))
+            .post(body.toRequestBody("application/json".toMediaType())).build()
+        val bytes = call(VoiceLogic.OWN, request) ?: return null
+        if (bytes.size < 200) {
+            lastError = "Your server gave no sound. Try again"
+            return null
+        }
+        return try {
+            spoken(c).also { it.writeBytes(bytes) }
+        } catch (e: IOException) {
+            lastError = "Could not save the sound"
+            null
+        }
     }
 
     // ---------- Sunna ----------
