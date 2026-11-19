@@ -261,9 +261,9 @@ def hashtags(text):
     return " ".join(out)
 
 
-def post_caption(pick, tags):
+def post_caption(pick, tags, footer=""):
     body = pick.get("caption") or pick.get("title") or ""
-    return "\n\n".join(x for x in (body, hashtags(tags)) if x)
+    return "\n\n".join(x for x in (body, footer.strip(), hashtags(tags)) if x)
 
 
 def ask_gemini(key, prompt, log, images=None, temperature=0.4):
@@ -967,7 +967,7 @@ def run_job(job):
             log(f"Clip {i + 1} failed: {e}")
             continue
         job["clips"].append({**pick, "options": pick.get("options", []), "file": name, "thumb": name.replace(".mp4", ".jpg"),
-                             "post": "\n\n".join(x for x in (post_caption(pick, req.get("tags", "")),
+                             "post": "\n\n".join(x for x in (post_caption(pick, req.get("tags", ""), req.get("footer", "")),
                                                                    music_credit(req.get("music")) if music else "") if x),
                              "time": f"{clock(pick['start'])} - {clock(pick['end'])}",
                              "broll": [b["query"] for b in brolls], "v": 1, "busy": False})
@@ -1163,7 +1163,7 @@ class Handler(BaseHTTPRequestHandler):
                  "lang": str(req.get("lang", "auto"))[:5], "key": str(req.get("key", ""))[:100],
                  "music": str(req.get("music", "none"))[:20], "music_link": str(req.get("music_link", ""))[:500],
                  "music_vol": str(req.get("music_vol", "soft"))[:10], "broll": bool(req.get("broll", False)),
-                 "pexels": str(req.get("pexels", ""))[:100]}
+                 "pexels": str(req.get("pexels", ""))[:100], "footer": str(req.get("footer", ""))[:300]}
         job = new_job(clean)
         self._send(200, {"id": job["id"]})
 
@@ -1189,12 +1189,16 @@ pre{white-space:pre-wrap;background:#0f1115;border:1px solid #262b35;border-radi
 <h1>✂ Sahayak Clipper</h1>
 <p class="s">Paste a video link. The server listens to it, picks the best parts, and makes ready Reels with moving captions.</p>
 <div class="card">
+<label>Campaign <small>(fills brief, tags and caption line)</small></label>
+<select id="preset"><option value="">Custom (type below)</option><option value="until">Until It Works podcast</option><option value="sma">Social Media Addiction</option></select>
 <label>1. Video link <small>(YouTube or Google Drive)</small></label>
 <input id="url" placeholder="https://www.youtube.com/watch?v=..." inputmode="url">
 <label>2. Campaign brief <small>(what kind of parts to pick)</small></label>
 <textarea id="brief" placeholder="Example: Content must clearly convey the message of social media addiction."></textarea>
 <label>3. Hashtags for the post</label>
 <input id="tags" placeholder="#SocialMediaJustice">
+<label>4. Line that must be in every caption <small>(optional)</small></label>
+<input id="footer" placeholder="Example: Full episode: YouTube @UntilItWorksPodcast">
 <div class="row">
 <div><label>How many clips</label><select id="count"><option>3</option><option selected>5</option><option>8</option><option>10</option></select></div>
 <div><label>Length</label><select id="length"><option value="short">15-35 sec</option><option value="medium" selected>25-60 sec</option><option value="long">45-90 sec</option></select></div>
@@ -1227,7 +1231,13 @@ pre{white-space:pre-wrap;background:#0f1115;border:1px solid #262b35;border-radi
 const $=id=>document.getElementById(id);
 const q=new URLSearchParams(location.search);
 let K=q.get('k')||'';try{if(K)localStorage.setItem('ck',K);else K=localStorage.getItem('ck')||''}catch(e){}
-const keep=['brief','tags','count','length','look','captions','lang','key','music','music_vol','music_link','broll','pexels'];
+const keep=['preset','brief','tags','footer','count','length','look','captions','lang','key','music','music_vol','music_link','broll','pexels'];
+const PRESETS={
+ until:{brief:'Clips from the Until It Works podcast with Justin Trachsel and guests. Pick sharp, honest, funny or surprising moments with one clear point. English only.',tags:'',footer:'Full episode: YouTube @UntilItWorksPodcast',length:'medium'},
+ sma:{brief:'Content must clearly convey the message of social media addiction.',tags:'#SocialMediaJustice',footer:'',length:'medium'}
+};
+function applyPreset(){const p=PRESETS[$('preset').value];if(!p)return;['brief','tags','footer','length'].forEach(f=>{$(f).value=p[f]})}
+$('preset').onchange=applyPreset;
 try{keep.forEach(f=>{const v=localStorage.getItem('c_'+f);if(v!==null)$(f).value=v})}catch(e){}
 function api(p,o={}){o.headers=Object.assign({'X-Key':K,'Content-Type':'application/json'},o.headers||{});return fetch(p,o).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('Error '+r.status));return j})}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -1256,7 +1266,7 @@ function rehook(id,i,b){const t=$('h_'+id+i).value.trim();if(!t)return;b.disable
 function poll(){Object.keys(open).forEach(id=>api('/api/jobs/'+id).then(draw).catch(()=>{}))}
 setInterval(poll,4000);
 $('go').onclick=()=>{
- const body={url:$('url').value.trim(),brief:$('brief').value,tags:$('tags').value,count:+$('count').value,length:$('length').value,look:$('look').value,captions:$('captions').value==='1',lang:$('lang').value,key:$('key').value.trim(),music:$('music').value,music_vol:$('music_vol').value,music_link:$('music_link').value.trim(),broll:$('broll').value==='1',pexels:$('pexels').value.trim()};
+ const body={url:$('url').value.trim(),brief:$('brief').value,tags:$('tags').value,footer:$('footer').value.trim(),count:+$('count').value,length:$('length').value,look:$('look').value,captions:$('captions').value==='1',lang:$('lang').value,key:$('key').value.trim(),music:$('music').value,music_vol:$('music_vol').value,music_link:$('music_link').value.trim(),broll:$('broll').value==='1',pexels:$('pexels').value.trim()};
  if(!body.url){$('note').textContent='Paste the video link first.';return}
  try{keep.forEach(f=>localStorage.setItem('c_'+f,$(f).value))}catch(e){}
  $('go').disabled=true;$('note').textContent='Sending…';
