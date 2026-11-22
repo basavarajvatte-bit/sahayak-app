@@ -61,6 +61,12 @@ class AssistService : Service(), GeminiLive.Callback {
     private var autoStep = false
     private var planner: Planner? = null
     private var taskVox: TaskVox? = null
+    // Phase 2: kai kaam ek saath (TaskBoard), research alag threads par
+    private val board = TaskBoard()
+    private var researcher: Planner? = null
+    private val researchPool = java.util.concurrent.Executors.newFixedThreadPool(RESEARCH_THREADS)
+    @Volatile private var busyAtPress = false
+    private var idleSince = 0L
     private val plannerThread = HandlerThread("sahayak-planner").apply { start() }
     private val plannerHandler = Handler(plannerThread.looper)
     private val recent = ArrayDeque<String>()
@@ -117,6 +123,7 @@ class AssistService : Service(), GeminiLive.Callback {
         override fun run() {
             if (stopping) return
             maybeNudge()
+            checkQueue()
             if (tools != null && PhoneControl.instance == null && !controlLostShown) {
                 controlLostShown = true
                 RunLog.add(this@AssistService, "control_lost")
@@ -172,6 +179,7 @@ class AssistService : Service(), GeminiLive.Callback {
         voiceName = intent.getStringExtra(EXTRA_VOICE) ?: "Aoede"
         autoStep = intent.getBooleanExtra(EXTRA_AUTO, false)
         planner = Planner(http, apiKey)
+        researcher = Planner(http, apiKey, RESEARCH_TIMEOUT_SECONDS)
         taskVox = intent.getStringExtra(EXTRA_TASKVOX).orEmpty().takeIf { it.isNotBlank() }?.let { TaskVox(http, it) }
         whisper = intent.getStringExtra(EXTRA_WHISPER).orEmpty().takeIf { it.isNotBlank() }?.let { Whisper(http, it) }
         val canControl = PhoneControl.instance != null
@@ -281,12 +289,18 @@ class AssistService : Service(), GeminiLive.Callback {
 
     /** Likhkar diya order: Sahayak chup rehkar kaam karta hai, jawab screen par dikhta hai. */
     private fun typedOrder(text: String) {
+        val busy = busyNow
         workerHandler.post {
             if (live?.isReady != true) {
                 practiceName = null
                 mainHandler.post { caption?.show("No connection. Please try again.") }
                 mainHandler.postDelayed(hideReply, REPLY_SHOW_MS)
                 AssistState.set(true, "No connection right now. Try again shortly.")
+                return@post
+            }
+            if (busy) {
+                // Kaam chal raha hai: use mat chhedo, naya order line mein ya research mein
+                takeOrder(text, true, true)
                 return@post
             }
             stopRequested = false
@@ -299,7 +313,7 @@ class AssistService : Service(), GeminiLive.Callback {
             releasedAt = System.currentTimeMillis()
             RunLog.add(this, "order typed")
             setBusy(true)
-            dispatchOrder(text)
+            takeOrder(text, false, true)
         }
     }
 
@@ -310,6 +324,9 @@ class AssistService : Service(), GeminiLive.Callback {
     /** Kaam chalte waqt dot dabate hi sab kuch turant band. */
     private fun stopEverything() {
         stopRequested = true
+        busyAtPress = false
+        idleSince = 0L
+        board.stopAll(System.currentTimeMillis())
         talkMode = false
         mainHandler.post { typeBar?.showTalkState(false) }
         PhoneControl.instance?.abort = true
@@ -365,9 +382,16 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         if (busyNow) {
-            swallowRelease = true
-            stopEverything()
-            return
+            if (whisper == null && listener == null) {
+                // Awaaz seedhe Gemini ko jaati hai, isliye line nahi lag sakti: purana tareeka, sab band
+                swallowRelease = true
+                stopEverything()
+                return
+            }
+            // Phase 2: chhota tap = band, hold karke bolo = naya kaam (releaseDot decide karega)
+            busyAtPress = true
+        } else {
+            busyAtPress = false
         }
         workerHandler.post {
             if (endPending) {
@@ -382,7 +406,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 heard.setLength(0)
                 caption?.show("Speak...")
             }
-            setBusy(false)
+            if (!busyAtPress) setBusy(false)
             speakingUntil = 0L
             voice?.interrupt()
             val active = listener
@@ -420,6 +444,10 @@ class AssistService : Service(), GeminiLive.Callback {
                 whisperHandler.removeCallbacks(partialTick)
                 voice?.setMic(false)
                 endPending = false
+                if (busyAtPress) {
+                    stopEverything() // kaam chalte chhota tap: sab band
+                    return@post
+                }
                 AssistState.set(true, "Hold the dot to give a command.")
                 return@post
             }
@@ -454,16 +482,104 @@ class AssistService : Service(), GeminiLive.Callback {
         mainHandler.post {
             active.finish { words ->
                 if (words.isBlank()) {
-                    setBusy(false)
+                    setBusy(busyAtPress)
                     AssistState.set(true, "Could not understand. Hold the dot and try again.")
                 } else {
-                    releasedAt = System.currentTimeMillis()
-                    RunLog.add(this, "order listener")
-                    voiceRecognised()
-                    dispatchOrder(words)
+                    val busy = busyAtPress
+                    workerHandler.post {
+                        if (!busy) releasedAt = System.currentTimeMillis()
+                        RunLog.add(this, "order listener")
+                        voiceRecognised()
+                        takeOrder(words, busy, false)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Phase 2: har naya order yahan aata hai.
+     * Research (screen nahi chahiye) turant saath mein chalta hai.
+     * Screen kaam chal raha ho to naya screen kaam line mein lagta hai, pehla band nahi hota.
+     */
+    private fun takeOrder(text: String, busy: Boolean, silent: Boolean) {
+        busyAtPress = false
+        val now = System.currentTimeMillis()
+        val kind = TaskBoard.classify(text)
+        if (kind == TaskBoard.Kind.RESEARCH && researcher != null && (busy || TaskBoard.isDeep(text))) {
+            setBusy(busy)
+            startResearch(board.add(text, kind, silent, now))
+            return
+        }
+        val task = board.add(text, TaskBoard.Kind.SCREEN, silent, now)
+        if (busy) {
+            setBusy(true)
+            History.add(this, "queued", text)
+            RunLog.add(this, "task_queued " + task.id)
+            showBrief("Added to line (" + board.waitingScreen() + "): " + text.take(40))
+            AssistState.set(true, "Working. " + board.summary())
+            return
+        }
+        board.runningScreen()?.let { board.end(it, TaskBoard.Status.DONE, now) }
+        board.start(task, now)
+        idleSince = 0L
+        dispatchOrder(text)
+    }
+
+    /** Research Agent: alag thread par Google search, jawab notification mein. */
+    private fun startResearch(task: TaskBoard.Task) {
+        val brain = researcher ?: return
+        board.start(task, System.currentTimeMillis())
+        RunLog.add(this, "research_start " + task.id)
+        History.add(this, "research", task.text)
+        showBrief("Research started: " + task.text.take(40))
+        AssistState.set(true, board.summary())
+        val app = applicationContext
+        researchPool.execute {
+            val began = System.currentTimeMillis()
+            val answer = brain.research(task.text, language.ifBlank { "Hinglish" })
+            if (board.isStopped(task) || stopping) return@execute
+            val now = System.currentTimeMillis()
+            val id = RESEARCH_NOTIFY_BASE + task.id
+            if (answer == null) {
+                board.end(task, TaskBoard.Status.FAILED, now, brain.lastError)
+                WorkList.notifyText(app, id, "Research could not finish: " + task.text.take(60) + ". " + brain.lastError)
+                showBrief("Research failed. " + brain.lastError)
+            } else {
+                board.end(task, TaskBoard.Status.DONE, now, answer)
+                WorkList.notifyText(app, id, ("Research: " + task.text.take(60) + "\n\n" + answer).take(NOTIFY_LIMIT))
+                History.add(app, "research result", task.text.take(60) + ": " + answer.take(300))
+                showBrief("Research ready. See the notification.")
+            }
+            RunLog.add(app, "research " + (if (answer != null) "ok " else "failed ") + (now - began) + "ms")
+            AssistState.set(true, board.summary().ifEmpty { "Ready. Hold the dot and give a command." })
+        }
+    }
+
+    /** Screen khaali hote hi line ka agla kaam shuru. */
+    private fun checkQueue() {
+        val now = System.currentTimeMillis()
+        val idle = !busyNow && !talking && !endPending && !stopRequested && now >= speakingUntil && live?.isReady == true
+        if (!idle) {
+            idleSince = 0L
+            return
+        }
+        if (idleSince == 0L) {
+            idleSince = now
+            return
+        }
+        if (now - idleSince < QUEUE_IDLE_MS) return
+        board.runningScreen()?.let { board.end(it, TaskBoard.Status.DONE, now) }
+        val next = board.takeNextScreen(now) ?: return
+        idleSince = 0L
+        silentTurn = next.silent
+        releasedAt = now
+        voice?.interrupt()
+        setBusy(true)
+        showBrief("Next task: " + next.text.take(40))
+        AssistState.set(true, "Working. " + board.summary())
+        RunLog.add(this, "task_next " + next.id)
+        dispatchOrder(next.text)
     }
 
     /** Chhota order phone par turant, baaki AI ko. */
@@ -797,7 +913,7 @@ class AssistService : Service(), GeminiLive.Callback {
         if (stopRequested) return
         val audio = snapshot()
         if (audio.size < MIN_AUDIO_BYTES || !hasVoice(audio)) {
-            setBusy(false)
+            setBusy(busyAtPress)
             AssistState.set(true, "No voice heard. Hold the dot and try again.")
             return
         }
@@ -805,10 +921,11 @@ class AssistService : Service(), GeminiLive.Callback {
             val text = whisper?.transcribe(audio).orEmpty()
             if (text.isBlank()) throw IOException("empty")
             if (stopRequested) return
-            releasedAt = System.currentTimeMillis()
+            val busy = busyAtPress
+            if (!busy) releasedAt = System.currentTimeMillis()
             RunLog.add(this, "order whisper")
             voiceRecognised()
-            dispatchOrder(text)
+            workerHandler.post { takeOrder(text, busy, false) }
         } catch (e: IOException) {
             if (stopRequested) return
             currentOrder = "voice order"
@@ -940,7 +1057,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 name == "cancel_work" -> JSONObject().put("status",
                     if (WorkList.remove(this, args.optString("id"))) "ok" else "failed")
                 else -> try {
-                    AssistState.set(true, "Working. Press the dot to stop.")
+                    AssistState.set(true, "Working. Tap the dot to stop, hold it to add another task.")
                     control.run(name, args)
                 } catch (e: RuntimeException) {
                     JSONObject().put("status", "failed")
@@ -1033,6 +1150,7 @@ class AssistService : Service(), GeminiLive.Callback {
         actions.quitSafely()
         whisperThread.quitSafely()
         plannerThread.quitSafely()
+        researchPool.shutdownNow()
         super.onDestroy()
     }
 
@@ -1126,6 +1244,11 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val VOICE_PEAK = 1_200
         private const val MIN_HOLD_MS = 300L
         private const val BUSY_TIMEOUT_MS = 45_000L
+        private const val RESEARCH_THREADS = 3
+        private const val RESEARCH_TIMEOUT_SECONDS = 90L
+        private const val RESEARCH_NOTIFY_BASE = 70_000
+        private const val NOTIFY_LIMIT = 3_500
+        private const val QUEUE_IDLE_MS = 6_000L
         private const val BYTES_PER_MS = 48 // 24 kHz, 16 bit
 
         fun start(context: Context, resultCode: Int, data: Intent, key: String, language: String, name: String, voice: String, autoStep: Boolean, whisperKey: String, taskVoxKey: String) {

@@ -61,7 +61,7 @@ Faayde ke hisaab se kram thoda badla hai: sabse pehle wahi jo aapko roz chubhta 
 | Phase | Kya banega | Pehchaan ki ho gaya |
 |---|---|---|
 | 1 | Audit + yeh design | Yeh file ✅ |
-| 2 | TaskManager + Orchestrator, kai task ek saath, screen queue | Kaam chalte naya order do, pehla band na ho |
+| 2 | TaskManager + Orchestrator, kai task ek saath, screen queue | Kaam chalte naya order do, pehla band na ho — code ✅, phone test baaki |
 | 3 | ModelRouter: Gemini + Groq + OpenRouter (+ Cerebras), limit par agla model | Gemini limit khatam ho to bhi jawab aaye |
 | 4 | Parallel workers (research/think/verify ek saath) | Ek order par kai agent dashboard me ek saath dikhe |
 | 5 | Android control pakka: YouTube play local tap se, popup hatana, retry ki limit, tarika fail ho to doosra (text → element → position) | "Pal Pal Dil Ke Paas chalao" gaana chalne tak kare |
@@ -76,3 +76,12 @@ Faayde ke hisaab se kram thoda badla hai: sabse pehle wahi jo aapko roz chubhta 
 - Purane features nahi hatenge. Gemini Live aur phone control waise hi rahenge.
 - Har phase ke baad APK build (GitHub Actions) aur aap phone par test karoge; tabhi agla phase.
 - Jo bana aur test nahi hua, use "ho gaya" nahi kahenge.
+
+## Phase 2 me kya bana (23 Nov 2026)
+
+- `TaskBoard.kt`: har kaam ka record (line me / chal raha / ho gaya / fail / band), screen kaam ki line, order ko screen ya research me baantna.
+- `AssistService`: kaam chalte dot **hold karke bolo** = naya kaam. Screen kaam line me lagta hai aur screen 6 second khaali hote hi apne aap shuru hota hai. **Chhota tap** = sab band (line bhi).
+- Research Agent (`Planner.research`): Google search ke saath, 3 tak ek saath, jawab notification me links ke saath. Khaali Sahayak me sirf bade research order ("find", "list", "research"...) yahan jaate hain; chhote sawaal pehle ki tarah Gemini Live bolkar batata hai.
+- Typed order (notification ka Type) bhi isi niyam se.
+- Tests: `TaskBoardTest.kt`.
+- Seema: agar Whisper key nahi aur phone ka speech recognition bhi nahi, to purana niyam (dot dabate hi sab band).
