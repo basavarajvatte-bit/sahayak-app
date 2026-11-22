@@ -36,4 +36,7 @@ jobs:
           cp market/build/outputs/apk/hi/release/market-hi-release.apk market-watch.apk
           cp market/build/outputs/apk/mr/release/market-mr-release.apk market-watch-marathi.apk
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest sahayak.apk chhotu-todo.apk market-watch.apk market-watch-marathi.apk --title "Sahayak test app" --notes "Sirf test ke liye." --latest
+          gh release create latest sahayak.apk chhotu-todo.apk market-watch.apk market-watch-marathi.apk --title "Sahayak test app" --notes "Sirf test ke liye." --latest --target "${{ github.sha }}"
+          # Kabhi release draft reh jaati hai aur link 404 deta hai: pakka publish karo
+          sleep 5
+          gh release edit latest --draft=false --latest
