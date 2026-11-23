@@ -112,21 +112,19 @@ object GameLogic {
 
     private fun price(v: Double) = "₹" + String.format(java.util.Locale.ENGLISH, "%.2f", v)
 
-    /** "14:25" (+ minute) -> "2:25 PM". 12 ghante ki ghadi. Galat ho to jaisa aaya waisa. */
-    fun time12(hhmm: String, plus: Int = 0): String {
+    /** "14:25" (+ minute) -> "14:55". 24 ghante ki ghadi (broker app se milane ke liye). Galat ho to jaisa aaya waisa. */
+    fun clock24(hhmm: String, plus: Int = 0): String {
         val p = hhmm.trim().split(":")
         val h = p.getOrNull(0)?.toIntOrNull() ?: return hhmm
         val m = p.getOrNull(1)?.toIntOrNull() ?: return hhmm
         val total = ((h * 60 + m + plus) % (24 * 60) + 24 * 60) % (24 * 60)
-        val hour = total / 60
-        val shown = if (hour % 12 == 0) 12 else hour % 12
-        return shown.toString() + ":" + String.format(java.util.Locale.ENGLISH, "%02d", total % 60) + if (hour < 12) " AM" else " PM"
+        return String.format(java.util.Locale.ENGLISH, "%02d:%02d", total / 60, total % 60)
     }
 
     /**
      * Ek nakli option trade, poori jaankari ke saath:
      * "Nifty 25350 PE (1 Dec, weekly)"
-     * "Liya 3:15 PM · Becha 3:25 PM"
+     * "Liya 15:15 · Becha 15:25"
      * "1 lot (65) · ₹245.40 → ₹250.85"
      * "Lagaye ₹15,951 · Kharcha ₹78"
      */
@@ -136,8 +134,8 @@ object GameLogic {
         val contract = if (parts.size >= 3) parts[parts.size - 2].toDoubleOrNull()?.roundToLong()?.toString().orEmpty() + " " + parts.last()
         else option
         val head = indexName + " " + contract.trim() + if (expiry.isBlank()) "" else " (" + expiryWords(expiry) + ")"
-        val sellAt = if (minutes > 0) time12(at, minutes) else ""
-        val times = "Liya " + time12(at) + when {
+        val sellAt = if (minutes > 0) clock24(at, minutes) else ""
+        val times = "Liya " + clock24(at) + when {
             sellAt.isEmpty() -> ""
             open -> " · Bechenge " + sellAt + " ko"
             else -> " · Becha " + sellAt

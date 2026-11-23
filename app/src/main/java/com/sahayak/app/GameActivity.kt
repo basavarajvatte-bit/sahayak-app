@@ -164,7 +164,7 @@ class GameActivity : Activity() {
     /** "2026-11-18 14:15" -> "2:15 baje" */
     private fun clock(stamp: String): String = try {
         val t = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).parse(stamp)!!
-        SimpleDateFormat("h:mm a", Locale.ENGLISH).format(t)
+        SimpleDateFormat("HH:mm", Locale.ENGLISH).format(t)
     } catch (e: java.text.ParseException) {
         stamp
     }
@@ -292,7 +292,7 @@ class GameActivity : Activity() {
             listOfNotNull(best?.optJSONObject(0), worst?.optJSONObject(0)).forEach { t ->
                 val v = t.optDouble("pnl", 0.0)
                 val at = t.optString("at")
-                c.addView(row(t.optString("symbol") + "\nLiya " + GameLogic.time12(at) + " · Becha " + GameLogic.time12(at, 10),
+                c.addView(row(t.optString("symbol") + "\nLiya " + GameLogic.clock24(at) + " · Becha " + GameLogic.clock24(at, 10),
                     GameLogic.tradeResult(v), moneyColor(v), 15f))
             }
         }
