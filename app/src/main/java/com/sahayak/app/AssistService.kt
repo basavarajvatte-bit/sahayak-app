@@ -69,13 +69,12 @@ class AssistService : Service(), GeminiLive.Callback {
     private var idleSince = 0L
     private val plannerThread = HandlerThread("sahayak-planner").apply { start() }
     private val plannerHandler = Handler(plannerThread.looper)
-    private val recent = ArrayDeque<String>()
-    private val appVisits = ArrayDeque<String>()
     private var stepCount = 0
     @Volatile private var currentOrder: String? = null
     @Volatile private var orderUntil = 0L
     @Volatile private var quietOrder = false
     private val stepLog = ArrayList<String>()
+    @Volatile private var tracker: TaskTracker? = null // is order ke step, galtiyan, sudhar
     private var reviews = 0
     private var practiceName: String? = null
     private var lastOrder: String? = null
@@ -603,6 +602,7 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         lastOrder = text
+        tracker = null // naya order, naya hisaab
         val taught = Skills.exactName(this, text)
         if (taught != null) {
             runSkill(taught, false)
@@ -632,8 +632,14 @@ class AssistService : Service(), GeminiLive.Callback {
             }
             RunLog.add(this, "fast " + (if (done) "ok " else "failed ") + (System.currentTimeMillis() - began) + "ms")
             val keepGoing = done && command is LocalCommands.Command.Quick && command.extra.endsWith("|play")
-            if (keepGoing) {
-                live?.sendText("YouTube results are open for this order: $text. Tap the first video now, then stop.")
+            // Gaana khud chalao aur jaancho; AI sirf tab jab yeh na ho paye
+            val play = if (keepGoing && !stopRequested) control.playFirstVideo() else null
+            if (play != null) RunLog.add(this, "yt_play " + play.name.lowercase())
+            if (keepGoing && play != PhoneControl.PlayResult.PLAYING) {
+                tracker = TaskTracker(text, System.currentTimeMillis())
+                live?.sendText(if (play == PhoneControl.PlayResult.TAPPED_UNSURE)
+                    "A YouTube video was already tapped for this order: $text. Do not search again. Call get_screen and check it is playing. If the wrong video opened, go_back once and tap the right one."
+                else "YouTube results are open for this order: $text. Do not search again. Tap the first real video (not an ad or a Short), then check that it plays.")
             } else if (done) {
                 setBusy(false)
                 silentTurn = false
@@ -687,13 +693,14 @@ class AssistService : Service(), GeminiLive.Callback {
                     quietOrder = silentTurn
                     extendOrder()
                     val remaining = steps.drop(result.failedAt + 1).joinToString(" | ")
+                    tracker = TaskTracker(name, System.currentTimeMillis())
                     plannerHandler.post {
                         val help = planner?.recover(name, step, remaining, screen?.latest())
                         RunLog.add(this, "recover " + (if (help != null) "ok" else "none"))
                         if (help != null) Skills.lesson(this, name, "Stuck at: " + step.take(60) + ". Fix: " + help.take(120))
                         if (!stopRequested) {
                             live?.sendText("The taught task \"$name\" got stuck at: $step.\nExpert advice from the planner:\n" +
-                                help.orEmpty() + "\nGet past this now, then do these remaining steps without asking: $remaining")
+                                help.orEmpty() + "\nSteps before it are already done, do not redo them. Get past this step now, then do these remaining steps without asking: $remaining")
                         }
                     }
                 }
@@ -738,8 +745,7 @@ class AssistService : Service(), GeminiLive.Callback {
             RunLog.add(this, "plan " + (if (plan != null) "ok " else "skipped ") + (System.currentTimeMillis() - began) + "ms")
             if (stopRequested) return@post
             workerHandler.post {
-                recent.clear()
-                appVisits.clear()
+                tracker = TaskTracker(text, System.currentTimeMillis())
                 stepCount = 0
                 stepLog.clear()
                 reviews = 0
@@ -805,6 +811,15 @@ class AssistService : Service(), GeminiLive.Callback {
         val order = currentOrder ?: return
         val think = planner ?: return
         if (stopRequested) return
+        if (tracker?.finished == true) {
+            // Sahayak ne insaan se madad maangi: dobara khud se mat chalao
+            if (!stuck) {
+                DailyLearning.note(this, "result: needs person")
+                endOrder()
+                finishPractice(false)
+            }
+            return
+        }
         if (stepLog.isEmpty()) {
             // AI ne sirf jawab diya: thodi der baad phone control apne aap band
             if (!talkMode) orderUntil = minOf(orderUntil, System.currentTimeMillis() + AFTER_ANSWER_MS)
@@ -820,7 +835,8 @@ class AssistService : Service(), GeminiLive.Callback {
             return
         }
         reviews++
-        val steps = stepLog.takeLast(15).joinToString("\n")
+        val done = tracker?.doneSoFar().orEmpty()
+        val steps = stepLog.takeLast(15).joinToString("\n") + if (done.isEmpty()) "" else "\nAlready done: $done"
         setBusy(true)
         plannerHandler.postDelayed({
             val began = System.currentTimeMillis()
@@ -843,7 +859,7 @@ class AssistService : Service(), GeminiLive.Callback {
                 else -> {
                     silentTurn = quietOrder
                     extendOrder()
-                    live?.sendText("[REVIEW] $fix")
+                    live?.sendText("[REVIEW] $fix" + if (stuck) " Continue from the unfinished step. Do not redo finished steps." else "")
                 }
             }
         }, REVIEW_DELAY_MS)
@@ -871,30 +887,61 @@ class AssistService : Service(), GeminiLive.Callback {
         }
     }
 
-    /** Sahayak chakkar mein phanse to use rokta hai. */
+    /**
+     * Har kaam ke baad jaanch: screen badli ya nahi, chakkar to nahi, popup/login/network to nahi.
+     * Fail par sirf wahi step sudharta hai, poora kaam shuru se nahi. Hadd paar ho to insaan ko saaf batata hai.
+     */
     private fun checkProgress(name: String, args: JSONObject, result: JSONObject) {
         stepCount++
-        stepLog.add(name + " " + args.toString().take(100) + " " + result.optString("status") + " " + result.optString("reason"))
-        val mark = name + "|" + args.toString().take(120) + "|" + result.optString("app")
-        recent.addLast(mark)
-        if (recent.size > HISTORY_SIZE) recent.removeFirst()
-        if (name == "open_app") {
-            appVisits.addLast(args.optString("name").lowercase())
-            if (appVisits.size > 4) appVisits.removeFirst()
-        }
-        val visits = appVisits.toList()
-        val bouncing = visits.size == 4 && visits[0] == visits[2] && visits[1] == visits[3] && visits[0] != visits[1]
-        val repeating = recent.count { it == mark } >= REPEAT_LIMIT
-        when {
-            stepCount >= STEP_LIMIT -> result.put("status", "stopped").put("reason", "too_many_steps")
+        stepLog.add(name + " " + args.toString().take(100) + " " + result.optString("status") + " " + result.optString("reason") +
+            if (result.optBoolean("changed", true)) "" else " no_change")
+        if (stepCount >= STEP_LIMIT) {
+            result.put("status", "stopped").put("reason", "too_many_steps")
                 .put("warning", "Stop now and tell the person in one sentence what is blocking you.")
-            bouncing || repeating -> {
-                RunLog.add(this, "loop_warning")
-                reviewWork(stuck = true)
-                result.put("warning", "You are going in circles. Do not repeat this. Use what you already have and take a different approach.")
+            return
+        }
+        val status = result.optString("status")
+        val screenList = result.optJSONArray("screen")
+        if (screenList == null || status == "stopped" || status == "cancelled_by_person" || status == "password_field") return
+        val track = tracker ?: TaskTracker(currentOrder ?: "order", System.currentTimeMillis()).also { tracker = it }
+        val labels = ArrayList<String>()
+        for (i in 0 until screenList.length()) {
+            screenList.optJSONObject(i)?.optString("text")?.takeIf { it.isNotBlank() }?.let { labels.add(it) }
+        }
+        val app = result.optString("app")
+        val changed = if (result.has("changed")) result.optBoolean("changed") else null
+        val feedback = track.record(name, targetOf(args), status == "ok", changed,
+            TaskTracker.signature(app, labels), labels, app, System.currentTimeMillis())
+        when (feedback.verdict) {
+            TaskTracker.Verdict.NO_CHANGE -> result.put("check", "The screen did not change, so this action did not work.")
+            TaskTracker.Verdict.REPEAT, TaskTracker.Verdict.BOUNCE, TaskTracker.Verdict.NO_PROGRESS -> {
+                RunLog.add(this, "loop_" + feedback.verdict.name.lowercase())
+                result.put("check", "No progress. Change the approach.")
+                    .put("done_so_far", track.doneSoFar().ifEmpty { "nothing yet" })
+                // Do baar khud ka sujhav kaam na aaye, tab doosre model se salah (API call bachao)
+                if (track.recoveries >= EXPERT_AFTER) reviewWork(stuck = true)
             }
+            else -> Unit
+        }
+        feedback.advice?.let { result.put("warning", it) }
+        feedback.situation?.let { result.put("situation", it.name.lowercase()) }
+        if (feedback.askPerson) {
+            RunLog.add(this, "needs_person " + (feedback.situation?.name ?: feedback.verdict.name).lowercase())
+            result.put("status", "stopped").put("reason", "needs_person").put("say", track.helpMessage(feedback.situation))
+            track.finish()
         }
     }
+
+    private fun targetOf(args: JSONObject): String = when {
+        args.optString("text").isNotBlank() -> args.optString("text")
+        args.optString("name").isNotBlank() -> args.optString("name")
+        args.optString("url").isNotBlank() -> args.optString("url")
+        args.optString("action").isNotBlank() -> (args.optString("action") + " " + args.optString("value")).trim()
+        args.optString("direction").isNotBlank() -> args.optString("direction")
+        args.has("element") -> "#" + args.optInt("element")
+        args.has("x") -> args.optInt("x").toString() + "," + args.optInt("y")
+        else -> args.optString("contact")
+    }.take(60)
 
     private fun snapshot(): ByteArray = synchronized(spoken) { spoken.toByteArray() }
 
@@ -1231,10 +1278,9 @@ class AssistService : Service(), GeminiLive.Callback {
         private const val MIC_TAIL_MS = 80L
         private const val VOICE_BANNER_MS = 900L
         private const val ORDER_WINDOW_MS = 300_000L
-        private const val HISTORY_SIZE = 8
         private const val MAX_REVIEWS = 3
         private const val REVIEW_DELAY_MS = 1_200L
-        private const val REPEAT_LIMIT = 3
+        private const val EXPERT_AFTER = 3
         private const val STEP_LIMIT = 120
         private const val AFTER_ANSWER_MS = 8_000L
         private const val MIN_LIST_SIZE = 8

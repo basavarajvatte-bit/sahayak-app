@@ -85,3 +85,30 @@ Faayde ke hisaab se kram thoda badla hai: sabse pehle wahi jo aapko roz chubhta 
 - Typed order (notification ka Type) bhi isi niyam se.
 - Tests: `TaskBoardTest.kt`.
 - Seema: agar Whisper key nahi aur phone ka speech recognition bhi nahi, to purana niyam (dot dabate hi sab band).
+
+## Agent upgrade: galti sudharna, chakkar rokna (23 Nov 2026)
+
+Purani dikkat (code me mili):
+- `checkProgress` sirf "same tool + same args" 3 baar ginta tha. Screen badli ya nahi, yeh kabhi nahi dekha. Tap "ok" aata tha bhale kuch na hua ho, isliye AI wahi tap karta rehta tha aur aakhir me "I am stuck in a loop" bolta tha.
+- Kaunse step ho chuke, yeh kahin likha nahi tha, isliye AI kabhi shuru se dobara karta tha.
+- YouTube: search ke baad AI ko "first video tap karo" bola jaata tha; AI kabhi tap nahi karta tha.
+
+Kya bana:
+- `TaskTracker.kt` (naya): har order ka hisaab — ho chuke step, fail step, dekhi gayi screens, sudhar ki ginti, time limit.
+  - Har kaam ke baad faisla: OK / screen nahi badli / fail / repeat / do screen ke beech jhoola / kai kaam se koi progress nahi / ab insaan ki madad.
+  - Fail par agla tarika: text → element number → position → scroll → go_back → doosra raasta. Keyboard button chhupa de to press_enter / go_back.
+  - Screen pehchaan: permission popup, ad/popup, login, CAPTCHA, network error, app not responding, loading, "no results", home screen.
+  - Hadd: 100 kaam, 5 sudhar, 10 minute. Uske baad saaf message: kya ho gaya, kya try kiya, aapko kya karna hai. "Stuck in a loop" ab nahi.
+  - WhatsApp: send pakka na ho to pehle chat dekho; message do baar kabhi nahi.
+- `PhoneControl.run`: har kaam ke result me `changed` (screen sach me badli ya nahi).
+- `PhoneControl.playFirstVideo`: YouTube me pehli asli video (ad/Shorts nahi) khud dabata hai aur player khulne tak jaanchta hai. Na ho paye tabhi AI.
+- `AssistService.checkProgress`: tracker se `check`, `warning`, `situation`, `done_so_far` AI ko jaata hai. Doosre model (planner) se salah sirf 3 sudhar ke baad, taaki API call bache.
+- `Prompts` (OPERATOR): dekho → socho → karo → jaancho; sirf fail step sudharo; result screen par dikhe tabhi "ho gaya".
+- `Planner` review: screen dekhkar faisla (video chal raha? message chat me dikha?), atke to "shuru se" kabhi nahi.
+
+Tests: `TaskTrackerTest.kt` — 15 test (normal kaam, fail tap, popup, loading, no results, chakkar, jhoola, hadd par madad, app band, network, login/CAPTCHA, WhatsApp double send, timeout). Computer par sab pass.
+
+Seema (sach):
+- Android wala hissa (AccessibilityService, Gemini Live) computer par test nahi ho sakta. APK GitHub Actions banata hai; phone par test baaki.
+- YouTube ke player buttons ke naam app version ke saath badal sakte hain. Player na pehchane to AI ko saunp deta hai, kaam nahi rukta.
+- Payment, password, PIN, OTP, bank/UPI par pehle jaisa hi rukta hai.

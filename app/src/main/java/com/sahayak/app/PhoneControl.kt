@@ -273,10 +273,56 @@ class PhoneControl : AccessibilityService() {
         val result = JSONObject().put("status", if (done) "ok" else "failed")
             .put("app", rootInActiveWindow?.packageName?.toString().orEmpty())
             .put("screen", readScreen())
+        // Sirf command chalna kaafi nahi: screen sach me badli ya nahi, yeh bhi batao
+        if (name != "get_screen" && name != "wait") result.put("changed", screenText() != before)
         if (after != null) result.put("status", "stopped").put("reason", after)
         else if (name == "type_text" && done) result.put("next", "Text is typed but not sent. Submit it now.")
         else if (name == "compose_email" && done) result.put("next", "Check the fields, then tap the send button now.")
         return result
+    }
+
+    /**
+     * YouTube results khulne ke baad pehli asli video (ad/Shorts nahi) khud dabao,
+     * phir jaancho ki player khula. PLAYING sirf tab jab player dikh gaya.
+     */
+    fun playFirstVideo(): PlayResult {
+        var tapped = false
+        var results = "" // tap se pehle ki screen; pehle se chal raha mini player dhokha na de
+        for (round in 0 until PLAY_ROUNDS) {
+            if (rootInActiveWindow?.packageName?.toString() != YOUTUBE) {
+                Thread.sleep(PLAY_STEP_MS)
+                continue
+            }
+            if (tapped && playerVisible() && screenText() != results) return PlayResult.PLAYING
+            if (!tapped) {
+                val video = visibleNodes().firstOrNull { isVideoResult(label(it)) }
+                if (video != null) {
+                    results = screenText()
+                    tapped = tapNode(video)
+                    if (tapped) waitUntilSettled(results)
+                    continue
+                }
+            }
+            Thread.sleep(PLAY_STEP_MS)
+        }
+        return when {
+            tapped && playerVisible() && screenText() != results -> PlayResult.PLAYING
+            tapped -> PlayResult.TAPPED_UNSURE
+            else -> PlayResult.NO_RESULT
+        }
+    }
+
+    enum class PlayResult { PLAYING, TAPPED_UNSURE, NO_RESULT }
+
+    private fun isVideoResult(text: String): Boolean {
+        val t = text.lowercase()
+        if (t.isEmpty() || "sponsored" in t || t.startsWith("ad ") || " ad -" in t || "shorts" in t) return false
+        return "play video" in t || (" views" in t && (" minute" in t || " second" in t || " hour" in t))
+    }
+
+    private fun playerVisible(): Boolean = visibleNodes().any { node ->
+        val t = label(node).lowercase()
+        PLAYER_WORDS.any { it in t }
     }
 
     /** AI ke bina seedha kaam. true matlab kaam ho gaya, false matlab AI ko do. */
@@ -1546,6 +1592,11 @@ class PhoneControl : AccessibilityService() {
         @Volatile var instance: PhoneControl? = null
             private set
 
+        private const val PLAY_ROUNDS = 16
+        private const val PLAY_STEP_MS = 500L
+        // "play video" nahi: woh results list me bhi hota hai
+        private val PLAYER_WORDS = listOf("pause video", "minimize", "mini player", "fullscreen", "full screen",
+            "next video", "previous video")
         private const val MIN_SETTLE_MS = 150L
         private const val TYPE_CHECK_MS = 250L
         private const val MAX_SETTLE_MS = 4_000L
