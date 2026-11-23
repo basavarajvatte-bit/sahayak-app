@@ -307,6 +307,7 @@ def main():
             log = []
     end = 12 * 60 + 25 if now().hour < 12 else 15 * 60 + 31
     handled = {e["at"] for e in log}
+    marked = -1  # khule trade ka live bhaav aakhri baar kis minute liya
     ended_day = False
     while True:
         t = now()
@@ -320,6 +321,16 @@ def main():
         # Har 10 minute ka khaana: 9:15, 9:25, 9:35 ... ek khaana ek hi baar
         tick = m - (m - (9 * 60 + 15)) % TICK
         if tick in handled:
+            # Do khaano ke beech: har minute khule nakli trade ka live munafa/nuksaan
+            if m != marked and handled:
+                marked = m
+                try:
+                    if idx.mark():
+                        last = max(handled)
+                        save("live.json", {**live(log, model, last), "index": idx.live(last)})
+                        publish(["live.json", "index_today.jsonl"])
+                except Exception as e:  # noqa: BLE001
+                    print("live mark failed", e, flush=True)
             time.sleep(20)
             continue
         handled.add(tick)

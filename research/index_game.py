@@ -218,7 +218,7 @@ def chain(name):
             x = r.get(side) or {}
             bid, ask = x.get("buyPrice1") or 0, x.get("sellPrice1") or 0
             if bid > 0 and ask > 0:
-                row[side] = (float(bid), float(ask))
+                row[side] = (float(bid), float(ask), float(x.get("lastPrice") or 0))
         if k and row:
             strikes[float(k)] = row
     return {"expiry": exp, "under": under, "strikes": strikes}
@@ -305,11 +305,41 @@ class Game:
                     side = "CE" if p >= SURE else "PE"
                     atm = min(ch["strikes"], key=lambda k: abs(k - ch["under"]))
                     if side in ch["strikes"].get(atm, {}):
-                        ask = ch["strikes"][atm][side][1]
+                        bid, ask = ch["strikes"][atm][side][0], ch["strikes"][atm][side][1]
                         e["trade"] = {"side": side, "strike": atm, "expiry": ch["expiry"], "buy": ask, "qty": info["lot"]}
+                        self.mark_one(e["trade"], bid, ch["strikes"][atm][side][2], ch["under"])
                 self.log.append(e)
         with open(self.path, "w") as fh:
             fh.write("\n".join(json.dumps(e) for e in self.log))
+
+    def mark_one(self, t, bid, ltp, under):
+        """Khule trade ka abhi ka hisaab: agar abhi bid par bechein to kharcha kaatkar kitna bachega."""
+        buy_v, sell_v = t["buy"] * t["qty"], bid * t["qty"]
+        t["now"] = bid
+        t["now_ltp"] = ltp or None
+        t["now_at"] = now().strftime("%H:%M")
+        t["now_pnl"] = round(sell_v - buy_v - costs(buy_v, sell_v), 2)
+        t["now_index"] = under
+
+    def mark(self):
+        """Har minute: khule nakli trade ka live bhaav (Zerodha jaisa). True = koi khula trade hai."""
+        opened = [e for e in self.log if e.get("trade") and not e.get("done")]
+        if not opened:
+            return False
+        for name in sorted({e["index"] for e in opened}):
+            ch = chain(name)
+            if not ch:
+                continue
+            for e in opened:
+                t = e["trade"]
+                if e["index"] != name or t["expiry"] != ch["expiry"]:
+                    continue
+                row = ch["strikes"].get(t["strike"], {}).get(t["side"])
+                if row:
+                    self.mark_one(t, row[0], row[2], ch["under"])
+        with open(self.path, "w") as fh:
+            fh.write("\n".join(json.dumps(e) for e in self.log))
+        return True
 
     def score(self):
         out = {}
@@ -345,6 +375,10 @@ class Game:
             trades.append({"index": e["index"], "at": "%d:%02d" % divmod(e["at"], 60), "minutes": e["minutes"],
                            "option": "%s %d %s" % (e["index"], t["strike"], t["side"]), "expiry": t["expiry"],
                            "qty": t["qty"], "buy": t["buy"], "sell": t.get("sell"), "costs": t.get("costs"),
-                           "pnl": t.get("pnl"), "index_move_pct": e.get("move_pct"), "open": not e.get("done")})
+                           "pnl": t.get("pnl"), "index_move_pct": e.get("move_pct"), "open": not e.get("done"),
+                           "now": t.get("now"), "now_ltp": t.get("now_ltp"), "now_at": t.get("now_at"),
+                           "now_pnl": t.get("now_pnl"), "now_index": t.get("now_index")})
+        live_pnl = [x["now_pnl"] for x in trades if x["open"] and x.get("now_pnl") is not None]
         return {"guesses": [{"index": k, "price": price.get(k), "p": v} for k, v in latest.items()],
+                "open_pnl": round(sum(live_pnl), 2) if live_pnl else None, "open_count": len(live_pnl),
                 "trades": trades[-20:], "today": self.score(), "model_check": self.model.get("check")}

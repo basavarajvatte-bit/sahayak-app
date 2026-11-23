@@ -61,4 +61,12 @@ class GameLogicTest {
         assertEquals("15:25", GameLogic.clock24("15:15", 10))
         assertEquals("bad", GameLogic.expiryWords("bad"))
     }
+
+    @Test fun liveOpenTradeShowsNowPriceAndSignedPnl() {
+        val t = GameLogic.tradeLines("14:25", 30, true, "NIFTY", "Nifty", "NIFTY 25450 PE", "01-Dec-2026", 65, 245.35, null, null, 262.1, "14:37")
+        assertEquals("Nifty 25450 PE (1 Dec, weekly)\nLiya 14:25 · Bechenge 14:55 ko\n1 lot (65) · ₹245.35 → abhi ₹262.10 (14:37)\nLagaye ₹15,948", t)
+        assertEquals("+₹1,010", GameLogic.livePnl(1010.2))
+        assertEquals("−₹120", GameLogic.livePnl(-120.0))
+        assertEquals("₹0", GameLogic.livePnl(0.2))
+    }
 }

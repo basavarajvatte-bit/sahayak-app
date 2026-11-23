@@ -228,6 +228,11 @@ class GameActivity : Activity() {
         c.addView(gap())
         c.addView(text("🎮 Nakli paise ka khel (options)", 17f, true))
         c.addView(text(GameLogic.moneyWords(trades, pnl), 15f, false, if (trades == 0) GREY else moneyColor(pnl)))
+        // Zerodha jaisa: abhi khule trade ka live munafa/nuksaan, bada aur rang ke saath
+        if (!ix.isNull("open_pnl") && ix.optInt("open_count") > 0) {
+            val open = ix.optDouble("open_pnl")
+            c.addView(row("🔴 LIVE · khule trade (" + ix.optInt("open_count") + ")", GameLogic.livePnl(open), moneyColor(open), 18f))
+        }
         val list = ix.optJSONArray("trades") ?: JSONArray()
         for (i in list.length() - 1 downTo 0) {
             val t = list.getJSONObject(i)
@@ -235,13 +240,21 @@ class GameActivity : Activity() {
             val what = GameLogic.tradeLines(t.optString("at"), t.optInt("minutes"), t.optBoolean("open"), index, name(index), t.optString("option"),
                 t.optString("expiry"), t.optInt("qty"), t.optDouble("buy"),
                 if (t.isNull("sell")) null else t.optDouble("sell"),
-                if (t.isNull("costs")) null else t.optDouble("costs"))
+                if (t.isNull("costs")) null else t.optDouble("costs"),
+                if (t.isNull("now")) null else t.optDouble("now"), t.optString("now_at"))
+            val live = t.optBoolean("open") && !t.isNull("now_pnl")
             val result = when {
+                live -> "LIVE " + GameLogic.livePnl(t.optDouble("now_pnl"))
                 t.optBoolean("open") -> "chal raha hai ⏳"
                 t.isNull("pnl") -> "gina nahi"
                 else -> GameLogic.tradeResult(t.optDouble("pnl"))
             }
-            c.addView(row(what, result, if (t.isNull("pnl")) GREY else moneyColor(t.optDouble("pnl")), 14f))
+            val color = when {
+                live -> moneyColor(t.optDouble("now_pnl"))
+                t.isNull("pnl") -> GREY
+                else -> moneyColor(t.optDouble("pnl"))
+            }
+            c.addView(row(what, result, color, 14f))
         }
         if (rightLost > 0) {
             c.addView(text("🧊 $rightLost baar andaza sahi tha, phir bhi paisa gaya. Kyun? Option ka bhaav baraf ki tarah har minute thoda pighalta hai, aur har trade par kharcha bhi lagta hai.", 14f, false, AMBER))

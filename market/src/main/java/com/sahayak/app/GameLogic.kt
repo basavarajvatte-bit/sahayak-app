@@ -129,7 +129,8 @@ object GameLogic {
      * "Lagaye ₹15,951 · Kharcha ₹78"
      */
     fun tradeLines(at: String, minutes: Int, open: Boolean, index: String, indexName: String, option: String,
-                   expiry: String, qty: Int, buy: Double, sell: Double?, costs: Double?): String {
+                   expiry: String, qty: Int, buy: Double, sell: Double?, costs: Double?,
+                   nowPrice: Double? = null, nowAt: String = ""): String {
         val parts = option.trim().split(" ")
         val contract = if (parts.size >= 3) parts[parts.size - 2].toDoubleOrNull()?.roundToLong()?.toString().orEmpty() + " " + parts.last()
         else option
@@ -147,9 +148,20 @@ object GameLogic {
             lots > 1 -> "$lots lot ($qty)"
             else -> "$qty unit"
         }
-        val move = amount + " · " + price(buy) + if (sell != null) " → " + price(sell) else ""
+        val move = amount + " · " + price(buy) + when {
+            sell != null -> " → " + price(sell)
+            open && nowPrice != null -> " → abhi " + price(nowPrice) + if (nowAt.isBlank()) "" else " (" + clock24(nowAt) + ")"
+            else -> ""
+        }
         val money = "Lagaye " + rupees(buy * qty) + if (costs != null) " · Kharcha " + rupees(costs) else ""
         return head + "\n" + times + "\n" + move + "\n" + money
+    }
+
+    /** Zerodha jaisa: "+₹277" ya "−₹120". Live trade ke liye, bina emoji. */
+    fun livePnl(pnl: Double): String = when {
+        pnl > 0.5 -> "+" + rupees(pnl)
+        pnl < -0.5 -> rupees(pnl)
+        else -> "₹0"
     }
 
     fun optionWords(side: String): String = if (side == "CE") "Call (upar ka daav)" else "Put (neeche ka daav)"
