@@ -94,6 +94,48 @@ object GameLogic {
     }
 
     /** "CE" -> Call (upar wala), "PE" -> Put (neeche wala) */
+    /** Ek lot mein kitne unit (game ki setting, research/index_game.py jaisi). */
+    fun lotSize(index: String): Int = when (index) {
+        "NIFTY" -> 65
+        "BANKNIFTY" -> 30
+        else -> 0
+    }
+
+    /** "01-Dec-2026" -> "1 Dec, weekly". Mahine ka aakhri expiry = monthly (agle hafte mahina badal jaye). */
+    fun expiryWords(expiry: String): String = try {
+        val d = java.time.LocalDate.parse(expiry, java.time.format.DateTimeFormatter.ofPattern("dd-MMM-yyyy", java.util.Locale.ENGLISH))
+        val kind = if (d.plusDays(7).monthValue != d.monthValue) "monthly" else "weekly"
+        d.dayOfMonth.toString() + " " + d.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH) + ", " + kind
+    } catch (e: Exception) {
+        expiry
+    }
+
+    private fun price(v: Double) = "₹" + String.format(java.util.Locale.ENGLISH, "%.2f", v)
+
+    /**
+     * Ek nakli option trade, poori jaankari ke saath:
+     * "15:15 · Nifty 25350 PE (1 Dec, weekly)"
+     * "1 lot (65) · ₹245.40 → ₹250.85"
+     * "Lagaye ₹15,951 · Kharcha ₹78"
+     */
+    fun tradeLines(at: String, index: String, indexName: String, option: String, expiry: String,
+                   qty: Int, buy: Double, sell: Double?, costs: Double?): String {
+        val parts = option.trim().split(" ")
+        val contract = if (parts.size >= 3) parts[parts.size - 2].toDoubleOrNull()?.roundToLong()?.toString().orEmpty() + " " + parts.last()
+        else option
+        val head = at + " · " + indexName + " " + contract.trim() + if (expiry.isBlank()) "" else " (" + expiryWords(expiry) + ")"
+        val size = lotSize(index)
+        val lots = if (size > 0 && qty > 0 && qty % size == 0) qty / size else 0
+        val amount = when {
+            lots == 1 -> "1 lot ($qty)"
+            lots > 1 -> "$lots lot ($qty)"
+            else -> "$qty unit"
+        }
+        val move = amount + " · " + price(buy) + if (sell != null) " → " + price(sell) else ""
+        val money = "Lagaye " + rupees(buy * qty) + if (costs != null) " · Kharcha " + rupees(costs) else ""
+        return head + "\n" + move + "\n" + money
+    }
+
     fun optionWords(side: String): String = if (side == "CE") "Call (upar ka daav)" else "Put (neeche ka daav)"
 
     /** India ke time mein abhi bazaar khula hai? (Sirf din aur samay, chhutti nahi pata.) */

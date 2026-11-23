@@ -231,9 +231,11 @@ class GameActivity : Activity() {
         val list = ix.optJSONArray("trades") ?: JSONArray()
         for (i in list.length() - 1 downTo 0) {
             val t = list.getJSONObject(i)
-            val side = t.optString("option").substringAfterLast(" ")
-            val what = t.optString("at") + " · " + name(t.optString("index")) + " " + GameLogic.optionWords(side) + "\n" +
-                "₹" + t.optDouble("buy") + " mein liya" + if (!t.isNull("sell")) " → ₹" + t.optDouble("sell") + " mein becha" else ""
+            val index = t.optString("index")
+            val what = GameLogic.tradeLines(t.optString("at"), index, name(index), t.optString("option"),
+                t.optString("expiry"), t.optInt("qty"), t.optDouble("buy"),
+                if (t.isNull("sell")) null else t.optDouble("sell"),
+                if (t.isNull("costs")) null else t.optDouble("costs"))
             val result = when {
                 t.optBoolean("open") -> "chal raha hai ⏳"
                 t.isNull("pnl") -> "gina nahi"
