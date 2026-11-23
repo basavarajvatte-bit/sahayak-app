@@ -3,19 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// Market Watch ka code Sahayak se hi aata hai, do copy nahi rakhni
-val sharedCode = tasks.register<Copy>("sharedCode") {
-    from("../app/src/main/java/com/sahayak/app") {
-        include(
-            "Market.kt", "MarketLogic.kt", "MarketActivity.kt", "MarketNewsActivity.kt", "ShareActivity.kt", "ChartView.kt", "FinanceView.kt",
-            "GreenList.kt", "Patterns.kt", "PatternLogic.kt", "PatternActivity.kt", "PatternLockActivity.kt",
-            "Funds.kt", "FundLogic.kt", "FundsActivity.kt", "FundActivity.kt", "BuyDialog.kt", "BuffettLogic.kt", "BuffettCard.kt",
-            "Planner.kt", "StoryLogic.kt", "ShortsLogic.kt", "BrainLogic.kt", "WatchLogic.kt", "Watcher.kt", "WatchActivity.kt",
-            "SecureStore.kt", "GeminiLive.kt", "Lang.kt", "LangMr.kt", "GameLogic.kt", "GameActivity.kt"
-        )
-    }
-    into(layout.buildDirectory.dir("shared/com/sahayak/app"))
-}
+// Market Watch ka apna code yahin (market/src) hai. Sahayak se ab kuch nahi aata (23 Nov 2026 se alag).
 
 android {
     namespace = "com.sahayak.market"
@@ -57,8 +45,6 @@ android {
         }
     }
 
-    sourceSets["main"].java.srcDir(layout.buildDirectory.dir("shared"))
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -68,6 +54,6 @@ android {
 
 dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
-
-tasks.named("preBuild") { dependsOn(sharedCode) }

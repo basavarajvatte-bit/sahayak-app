@@ -98,10 +98,10 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
      * Jawab: (JSON text, search hua ya nahi).
      */
     fun depth(text: String): Pair<String, Boolean>? {
-        grounded(Lang.ai(DEPTH_RULES) + "\n\n" + text)?.let { return it to true }
+        grounded(DEPTH_RULES + "\n\n" + text)?.let { return it to true }
         val parts = JSONArray().put(JSONObject().put("text", text))
         for (round in 0 until 2) {
-            ask(Lang.ai(DEPTH_RULES), parts, 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)?.let { return it to false }
+            ask(DEPTH_RULES, parts, 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)?.let { return it to false }
             // Gemini vyast ho to thoda ruk kar ek baar aur
             if (!lastError.contains("busy")) break
             try {
@@ -115,7 +115,7 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
 
     /** Bazaar ki khabron ka Hinglish matlab aur share par ho sakne wala asar, ek hi baar mein kai khabrein. */
     fun explainNews(text: String): String? =
-        ask(Lang.ai(NEWS_RULES), JSONArray().put(JSONObject().put("text", text)), 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)
+        ask(NEWS_RULES, JSONArray().put(JSONObject().put("text", text)), 0.2, DEPTH_TOKENS, json = true, models = DEPTH_MODELS)
 
     /** Pattern study: kya ye headings sach mein us ghatna ki khabar hain, aur kis company ki. */
     fun patternCheck(text: String): String? =
@@ -127,14 +127,6 @@ class Planner(http: OkHttpClient, private val apiKey: String, timeoutSeconds: Lo
             " (both included). Reply with JSON only: {\"items\":[{\"company\":\"name\",\"amount\":rupees per share as a number or 0 if unknown," +
             "\"record_date\":\"16 Nov 2026\"}]}. Use the date format exactly like 16 Nov 2026. Only include entries you found in search results. Never guess."
     )
-
-    /** Google search se share ka abhi ka NSE bhaav. Sirf tab, jab baaki jagah ke bhaav aapas mein na milein. */
-    fun priceCheck(name: String, code: String): Double? {
-        val prompt = "Use web search. What is the latest share price of " + name + " (NSE: " + code + ") on the National Stock Exchange of India, in rupees? " +
-            "Reply with JSON only: {\"price\": number, \"as_of\": \"date and time\", \"source\": \"site name\"}. " +
-            "If you cannot find a clear price, reply {\"price\": 0}. Never guess."
-        return grounded(prompt)?.let { MarketLogic.parseAiPrice(it) }
-    }
 
     /**
      * Research Agent (Phase 2): Google search ke saath poora jawab, links ke saath.
