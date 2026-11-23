@@ -112,18 +112,36 @@ object GameLogic {
 
     private fun price(v: Double) = "₹" + String.format(java.util.Locale.ENGLISH, "%.2f", v)
 
+    /** "14:25" (+ minute) -> "2:25 PM". 12 ghante ki ghadi. Galat ho to jaisa aaya waisa. */
+    fun time12(hhmm: String, plus: Int = 0): String {
+        val p = hhmm.trim().split(":")
+        val h = p.getOrNull(0)?.toIntOrNull() ?: return hhmm
+        val m = p.getOrNull(1)?.toIntOrNull() ?: return hhmm
+        val total = ((h * 60 + m + plus) % (24 * 60) + 24 * 60) % (24 * 60)
+        val hour = total / 60
+        val shown = if (hour % 12 == 0) 12 else hour % 12
+        return shown.toString() + ":" + String.format(java.util.Locale.ENGLISH, "%02d", total % 60) + if (hour < 12) " AM" else " PM"
+    }
+
     /**
      * Ek nakli option trade, poori jaankari ke saath:
-     * "15:15 · Nifty 25350 PE (1 Dec, weekly)"
+     * "Nifty 25350 PE (1 Dec, weekly)"
+     * "Liya 3:15 PM · Becha 3:25 PM"
      * "1 lot (65) · ₹245.40 → ₹250.85"
      * "Lagaye ₹15,951 · Kharcha ₹78"
      */
-    fun tradeLines(at: String, index: String, indexName: String, option: String, expiry: String,
-                   qty: Int, buy: Double, sell: Double?, costs: Double?): String {
+    fun tradeLines(at: String, minutes: Int, open: Boolean, index: String, indexName: String, option: String,
+                   expiry: String, qty: Int, buy: Double, sell: Double?, costs: Double?): String {
         val parts = option.trim().split(" ")
         val contract = if (parts.size >= 3) parts[parts.size - 2].toDoubleOrNull()?.roundToLong()?.toString().orEmpty() + " " + parts.last()
         else option
-        val head = at + " · " + indexName + " " + contract.trim() + if (expiry.isBlank()) "" else " (" + expiryWords(expiry) + ")"
+        val head = indexName + " " + contract.trim() + if (expiry.isBlank()) "" else " (" + expiryWords(expiry) + ")"
+        val sellAt = if (minutes > 0) time12(at, minutes) else ""
+        val times = "Liya " + time12(at) + when {
+            sellAt.isEmpty() -> ""
+            open -> " · Bechenge " + sellAt + " ko"
+            else -> " · Becha " + sellAt
+        }
         val size = lotSize(index)
         val lots = if (size > 0 && qty > 0 && qty % size == 0) qty / size else 0
         val amount = when {
@@ -133,7 +151,7 @@ object GameLogic {
         }
         val move = amount + " · " + price(buy) + if (sell != null) " → " + price(sell) else ""
         val money = "Lagaye " + rupees(buy * qty) + if (costs != null) " · Kharcha " + rupees(costs) else ""
-        return head + "\n" + move + "\n" + money
+        return head + "\n" + times + "\n" + move + "\n" + money
     }
 
     fun optionWords(side: String): String = if (side == "CE") "Call (upar ka daav)" else "Put (neeche ka daav)"

@@ -49,13 +49,15 @@ class GameLogicTest {
     }
 
     @Test fun tradeShowsContractLotsAndMoney() {
-        val t = GameLogic.tradeLines("15:15", "NIFTY", "Nifty", "NIFTY 25350 PE", "01-Dec-2026", 65, 245.4, 250.85, 77.53)
-        assertEquals("15:15 · Nifty 25350 PE (1 Dec, weekly)\n1 lot (65) · ₹245.40 → ₹250.85\nLagaye ₹15,951 · Kharcha ₹78", t)
+        val t = GameLogic.tradeLines("15:15", 10, false, "NIFTY", "Nifty", "NIFTY 25350 PE", "01-Dec-2026", 65, 245.4, 250.85, 77.53)
+        assertEquals("Nifty 25350 PE (1 Dec, weekly)\nLiya 3:15 PM · Becha 3:25 PM\n1 lot (65) · ₹245.40 → ₹250.85\nLagaye ₹15,951 · Kharcha ₹78", t)
     }
 
     @Test fun openTradeAndMonthlyExpiry() {
-        val t = GameLogic.tradeLines("12:15", "BANKNIFTY", "Bank Nifty", "BANKNIFTY 63300 CE", "29-Dec-2026", 60, 400.0, null, null)
-        assertEquals("12:15 · Bank Nifty 63300 CE (29 Dec, monthly)\n2 lot (60) · ₹400.00\nLagaye ₹24,000", t)
+        val t = GameLogic.tradeLines("11:45", 30, true, "BANKNIFTY", "Bank Nifty", "BANKNIFTY 63300 CE", "29-Dec-2026", 60, 400.0, null, null)
+        assertEquals("Bank Nifty 63300 CE (29 Dec, monthly)\nLiya 11:45 AM · Bechenge 12:15 PM ko\n2 lot (60) · ₹400.00\nLagaye ₹24,000", t)
+        assertEquals("12:05 PM", GameLogic.time12("11:55", 10))
+        assertEquals("9:15 AM", GameLogic.time12("9:15"))
         assertEquals("bad", GameLogic.expiryWords("bad"))
     }
 }

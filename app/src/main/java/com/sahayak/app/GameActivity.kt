@@ -164,7 +164,7 @@ class GameActivity : Activity() {
     /** "2026-11-18 14:15" -> "2:15 baje" */
     private fun clock(stamp: String): String = try {
         val t = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).parse(stamp)!!
-        SimpleDateFormat("h:mm", Locale.ENGLISH).format(t) + " baje"
+        SimpleDateFormat("h:mm a", Locale.ENGLISH).format(t)
     } catch (e: java.text.ParseException) {
         stamp
     }
@@ -232,7 +232,7 @@ class GameActivity : Activity() {
         for (i in list.length() - 1 downTo 0) {
             val t = list.getJSONObject(i)
             val index = t.optString("index")
-            val what = GameLogic.tradeLines(t.optString("at"), index, name(index), t.optString("option"),
+            val what = GameLogic.tradeLines(t.optString("at"), t.optInt("minutes"), t.optBoolean("open"), index, name(index), t.optString("option"),
                 t.optString("expiry"), t.optInt("qty"), t.optDouble("buy"),
                 if (t.isNull("sell")) null else t.optDouble("sell"),
                 if (t.isNull("costs")) null else t.optDouble("costs"))
@@ -291,7 +291,9 @@ class GameActivity : Activity() {
             c.addView(text("🏆 Aaj ka sabse achha aur sabse bura nakli trade", 16f, true))
             listOfNotNull(best?.optJSONObject(0), worst?.optJSONObject(0)).forEach { t ->
                 val v = t.optDouble("pnl", 0.0)
-                c.addView(row(t.optString("symbol") + " (" + t.optString("at") + ")", GameLogic.tradeResult(v), moneyColor(v), 15f))
+                val at = t.optString("at")
+                c.addView(row(t.optString("symbol") + "\nLiya " + GameLogic.time12(at) + " · Becha " + GameLogic.time12(at, 10),
+                    GameLogic.tradeResult(v), moneyColor(v), 15f))
             }
         }
         box.addCard(c)
