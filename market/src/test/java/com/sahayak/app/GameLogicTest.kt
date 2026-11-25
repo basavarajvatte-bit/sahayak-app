@@ -69,4 +69,32 @@ class GameLogicTest {
         assertEquals("−₹120", GameLogic.livePnl(-120.0))
         assertEquals("₹0", GameLogic.livePnl(0.2))
     }
+
+    @Test fun checkedListMatchesGameCount() {
+        val idx = listOf(
+            """{"day":"2026-11-25","at":555,"index":"NIFTY","minutes":10,"price":100,"p":0.52,"after":101,"move_pct":1,"right":true,"done":true}""",
+            """{"day":"2026-11-25","at":565,"index":"NIFTY","minutes":10,"price":100,"p":0.6,"after":99,"move_pct":-1,"right":false,"done":true}""",
+            """{"day":"2026-11-25","at":575,"index":"NIFTY","minutes":10,"price":100,"p":0.6,"after":100,"move_pct":0,"right":null,"done":true}""",
+            """{"day":"2026-11-25","at":575,"index":"NIFTY","minutes":30,"price":100,"p":0.6,"after":101,"move_pct":1,"right":true,"done":true}""",
+            """{"day":"2026-11-25","at":585,"index":"BANKNIFTY","minutes":10,"price":100,"p":0.4,"after":99,"move_pct":-1,"right":true,"done":true}""",
+            """{"day":"2026-11-25","at":595,"index":"NIFTY","minutes":10,"price":100,"p":0.6}"""
+        ).joinToString("\n")
+        val n = GameLogic.indexChecked(idx, "NIFTY", 10)
+        assertEquals(2, n.size)
+        assertEquals(565, n[0].at)
+        assertEquals("2 mein se 1 sahi", GameLogic.countWords(n))
+        assertEquals(1, GameLogic.indexChecked(idx, "BANKNIFTY", 10).size)
+
+        val sh = listOf(
+            """{"at":555,"symbol":"TCS","price":10,"p":{"10":0.7,"30":0.4},"res":{"10":{"after":11,"move_pct":10,"right":true}}}""",
+            """{"at":555,"symbol":"INFY","price":10,"p":{"10":0.3},"res":{"10":{"after":10,"move_pct":0,"right":null}}}""",
+            """{"at":565,"symbol":"ITC","price":10,"p":{"10":0.3},"res":{}}"""
+        ).joinToString("\n")
+        val s = GameLogic.sharesChecked(sh, 10)
+        assertEquals(1, s.size)
+        assertEquals("TCS", s[0].name)
+        assertEquals("09:15", GameLogic.hhmm(555))
+        assertEquals("⬆️ Upar socha (bahut pakka)", GameLogic.thought(0.7))
+        assertTrue(GameLogic.thought(0.52).contains("Pata nahi"))
+    }
 }

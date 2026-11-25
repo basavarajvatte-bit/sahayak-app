@@ -166,6 +166,44 @@ object GameLogic {
 
     fun optionWords(side: String): String = if (side == "CE") "Call (upar ka daav)" else "Put (neeche ka daav)"
 
+    const val INDEX_TODAY_URL = BASE + "index_today.jsonl"
+    const val SHARES_TODAY_URL = BASE + "today.jsonl"
+
+    /** Ek jaancha hua andaza: kab, kis par, kya socha, kya hua. */
+    data class Checked(val at: Int, val name: String, val price: Double, val after: Double, val movePct: Double, val p: Double, val right: Boolean)
+
+    private fun lines(jsonl: String) = jsonl.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull {
+        try { JSONObject(it) } catch (e: org.json.JSONException) { null }
+    }
+
+    /** Nifty / Bank Nifty ke jaanche hue andaze (game wahi ginta hai jo yahan hain). Naya sabse upar. */
+    fun indexChecked(jsonl: String, index: String, minutes: Int): List<Checked> = lines(jsonl).filter {
+        it.optString("index") == index && it.optInt("minutes") == minutes && it.optBoolean("done") && !it.isNull("right") && it.has("right")
+    }.map {
+        Checked(it.optInt("at"), index, it.optDouble("price"), it.optDouble("after"), it.optDouble("move_pct"), it.optDouble("p"), it.optBoolean("right"))
+    }.sortedByDescending { it.at }.toList()
+
+    /** Nifty 50 shares ke jaanche hue andaze. Naya sabse upar. */
+    fun sharesChecked(jsonl: String, minutes: Int): List<Checked> {
+        val key = minutes.toString()
+        return lines(jsonl).mapNotNull { e ->
+            val r = e.optJSONObject("res")?.optJSONObject(key) ?: return@mapNotNull null
+            val p = e.optJSONObject("p")?.optDouble(key, Double.NaN) ?: Double.NaN
+            if (r.isNull("right") || !r.has("right") || p.isNaN()) return@mapNotNull null
+            Checked(e.optInt("at"), e.optString("symbol"), e.optDouble("price"), r.optDouble("after"), r.optDouble("move_pct"), p, r.optBoolean("right"))
+        }.sortedWith(compareByDescending<Checked> { it.at }.thenBy { it.name }).toList()
+    }
+
+    /** 555 -> "09:15" */
+    fun hhmm(minute: Int): String = String.format(java.util.Locale.ENGLISH, "%02d:%02d", minute / 60, minute % 60)
+
+    /** "Upar socha" / "Neeche socha", aur kitna pakka tha. */
+    fun thought(p: Double): String = (if (p >= 0.5) "⬆️ Upar socha" else "⬇️ Neeche socha") +
+        if (isSure(p)) " (${sureWords(p)})" else " (halka sa · screen par 'Pata nahi' dikha)"
+
+    /** "12 mein se 9 sahi" */
+    fun countWords(list: List<Checked>): String = if (list.isEmpty()) "koi nahi" else "${list.size} mein se ${list.count { it.right }} sahi"
+
     /** India ke time mein abhi bazaar khula hai? (Sirf din aur samay, chhutti nahi pata.) */
     fun marketHours(day: Int, minute: Int): Boolean = day in 2..6 && minute in (9 * 60 + 15)..(15 * 60 + 30)
 }

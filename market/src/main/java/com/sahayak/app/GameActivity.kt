@@ -71,6 +71,12 @@ class GameActivity : Activity() {
 
     private fun gap() = text("", 4f)
 
+    /** "100 mein se 89 sahi" dabaya: aaj ke saare andaze ek-ek karke dikhao. */
+    private fun openList(kind: String, index: String) = startActivity(
+        android.content.Intent(this, GuessListActivity::class.java)
+            .putExtra(GuessListActivity.KIND, kind).putExtra(GuessListActivity.INDEX, index).putExtra(GuessListActivity.MINUTES, 10)
+    )
+
     private fun moneyColor(v: Double) = if (v > 0.5) GREEN else if (v < -0.5) RED else GREY
 
     private fun guessColor(p: Double) = when {
@@ -206,7 +212,9 @@ class GameActivity : Activity() {
             }
             today?.optJSONObject(index)?.optJSONObject("10")?.let { s ->
                 val (face, _) = GameLogic.verdict(s)
-                if (s.optInt("guesses", 0) > 0) c.addView(row("Aaj ke andaze", "$face " + GameLogic.outOf100(s.optDouble("model_pct")), INK, 15f))
+                if (s.optInt("guesses", 0) > 0) c.addView(row("Aaj ke andaze 👆", "$face " + GameLogic.outOf100(s.optDouble("model_pct")), BLUE, 15f).apply {
+                    setOnClickListener { openList("index", index) }
+                })
             }
         }
 
@@ -270,7 +278,9 @@ class GameActivity : Activity() {
         val s10 = live.optJSONObject("today")?.optJSONObject("10")
         val (face, words) = GameLogic.verdict(s10)
         if (s10 != null && s10.optInt("guesses", 0) > 0) {
-            c.addView(row("Computer aaj", "$face " + GameLogic.outOf100(s10.optDouble("model_pct")), INK, 17f))
+            c.addView(row("Computer aaj 👆", "$face " + GameLogic.outOf100(s10.optDouble("model_pct")), BLUE, 17f).apply {
+                setOnClickListener { openList("shares", "") }
+            })
             c.addView(row("Sikka uchhalne se", "🪙 100 mein se 50 sahi", GREY, 15f))
         }
         c.addView(text(words, 14f, false, AMBER))
