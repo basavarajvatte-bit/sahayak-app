@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '7 3 * * 1-5'    # 8:37 subah (India): model seekhe, 9:15 se khel, 12:25 tak
+    - cron: '37 3 * * 1-5'   # 9:07 backup (GitHub kabhi time par nahi chalata)
     - cron: '23 6 * * 1-5'   # 11:53 (India): 12:25 ke baad se 3:30 tak
+    - cron: '13 7 * * 1-5'   # 12:43 backup
+    - cron: '47 7 * * 1-5'   # 1:17 backup
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: game
@@ -18,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
+      - name: Note start time
+        run: echo "START_H=$(TZ=Asia/Kolkata date +%-H)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -32,3 +38,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python research/game.py research/game
+      - name: Start the afternoon game (GitHub ka 11:53 wala time kabhi chhoot jaata hai)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Sirf subah wala run (12 se pehle shuru hua) dopahar wala chalu kare, warna chhutti ke din baar-baar chalega
+          h=$(TZ=Asia/Kolkata date +%-H)
+          if [ "$START_H" -lt 12 ] && [ "$h" -ge 12 ] && [ "$h" -lt 15 ]; then gh workflow run game.yml --ref main || true; fi
