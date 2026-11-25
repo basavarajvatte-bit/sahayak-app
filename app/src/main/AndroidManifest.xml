@@ -78,12 +78,39 @@
             android:theme="@android:style/Theme.Material.Light.NoActionBar"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".FundsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".FundActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".PatternLockActivity"
+            android:exported="false" />
 
+        <activity
+            android:name=".PatternActivity"
+            android:exported="false" />
 
+        <activity
+            android:name=".ShareActivity"
+            android:exported="false" />
 
+        <activity
+            android:name=".MarketNewsActivity"
+            android:exported="false" />
 
+        <activity
+            android:name=".GameActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".GuessListActivity"
+            android:exported="false" />
 
         <!-- Phone mein kahin bhi PDF kholo to "Open with" mein Sahayak -->
         <activity
@@ -106,6 +133,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".MarketActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".WatchActivity"
