@@ -36,6 +36,8 @@ jobs:
         run: |
           mkdir -p research/game
           gh release download game -D research/game --clobber || true
+          # Ek baar ki marammat: galat data ki jagah sahi file (research/repair), phir folder hata dete hain
+          if [ -d research/repair ]; then cp research/repair/* research/game/; fi
       - name: Play
         env:
           GH_TOKEN: ${{ github.token }}
