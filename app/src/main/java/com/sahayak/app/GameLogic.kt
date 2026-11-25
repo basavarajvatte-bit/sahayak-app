@@ -14,8 +14,8 @@ object GameLogic {
     const val LIVE_URL = BASE + "live.json"
     const val HISTORY_URL = BASE + "history.json"
 
-    /** Itna pakka ho tabhi game nakli trade karta hai. */
-    const val SURE = 0.56
+    /** Itna pakka ho tabhi game nakli trade karta hai (26 Nov 2026 se 0.60, pehle 0.56). */
+    const val SURE = 0.60
 
     /** Model seedhe tarikon se kam se kam itna aage ho tabhi "aage" maano. */
     private const val EDGE = 2.0
@@ -34,8 +34,8 @@ object GameLogic {
         val s = maxOf(p, 1 - p)
         return when {
             s < SURE -> "pata nahi"
-            s < 0.60 -> "shayad"
-            s < 0.65 -> "kaafi pakka"
+            s < 0.64 -> "shayad"
+            s < 0.70 -> "kaafi pakka"
             else -> "bahut pakka"
         }
     }
@@ -203,6 +203,55 @@ object GameLogic {
 
     /** "12 mein se 9 sahi" */
     fun countWords(list: List<Checked>): String = if (list.isEmpty()) "koi nahi" else "${list.size} mein se ${list.count { it.right }} sahi"
+
+    /** Trade kaise band hua, aasaan shabdon mein. */
+    fun exitWords(exit: String): String = when (exit) {
+        "stop" -> "stop-loss laga"
+        "target" -> "target mila"
+        "day_end" -> "din khatam"
+        "time" -> "samay poora"
+        else -> ""
+    }
+
+    /** "long" -> Kharida (upar ka daav), "short" -> Short kiya (neeche ka daav) */
+    fun sideWords(side: String): String = if (side == "short") "📉 Short (neeche ka daav)" else "📈 Kharida (upar ka daav)"
+
+    /** Shares ka aaj ka kul nakli khel: 10 aur 30 minute dono milakar. (trade, paisa) */
+    fun sharesMoney(today: JSONObject?): Pair<Int, Double> {
+        var n = 0
+        var v = 0.0
+        for (h in listOf("10", "30")) today?.optJSONObject(h)?.let { n += it.optInt("trades", 0); v += it.optDouble("pnl", 0.0) }
+        return n to v
+    }
+
+    /** Index ka nakli khel, sirf diye gaye index (jaise sirf Nifty). (trade, paisa) */
+    fun indexMoney(today: JSONObject?, only: Set<String>): Pair<Int, Double> {
+        var n = 0
+        var v = 0.0
+        today?.keys()?.forEach { k ->
+            if (k !in only) return@forEach
+            today.optJSONObject(k)?.let { byH -> byH.keys().forEach { h -> byH.optJSONObject(h)?.let { n += it.optInt("trades", 0); v += it.optDouble("pnl", 0.0) } } }
+        }
+        return n to v
+    }
+
+    /** Data purana hai? "2026-11-25 14:05" aur abhi ka minute (din ke shuru se). Bazaar khula ho aur 15 minute se purana to chetavni. */
+    fun staleWords(updated: String, nowDay: String, nowMinute: Int, marketOpen: Boolean): String? {
+        if (!marketOpen) return null
+        val day = updated.substringBefore(' ')
+        val t = updated.substringAfter(' ', "").split(":")
+        val m = (t.getOrNull(0)?.toIntOrNull() ?: return null) * 60 + (t.getOrNull(1)?.toIntOrNull() ?: return null)
+        if (nowMinute < 9 * 60 + 50) return null
+        return when {
+            day != nowDay -> "⚠️ Aaj khel shuru hi nahi hua. GitHub ka run ruka hai."
+            nowMinute - m > 15 -> "⚠️ Khel ${nowMinute - m} minute se ruka hai (aakhri update ${hhmm(m)}). GitHub ka run band ho gaya lagta hai."
+            else -> null
+        }
+    }
+
+    /** Asli paisa kab: lagatar munafe wale din gino. */
+    fun realMoneyWords(winStreak: Int, goal: Int = 40): String =
+        "💰 Asli paisa: abhi nahi. Lagatar munafe wale khel ke din: $winStreak / $goal" + if (winStreak >= goal) " ✅ (phir bhi chhote se shuru karo)" else ""
 
     /** India ke time mein abhi bazaar khula hai? (Sirf din aur samay, chhutti nahi pata.) */
     fun marketHours(day: Int, minute: Int): Boolean = day in 2..6 && minute in (9 * 60 + 15)..(15 * 60 + 30)

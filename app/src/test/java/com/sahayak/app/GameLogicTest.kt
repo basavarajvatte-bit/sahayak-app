@@ -16,11 +16,12 @@ class GameLogicTest {
     @Test fun guessWordsAreSimple() {
         assertEquals("❔ Pata nahi", GameLogic.guess(0.52))
         assertEquals("❔ Pata nahi", GameLogic.guess(0.48))
-        assertEquals("⬆️ Upar jayega (shayad)", GameLogic.guess(0.57))
-        assertEquals("⬇️ Neeche jayega (kaafi pakka)", GameLogic.guess(0.38))
-        assertEquals("⬆️ Upar jayega (bahut pakka)", GameLogic.guess(0.7))
-        assertTrue(GameLogic.isSure(0.56))
-        assertFalse(GameLogic.isSure(0.55))
+        assertEquals("❔ Pata nahi", GameLogic.guess(0.57))
+        assertEquals("⬆️ Upar jayega (shayad)", GameLogic.guess(0.62))
+        assertEquals("⬇️ Neeche jayega (kaafi pakka)", GameLogic.guess(0.34))
+        assertEquals("⬆️ Upar jayega (bahut pakka)", GameLogic.guess(0.72))
+        assertTrue(GameLogic.isSure(0.60))
+        assertFalse(GameLogic.isSure(0.59))
         assertEquals("100 mein se 47 sahi", GameLogic.outOf100(46.8))
     }
 
@@ -35,6 +36,21 @@ class GameLogicTest {
         assertEquals("😟", GameLogic.verdict(bad).first)
         assertEquals("⏳", GameLogic.verdict(JSONObject("""{"guesses":0}""")).first)
         assertEquals("⏳", GameLogic.verdict(null).first)
+    }
+
+    @Test fun newRulesHelpers() {
+        val today = JSONObject("""{"10":{"trades":1,"pnl":-23.2},"30":{"trades":41,"pnl":-599.4}}""")
+        val (n, v) = GameLogic.sharesMoney(today)
+        assertEquals(42, n)
+        assertEquals(-622.6, v, 0.01)
+        val ix = JSONObject("""{"NIFTY":{"30":{"trades":1,"pnl":-1218.98}},"BANKNIFTY":{"30":{"trades":1,"pnl":-3290.03}}}""")
+        assertEquals(1, GameLogic.indexMoney(ix, setOf("NIFTY")).first)
+        assertEquals(-1218.98, GameLogic.indexMoney(ix, setOf("NIFTY")).second, 0.01)
+        assertEquals("stop-loss laga", GameLogic.exitWords("stop"))
+        assertEquals(null, GameLogic.staleWords("2026-11-25 14:05", "2026-11-25", 14 * 60 + 10, true))
+        assertTrue(GameLogic.staleWords("2026-11-25 12:25", "2026-11-25", 13 * 60 + 15, true)!!.contains("50 minute"))
+        assertEquals(null, GameLogic.staleWords("2026-11-25 12:25", "2026-11-25", 13 * 60 + 15, false))
+        assertTrue(GameLogic.realMoneyWords(3).endsWith("3 / 40"))
     }
 
     @Test fun moneyWords() {

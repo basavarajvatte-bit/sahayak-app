@@ -2,9 +2,12 @@
 
 - Har 10 minute: agle 10 aur 30 minute index upar ya neeche, aur kitna pakka.
 - Model pichhle 60 din ke 5-minute data se roz subah seekhta hai (aakhri 10 din par imaandar jaanch).
-- Pakka andaza ho (upar 56%+ ya neeche 56%+) to NSE ke live option chain se 1 lot ATM Call ya Put
-  asli ask bhaav par "khareedo", 10/30 minute baad asli bid bhaav par "becho". Saare kharche (brokerage,
-  STT, exchange, GST, stamp) kaate jaate hain. Sabse paas wali expiry, lekin aaj ki expiry nahi.
+- Pakka andaza ho (upar 60%+ ya neeche 60%+) to NSE ke live option chain se 1 lot ATM Call ya Put
+  asli ask bhaav par "khareedo", 10/30/60 minute baad (ya stop-loss / target lagne par) asli bid bhaav par "becho".
+  Saare kharche (brokerage, STT, exchange, GST, stamp) kaate jaate hain. Sabse paas wali expiry, lekin aaj/kal ki nahi.
+- Trade sirf tab: model pichhle 10 din ki jaanch mein paas ho, aaj "bada din" ho (badi khabar, bada gap ya VIX uchhla),
+  index sapaat na ho, bid-ask farq kam ho, aur din ki had (3 trade, ₹3,000 nuksaan) poori na hui ho.
+- Saath mein ek "chhaaya" trade: 1 strike ITM wala option, sirf tulna ke liye (ATM vs ITM kaunsa behtar).
 Sirf dummy paisa, seekhne ke liye.
 """
 import json
@@ -20,9 +23,24 @@ import study  # noqa: E402
 
 IST = timezone(timedelta(hours=5, minutes=30))
 INDEXES = {"NIFTY": {"yahoo": "^NSEI", "lot": 65, "step": 50}, "BANKNIFTY": {"yahoo": "^NSEBANK", "lot": 30, "step": 100}}
-HORIZONS = [10, 30]
-SURE = 0.56
+HORIZONS = [10, 30, 60]
+SURE = 0.60             # pehle 0.56 tha
 TRADE_ON = {"NIFTY"}  # Nakli trade sirf Nifty par (25 Nov 2026: Bank Nifty nahi khelna). Bank Nifty ke andaze chalte rahenge.
+STOP = 0.15             # premium 15% gire to bech do
+TARGET = 0.20           # premium 20% chadhe to bech do
+MAX_TRADES = 3          # din mein Nifty option trade
+DAY_LOSS = 3000.0       # din ka option nuksaan is had par to band
+MAX_SPREAD = 0.02       # bid-ask farq 2% se zyada to mat lo
+FLAT_RANGE = 0.10       # pichhle 30 minute mein index itna % bhi na hila to option mat lo (bhaav pighalta hai)
+GATE_PCT = 53.0         # 10 din ki jaanch mein kam se kam itna sahi
+GATE_SURE_PCT = 55.0
+GATE_SURE_N = 15
+BIG_ONLY = True         # Sirf "bade din" par trade (aapka niyam: badi khabar wale din)
+BIG_GAP = 0.8           # itna % gap = bada din
+BIG_VIX = 8.0           # VIX kal itna % uchhla = bada din
+BIG_MOVE = 1.0          # din mein index itna % chal chuka = bada din
+BIG_WORDS = ["war", "attack", "terror", "airstrike", "missile", "government falls", "collapse", "no-confidence",
+             "rbi policy", "repo rate", "budget", "emergency", "lockdown", "election result", "tariff", "sanction"]
 FEATURES = ["r10", "r30", "rday", "range30", "late", "gap", "prev", "vix", "expiry", "first15"]
 
 
@@ -165,6 +183,32 @@ def pct(n, d):
     return round(n * 100 / d, 1) if d else None
 
 
+def gate(c):
+    """10 din ki jaanch mein model paas hua ya nahi: (ok, wajah)."""
+    if not c.get("guesses"):
+        return False, "Model ki jaanch nahi ho paayi"
+    mp, sp, sn = c.get("model_pct") or 0, c.get("sure_pct") or 0, c.get("sure_guesses") or 0
+    if mp < GATE_PCT:
+        return False, "10 din ki jaanch mein model sirf %d%% sahi (kam se kam %d%% chahiye)" % (round(mp), GATE_PCT)
+    if sn < GATE_SURE_N:
+        return False, "10 din mein pakke andaze bahut kam (%d)" % sn
+    if sp < GATE_SURE_PCT:
+        return False, "Pakke andaze jaanch mein sirf %d%% sahi" % round(sp)
+    return True, "Jaanch paas (%d%% sahi, pakke %d%%)" % (round(mp), round(sp))
+
+
+def big_news():
+    """Aaj market hilane wali badi khabar? Google News (India) ki aaj ki headlines mein bade shabd. (haan/nahi, headline)"""
+    q = urllib.request.quote("(Sensex OR Nifty OR India) (" + " OR ".join('"%s"' % w for w in BIG_WORDS) + ") when:1d")
+    raw = study.get("https://news.google.com/rss/search?q=" + q + "&hl=en-IN&gl=IN&ceid=IN:en", 2)
+    if not raw:
+        return False, ""
+    import re
+    titles = re.findall(r"<title>(.*?)</title>", raw.decode("utf-8", "ignore"))[1:]
+    hits = [t for t in titles if any(w in t.lower() for w in BIG_WORDS) and any(x in t for x in ("Sensex", "Nifty", "market", "Market"))]
+    return (len(hits) >= 2), (hits[0][:100] if hits else "")
+
+
 def morning():
     out = {"made": now().strftime("%Y-%m-%d %H:%M"), "weights": {}, "check": {}}
     vix = daily("^INDIAVIX")
@@ -182,10 +226,13 @@ def morning():
             w_test = train(samples(name, data, closes, vix, learn, h))
             rows = samples(name, data, closes, vix, test, h)
             n = len(rows)
-            out["check"][name][str(h)] = {
-                "guesses": n, "model_pct": pct(sum(1 for f, y in rows if (prob(w_test, f) > 0.5) == (y > 0.5)), n),
-                "coin_pct": 50.0, "repeat_last_pct": pct(sum(1 for f, y in rows if (f["r10"] > 0) == (y > 0.5)), n),
-                "always_up_pct": pct(sum(y for _, y in rows), n)}
+            sure = [(f, y) for f, y in rows if max(prob(w_test, f), 1 - prob(w_test, f)) >= SURE]
+            c = {"guesses": n, "model_pct": pct(sum(1 for f, y in rows if (prob(w_test, f) > 0.5) == (y > 0.5)), n),
+                 "coin_pct": 50.0, "repeat_last_pct": pct(sum(1 for f, y in rows if (f["r10"] > 0) == (y > 0.5)), n),
+                 "always_up_pct": pct(sum(y for _, y in rows), n),
+                 "sure_guesses": len(sure), "sure_pct": pct(sum(1 for f, y in sure if (prob(w_test, f) > 0.5) == (y > 0.5)), len(sure))}
+            c["trade_ok"], c["why"] = gate(c)
+            out["check"][name][str(h)] = c
             out["weights"][name][str(h)] = train(samples(name, data, closes, vix, days, h))
         time.sleep(1)
     print("index model", json.dumps(out["check"]), flush=True)
@@ -251,21 +298,131 @@ class Game:
                 self.log = []
         self.vix = daily("^INDIAVIX")
         self.closes = {n: daily(i["yahoo"]) for n, i in INDEXES.items()}
+        self.news = None      # (haan/nahi, headline), din mein ek baar
+        self.big = {}         # index -> wajah, agar aaj bada din hai
+        self.gate_msg = ""
+
+    # ---------- niyam ----------
+
+    def model_ok(self, name, h):
+        c = ((self.model.get("check") or {}).get(name) or {}).get(str(h)) or {}
+        if "trade_ok" not in c:
+            # Purana model (bina gate ke): jaanch ke number se khud tay karo
+            ok, why = gate(c) if c else (False, "Model ki jaanch nahi mili")
+            return ok, why
+        return bool(c.get("trade_ok")), c.get("why") or ""
+
+    def big_day(self, name, f, today):
+        """Aaj bada din hai? Badi khabar, bada gap, VIX uchhla, ya index din mein bahut chal chuka."""
+        if not BIG_ONLY:
+            return "niyam band"
+        if self.news is None:
+            try:
+                self.news = big_news()
+            except Exception:  # noqa: BLE001
+                self.news = (False, "")
+        if self.news[0]:
+            return "Badi khabar: " + self.news[1]
+        if abs(f.get("gap", 0)) >= BIG_GAP:
+            return "Bada gap (%.1f%%)" % f["gap"]
+        days = sorted(x for x in self.vix if x < today)
+        if len(days) >= 2 and self.vix[days[-2]]:
+            ch = (self.vix[days[-1]] / self.vix[days[-2]] - 1) * 100
+            if ch >= BIG_VIX:
+                return "VIX kal %.0f%% uchhla" % ch
+        if abs(f.get("rday", 0)) >= BIG_MOVE:
+            return "Nifty aaj %.1f%% chal chuka" % f["rday"]
+        return None
+
+    def day_trades(self, name):
+        return [e for e in self.log if e["index"] == name and e.get("trade")]
+
+    def why_not(self, name, h, p, f, ch, today, tick):
+        """Trade kyun nahi (None = trade le sakte hain)."""
+        if name not in TRADE_ON:
+            return "Is index par nakli trade band hai (sirf andaze)"
+        if max(p, 1 - p) < SURE:
+            return "Pakka nahi (%d%% se kam)" % round(SURE * 100)
+        ok, why = self.model_ok(name, h)
+        if not ok:
+            return why
+        big = self.big_day(name, f, today)
+        if not big:
+            return "Aaj koi badi khabar ya bada uchhal nahi (aapka niyam: sirf bade din)"
+        self.big[name] = big
+        if not ch:
+            return "Option chain nahi mili"
+        if (datetime.strptime(ch["expiry"], "%d-%b-%Y").date() - now().date()).days <= 1:
+            return "Expiry kal hai: option ka bhaav bahut tez pighalta hai"
+        if f.get("range30", 0) < FLAT_RANGE:
+            return "Nifty sapaat chal raha hai: option kharidna ghaate ka sauda"
+        if tick + h > 15 * 60 + 20 or tick >= 15 * 60:
+            return "Bazaar band hone ke paas"
+        mine = self.day_trades(name)
+        if len(mine) >= MAX_TRADES:
+            return "Aaj ke %d trade poore" % MAX_TRADES
+        lost = sum(e["trade"].get("pnl", 0) or 0 for e in mine)
+        if lost <= -DAY_LOSS:
+            return "Aaj ka nuksaan ₹%d ki had par, band" % DAY_LOSS
+        if any(not e.get("trade", {}).get("closed") for e in mine):
+            return "Ek trade pehle se khula hai"
+        return None
+
+    def gate_why(self):
+        return self.gate_msg
+
+    # ---------- trade band karna ----------
+
+    def close(self, e, bid, why):
+        t = e["trade"]
+        if t.get("closed"):
+            return
+        t["sell"] = bid
+        buy_v, sell_v = t["buy"] * t["qty"], bid * t["qty"]
+        t["costs"] = costs(buy_v, sell_v)
+        t["pnl"] = round(sell_v - buy_v - t["costs"], 2)
+        t["pnl_gross"] = round(sell_v - buy_v, 2)
+        t["closed"] = True
+        t["exit"] = why
+        t["exit_at"] = now().strftime("%H:%M")
+
+    def close_itm(self, t, ch):
+        s = t.get("itm")
+        if not s or "sell" in s or not ch:
+            return
+        row = ch["strikes"].get(s["strike"], {}).get(t["side"])
+        if row:
+            s["sell"] = row[0]
+            bv, sv = s["buy"] * t["qty"], row[0] * t["qty"]
+            s["pnl"] = round(sv - bv - costs(bv, sv), 2)
+
+    def reason(self, e):
+        """Nuksaan ki wajah, aasaan shabdon mein."""
+        t = e.get("trade") or {}
+        if t.get("pnl") is None or t["pnl"] >= 0:
+            return None
+        if t.get("exit") == "stop":
+            return "stop-loss laga"
+        if e.get("right"):
+            return "index sahi disha mein, par option pighla / kharcha"
+        if e.get("right") is None:
+            return "index hila hi nahi, option pighla"
+        return "index ulti disha mein gaya"
 
     def tick(self, tick):
         today = now().strftime("%Y-%m-%d")
         vix_prev = self.vix.get(max((x for x in self.vix if x < today), default=""), None)
+        msgs = []
         for name, info in INDEXES.items():
             bs = bars5(info["yahoo"], "1d").get(today, [])
-            # Option chain sirf tab: is index par trade hota ho, ya pehle ka koi trade abhi khula ho (use bechna hai)
-            has_open = any(x for x in self.log if x["index"] == name and x.get("trade") and not x.get("done"))
+            has_open = any(x for x in self.log if x["index"] == name and x.get("trade") and not x["trade"].get("closed"))
             ch = chain(name) if (name in TRADE_ON or has_open) else None
             if not bs:
                 continue
             closes = self.closes[name]
             prev_day = max((x for x in closes if x < today), default=None)
             prev2 = max((x for x in closes if prev_day and x < prev_day), default=None)
-            # Purane andaze aur trade band karo
+            # Purane andaze jaancho, samay poora hua trade becho
             for e in self.log:
                 if e["index"] != name:
                     continue
@@ -279,14 +436,16 @@ class Game:
                 e["move_pct"] = round((later / e["price"] - 1) * 100, 3)
                 e["right"] = None if later == e["price"] else (later > e["price"]) == (e["p"] > 0.5)
                 t = e.get("trade")
-                if t and ch and t["strike"] in ch["strikes"] and t["side"] in ch["strikes"][t["strike"]] and t["expiry"] == ch["expiry"]:
-                    bid = ch["strikes"][t["strike"]][t["side"]][0]
-                    t["sell"] = bid
-                    buy_v, sell_v = t["buy"] * t["qty"], bid * t["qty"]
-                    t["costs"] = costs(buy_v, sell_v)
-                    t["pnl"] = round(sell_v - buy_v - t["costs"], 2)
-                elif t:
-                    t["note"] = "Could not get the option price to close; not counted"
+                if t and not t.get("closed"):
+                    row = ch["strikes"].get(t["strike"], {}).get(t["side"]) if ch and t["expiry"] == ch["expiry"] else None
+                    if row:
+                        self.close(e, row[0], "time")
+                    else:
+                        t["note"] = "Could not get the option price to close; not counted"
+                        t["closed"] = True
+                if t:
+                    self.close_itm(t, ch)
+                    t["why_lost"] = self.reason(e)
                 e["done"] = True
             # Naya andaza
             f = feats(bs, tick, closes.get(prev_day), vix_prev, expiry_days(name)(today))
@@ -303,30 +462,53 @@ class Game:
                 p = round(prob(w, f), 3)
                 e = {"day": today, "at": tick, "index": name, "minutes": h, "price": round(f["price"], 2), "p": p,
                      "f": {k: round(f[k], 3) for k in FEATURES}}
-                busy = any(x for x in self.log if x["index"] == name and x["minutes"] == h and x.get("trade") and not x.get("done"))
-                if ch and name in TRADE_ON and not busy and (p >= SURE or p <= 1 - SURE):
-                    side = "CE" if p >= SURE else "PE"
+                why = self.why_not(name, h, p, f, ch, today, tick)
+                if why is None:
+                    side = "CE" if p >= 0.5 else "PE"
                     atm = min(ch["strikes"], key=lambda k: abs(k - ch["under"]))
-                    if side in ch["strikes"].get(atm, {}):
-                        bid, ask = ch["strikes"][atm][side][0], ch["strikes"][atm][side][1]
-                        e["trade"] = {"side": side, "strike": atm, "expiry": ch["expiry"], "buy": ask, "qty": info["lot"]}
-                        self.mark_one(e["trade"], bid, ch["strikes"][atm][side][2], ch["under"])
+                    row = ch["strikes"].get(atm, {}).get(side)
+                    if not row:
+                        why = "ATM option ka bhaav nahi mila"
+                    elif (row[1] - row[0]) / row[1] > MAX_SPREAD:
+                        why = "Bid-ask farq bahut zyada (%.1f%%)" % ((row[1] - row[0]) / row[1] * 100)
+                    else:
+                        e["trade"] = {"side": side, "strike": atm, "expiry": ch["expiry"], "buy": row[1], "qty": info["lot"],
+                                      "big": self.big.get(name), "path": []}
+                        # Chhaaya trade: 1 strike ITM (Call ke liye neeche wala, Put ke liye upar wala)
+                        step = info["step"]
+                        itm = atm - step if side == "CE" else atm + step
+                        irow = ch["strikes"].get(itm, {}).get(side)
+                        if irow:
+                            e["trade"]["itm"] = {"strike": itm, "buy": irow[1]}
+                        self.mark_one(e["trade"], row[0], row[2], ch["under"])
+                if why and name in TRADE_ON and max(p, 1 - p) >= SURE:
+                    e["skip"] = why
+                    msgs.append(why)
                 self.log.append(e)
+        if msgs:
+            self.gate_msg = msgs[-1]
+        elif any(e.get("trade") for e in self.log):
+            self.gate_msg = ""
+        self.save()
+
+    def save(self):
         with open(self.path, "w") as fh:
             fh.write("\n".join(json.dumps(e) for e in self.log))
 
     def mark_one(self, t, bid, ltp, under):
-        """Khule trade ka abhi ka hisaab: agar abhi bid par bechein to kharcha kaatkar kitna bachega."""
+        """Khule trade ka abhi ka hisaab: agar abhi bid par bechein to kharcha kaatkar kitna bachega. Har minute ka bhaav bhi save."""
         buy_v, sell_v = t["buy"] * t["qty"], bid * t["qty"]
         t["now"] = bid
         t["now_ltp"] = ltp or None
         t["now_at"] = now().strftime("%H:%M")
         t["now_pnl"] = round(sell_v - buy_v - costs(buy_v, sell_v), 2)
         t["now_index"] = under
+        t.setdefault("path", []).append([t["now_at"], bid])
+        t["path"] = t["path"][-90:]
 
     def mark(self):
-        """Har minute: khule nakli trade ka live bhaav (Zerodha jaisa). True = koi khula trade hai."""
-        opened = [e for e in self.log if e.get("trade") and not e.get("done")]
+        """Har minute: khule nakli trade ka live bhaav, aur stop-loss / target. True = koi khula trade hai."""
+        opened = [e for e in self.log if e.get("trade") and not e["trade"].get("closed")]
         if not opened:
             return False
         for name in sorted({e["index"] for e in opened}):
@@ -338,11 +520,35 @@ class Game:
                 if e["index"] != name or t["expiry"] != ch["expiry"]:
                     continue
                 row = ch["strikes"].get(t["strike"], {}).get(t["side"])
-                if row:
-                    self.mark_one(t, row[0], row[2], ch["under"])
-        with open(self.path, "w") as fh:
-            fh.write("\n".join(json.dumps(e) for e in self.log))
+                if not row:
+                    continue
+                self.mark_one(t, row[0], row[2], ch["under"])
+                if row[0] <= t["buy"] * (1 - STOP):
+                    self.close(e, row[0], "stop")
+                    self.close_itm(t, ch)
+                elif row[0] >= t["buy"] * (1 + TARGET):
+                    self.close(e, row[0], "target")
+                    self.close_itm(t, ch)
+        self.save()
         return True
+
+    def close_all(self):
+        """Din khatam: koi trade khula reh gaya to abhi ke bid par band."""
+        opened = [e for e in self.log if e.get("trade") and not e["trade"].get("closed")]
+        for name in sorted({e["index"] for e in opened}):
+            ch = chain(name)
+            for e in opened:
+                t = e["trade"]
+                if e["index"] != name:
+                    continue
+                row = ch["strikes"].get(t["strike"], {}).get(t["side"]) if ch and t["expiry"] == ch["expiry"] else None
+                if row:
+                    self.close(e, row[0], "day_end")
+                    self.close_itm(t, ch)
+                else:
+                    t["closed"] = True
+                    t["note"] = "Could not get the option price to close; not counted"
+        self.save()
 
     def score(self):
         out = {}
@@ -351,16 +557,27 @@ class Game:
             for h in HORIZONS:
                 rows = [e for e in self.log if e["index"] == name and e["minutes"] == h and e.get("done") and e.get("right") is not None]
                 trades = [e for e in self.log if e["index"] == name and e["minutes"] == h and e.get("trade") and "pnl" in e["trade"]]
+                sure = [e for e in rows if max(e["p"], 1 - e["p"]) >= SURE]
                 n = len(rows)
-                right_dir_loss = sum(1 for e in trades if e["right"] and e["trade"]["pnl"] < 0)
+                right_dir_loss = sum(1 for e in trades if e.get("right") and e["trade"]["pnl"] < 0)
+                itm = [e["trade"]["itm"]["pnl"] for e in trades if (e["trade"].get("itm") or {}).get("pnl") is not None]
+                reasons = {}
+                for e in trades:
+                    r = e["trade"].get("why_lost")
+                    if r:
+                        reasons[r] = reasons.get(r, 0) + 1
                 out[name][str(h)] = {
                     "guesses": n, "model_pct": pct(sum(1 for e in rows if e["right"]), n), "coin_pct": 50.0,
                     "repeat_last_pct": pct(sum(1 for e in rows if (e["f"]["r10"] > 0) == (e["move_pct"] > 0)), n),
                     "always_up_pct": pct(sum(1 for e in rows if e["move_pct"] > 0), n),
+                    "sure_guesses": len(sure), "sure_pct": pct(sum(1 for e in sure if e["right"]), len(sure)),
                     "trades": len(trades), "trades_won": sum(1 for e in trades if e["trade"]["pnl"] > 0),
                     "pnl": round(sum(e["trade"]["pnl"] for e in trades), 2),
+                    "pnl_gross": round(sum(e["trade"].get("pnl_gross", e["trade"]["pnl"]) for e in trades), 2),
                     "costs": round(sum(e["trade"]["costs"] for e in trades), 2),
                     "right_but_lost": right_dir_loss,
+                    "itm_pnl": round(sum(itm), 2) if itm else None,
+                    "loss_reasons": reasons,
                 }
         return out
 
@@ -375,13 +592,24 @@ class Game:
             t = e.get("trade")
             if not t:
                 continue
+            closed = bool(t.get("closed")) or bool(e.get("done"))
             trades.append({"index": e["index"], "at": "%d:%02d" % divmod(e["at"], 60), "minutes": e["minutes"],
                            "option": "%s %d %s" % (e["index"], t["strike"], t["side"]), "expiry": t["expiry"],
                            "qty": t["qty"], "buy": t["buy"], "sell": t.get("sell"), "costs": t.get("costs"),
-                           "pnl": t.get("pnl"), "index_move_pct": e.get("move_pct"), "open": not e.get("done"),
+                           "pnl": t.get("pnl"), "index_move_pct": e.get("move_pct"), "open": not closed,
                            "now": t.get("now"), "now_ltp": t.get("now_ltp"), "now_at": t.get("now_at"),
-                           "now_pnl": t.get("now_pnl"), "now_index": t.get("now_index")})
+                           "now_pnl": t.get("now_pnl"), "now_index": t.get("now_index"),
+                           "exit": t.get("exit"), "exit_at": t.get("exit_at"), "why_lost": t.get("why_lost"),
+                           "big": t.get("big"), "itm_pnl": (t.get("itm") or {}).get("pnl"), "path": t.get("path", [])[-60:]})
         live_pnl = [x["now_pnl"] for x in trades if x["open"] and x.get("now_pnl") is not None]
+        skips = {}
+        for e in self.log:
+            if e.get("skip"):
+                skips[e["skip"]] = skips.get(e["skip"], 0) + 1
         return {"guesses": [{"index": k, "price": price.get(k), "p": v} for k, v in latest.items()],
                 "open_pnl": round(sum(live_pnl), 2) if live_pnl else None, "open_count": len(live_pnl),
-                "trades": trades[-20:], "today": self.score(), "model_check": self.model.get("check")}
+                "trades": trades[-20:], "today": self.score(), "model_check": self.model.get("check"),
+                "trade_on": sorted(TRADE_ON), "gate_why": self.gate_msg, "big_day": self.big.get("NIFTY"),
+                "skipped": sorted([{"why": k, "count": v} for k, v in skips.items()], key=lambda x: -x["count"])[:5],
+                "settings": {"sure": SURE, "stop": STOP, "target": TARGET, "max_trades": MAX_TRADES, "day_loss": DAY_LOSS,
+                             "big_only": BIG_ONLY}}
