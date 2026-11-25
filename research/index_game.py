@@ -22,6 +22,7 @@ IST = timezone(timedelta(hours=5, minutes=30))
 INDEXES = {"NIFTY": {"yahoo": "^NSEI", "lot": 65, "step": 50}, "BANKNIFTY": {"yahoo": "^NSEBANK", "lot": 30, "step": 100}}
 HORIZONS = [10, 30]
 SURE = 0.56
+TRADE_ON = {"NIFTY"}  # Nakli trade sirf Nifty par (25 Nov 2026: Bank Nifty nahi khelna). Bank Nifty ke andaze chalte rahenge.
 FEATURES = ["r10", "r30", "rday", "range30", "late", "gap", "prev", "vix", "expiry", "first15"]
 
 
@@ -256,7 +257,9 @@ class Game:
         vix_prev = self.vix.get(max((x for x in self.vix if x < today), default=""), None)
         for name, info in INDEXES.items():
             bs = bars5(info["yahoo"], "1d").get(today, [])
-            ch = chain(name)
+            # Option chain sirf tab: is index par trade hota ho, ya pehle ka koi trade abhi khula ho (use bechna hai)
+            has_open = any(x for x in self.log if x["index"] == name and x.get("trade") and not x.get("done"))
+            ch = chain(name) if (name in TRADE_ON or has_open) else None
             if not bs:
                 continue
             closes = self.closes[name]
@@ -301,7 +304,7 @@ class Game:
                 e = {"day": today, "at": tick, "index": name, "minutes": h, "price": round(f["price"], 2), "p": p,
                      "f": {k: round(f[k], 3) for k in FEATURES}}
                 busy = any(x for x in self.log if x["index"] == name and x["minutes"] == h and x.get("trade") and not x.get("done"))
-                if ch and not busy and (p >= SURE or p <= 1 - SURE):
+                if ch and name in TRADE_ON and not busy and (p >= SURE or p <= 1 - SURE):
                     side = "CE" if p >= SURE else "PE"
                     atm = min(ch["strikes"], key=lambda k: abs(k - ch["under"]))
                     if side in ch["strikes"].get(atm, {}):
