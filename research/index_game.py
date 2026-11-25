@@ -189,7 +189,7 @@ def gate(c):
         return False, "Model ki jaanch nahi ho paayi"
     mp, sp, sn = c.get("model_pct") or 0, c.get("sure_pct") or 0, c.get("sure_guesses") or 0
     if mp < GATE_PCT:
-        return False, "10 din ki jaanch mein model sirf %d%% sahi (kam se kam %d%% chahiye)" % (round(mp), GATE_PCT)
+        return False, "10 din ki jaanch mein model sirf %.1f%% sahi (kam se kam %d%% chahiye)" % (mp, GATE_PCT)
     if sn < GATE_SURE_N:
         return False, "10 din mein pakke andaze bahut kam (%d)" % sn
     if sp < GATE_SURE_PCT:
@@ -284,6 +284,14 @@ def costs(buy_value, sell_value):
     return round(brokerage + stt + exch + sebi + gst + stamp, 2)
 
 
+def is_open(e):
+    """Trade abhi khula hai? Purane data mein 'closed' nahi hota: wahan 'pnl', 'note' ya 'done' matlab band."""
+    t = e.get("trade")
+    if not t:
+        return False
+    return not (t.get("closed") or "pnl" in t or t.get("note") or e.get("done"))
+
+
 class Game:
     def __init__(self, folder, model):
         self.folder = folder
@@ -364,7 +372,7 @@ class Game:
         lost = sum(e["trade"].get("pnl", 0) or 0 for e in mine)
         if lost <= -DAY_LOSS:
             return "Aaj ka nuksaan ₹%d ki had par, band" % DAY_LOSS
-        if any(not e.get("trade", {}).get("closed") for e in mine):
+        if any(is_open(e) for e in mine):
             return "Ek trade pehle se khula hai"
         return None
 
@@ -375,7 +383,7 @@ class Game:
 
     def close(self, e, bid, why):
         t = e["trade"]
-        if t.get("closed"):
+        if t.get("closed") or "pnl" in t:
             return
         t["sell"] = bid
         buy_v, sell_v = t["buy"] * t["qty"], bid * t["qty"]
@@ -415,7 +423,7 @@ class Game:
         msgs = []
         for name, info in INDEXES.items():
             bs = bars5(info["yahoo"], "1d").get(today, [])
-            has_open = any(x for x in self.log if x["index"] == name and x.get("trade") and not x["trade"].get("closed"))
+            has_open = any(is_open(x) for x in self.log if x["index"] == name)
             ch = chain(name) if (name in TRADE_ON or has_open) else None
             if not bs:
                 continue
@@ -436,7 +444,7 @@ class Game:
                 e["move_pct"] = round((later / e["price"] - 1) * 100, 3)
                 e["right"] = None if later == e["price"] else (later > e["price"]) == (e["p"] > 0.5)
                 t = e.get("trade")
-                if t and not t.get("closed"):
+                if t and not t.get("closed") and "pnl" not in t:
                     row = ch["strikes"].get(t["strike"], {}).get(t["side"]) if ch and t["expiry"] == ch["expiry"] else None
                     if row:
                         self.close(e, row[0], "time")
@@ -508,7 +516,7 @@ class Game:
 
     def mark(self):
         """Har minute: khule nakli trade ka live bhaav, aur stop-loss / target. True = koi khula trade hai."""
-        opened = [e for e in self.log if e.get("trade") and not e["trade"].get("closed")]
+        opened = [e for e in self.log if is_open(e)]
         if not opened:
             return False
         for name in sorted({e["index"] for e in opened}):
@@ -534,7 +542,7 @@ class Game:
 
     def close_all(self):
         """Din khatam: koi trade khula reh gaya to abhi ke bid par band."""
-        opened = [e for e in self.log if e.get("trade") and not e["trade"].get("closed")]
+        opened = [e for e in self.log if is_open(e)]
         for name in sorted({e["index"] for e in opened}):
             ch = chain(name)
             for e in opened:
@@ -592,7 +600,7 @@ class Game:
             t = e.get("trade")
             if not t:
                 continue
-            closed = bool(t.get("closed")) or bool(e.get("done"))
+            closed = not is_open(e)
             trades.append({"index": e["index"], "at": "%d:%02d" % divmod(e["at"], 60), "minutes": e["minutes"],
                            "option": "%s %d %s" % (e["index"], t["strike"], t["side"]), "expiry": t["expiry"],
                            "qty": t["qty"], "buy": t["buy"], "sell": t.get("sell"), "costs": t.get("costs"),

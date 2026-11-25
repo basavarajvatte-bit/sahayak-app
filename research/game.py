@@ -342,7 +342,7 @@ def gate(check):
         return False, "Model ki jaanch nahi ho paayi (data nahi mila)"
     mp, sp, sn = check.get("model_pct") or 0, check.get("sure_pct") or 0, check.get("sure_guesses") or 0
     if mp < GATE_MODEL_PCT:
-        return False, "Pichhle %d din ki jaanch mein model sirf %d%% sahi tha (kam se kam %d%% chahiye)" % (CHECK_DAYS, round(mp), GATE_MODEL_PCT)
+        return False, "Pichhle %d din ki jaanch mein model sirf %.1f%% sahi tha (kam se kam %d%% chahiye)" % (CHECK_DAYS, mp, GATE_MODEL_PCT)
     if sn < GATE_SURE_N:
         return False, "Pichhle %d din mein pakke andaze bahut kam the (%d), bharosa nahi" % (CHECK_DAYS, sn)
     if sp < GATE_SURE_PCT:
